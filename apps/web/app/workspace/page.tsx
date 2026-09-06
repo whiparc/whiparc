@@ -2596,32 +2596,22 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       {selectedNode.id.startsWith('shell_command') && (
                         <div className="space-y-3">
                           <div>
-                            <div className="flex items-center justify-between mb-1.5">
-                              <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Commands to Execute</label>
-                              <span className="text-[10px] text-muted-foreground">Multi-line supported</span>
-                            </div>
-                            <textarea
-                              rows={5}
-                              value={p.command !== undefined ? p.command : (selectedNode.data?.command as string || '')}
-                              onChange={(e) => {
-                                handleParameterChange('command', e.target.value);
-                                updateNodeData(selectedNode.id, { command: e.target.value });
-                              }}
-                              placeholder={"npm install\nnpm run build\npm2 restart all"}
-                              className="w-full bg-muted border border-border rounded-lg p-3 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all font-mono resize-y leading-relaxed"
+                            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Command to execute</label>
+                            <input
+                              type="text"
+                              value={p.command}
+                              onChange={(e) => handleParameterChange('command', e.target.value)}
+                              placeholder="echo 'hello world'"
+                              className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all font-mono"
                             />
-                            <p className="text-[10px] text-muted-foreground mt-1">Multi-line commands will execute sequentially on the target host.</p>
                           </div>
                           <div>
                             <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Working Directory (chdir)</label>
                             <input
                               type="text"
-                              value={p.chdir !== undefined ? p.chdir : (selectedNode.data?.chdir as string || '/tmp')}
-                              onChange={(e) => {
-                                handleParameterChange('chdir', e.target.value);
-                                updateNodeData(selectedNode.id, { chdir: e.target.value });
-                              }}
-                              placeholder="/var/www/app"
+                              value={p.chdir}
+                              onChange={(e) => handleParameterChange('chdir', e.target.value)}
+                              placeholder="/tmp"
                               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all font-mono"
                             />
                           </div>
