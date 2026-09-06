@@ -393,18 +393,34 @@ export function generateAnsibleYAML(nodes: Node[], edges: Edge[]): string {
         enabled: ${enabled}\n\n`;
     }
     else if (id.startsWith('git_clone')) {
-      const repoUrl = p.repoUrl || '';
-      const destPath = p.destPath || '/var/www/app';
-      const branch = p.branch || 'main';
+      const repoUrl = p.repoUrl || data.repoUrl || '';
+      const destPath = p.destPath || data.destPath || '/var/www/app';
+      const branch = p.branch || data.branch || 'main';
+      const credentialId = p.credentialId || data.credentialId || '';
+
+      let gitRepoUrl = repoUrl;
+      if (credentialId && repoUrl.startsWith('https://')) {
+        const cleanUrl = repoUrl.substring(8);
+        gitRepoUrl = `https://{{ lookup('env', 'GITHUB_PAT') | default('') }}@${cleanUrl}`;
+      }
 
       tasksString += `    # Git Clone Repository
+    - name: Ensure destination directory exists
+      ansible.builtin.file:
+        path: "${destPath}"
+        state: directory
+        owner: ubuntu
+        mode: '0755'
+
     - name: Clone codebase from git repository
       ansible.builtin.git:
-        repo: "${repoUrl}"
+        repo: "${gitRepoUrl}"
         dest: "${destPath}"
         version: "${branch}"
         clone: yes
-        update: yes\n\n`;
+        update: yes
+        force: yes
+      ignore_errors: yes\n\n`;
     }
     else if (id.startsWith('shell_command')) {
       const command = p.command || 'echo "hello"';
@@ -429,68 +445,6 @@ export function generateAnsibleYAML(nodes: Node[], edges: Edge[]): string {
         dest: "${destPath}"
         owner: "${owner}"
         mode: "${mode}"\n\n`;
-    }
-    else if (data.tech === 'Source' || id.startsWith('code_repository')) {
-      const repoUrl = data.repoUrl || p.repoUrl || '';
-      const branch = data.branch || p.branch || 'main';
-      const destPath = data.destPath || p.destPath || '/home/ubuntu/app';
-      const buildCommand = data.buildCommand || p.buildCommand || '';
-      const startCommand = data.startCommand || p.startCommand || '';
-      const credentialId = data.credentialId || p.credentialId || '';
-      const appType = data.appType || p.appType || '';
-
-      let gitRepoUrl = repoUrl;
-      if (credentialId && repoUrl.startsWith('https://')) {
-        const cleanUrl = repoUrl.substring(8);
-        gitRepoUrl = `https://{{ lookup('env', 'GITHUB_PAT') | default('') }}@${cleanUrl}`;
-      }
-
-      tasksString += `    # Code Repository Deployment - ${label}
-    - name: Ensure destination directory exists
-      ansible.builtin.file:
-        path: "${destPath}"
-        state: directory
-        owner: ubuntu
-        mode: '0755'
-
-    - name: Clone source repository
-      ansible.builtin.git:
-        repo: "${gitRepoUrl}"
-        dest: "${destPath}"
-        version: "${branch}"
-        clone: yes
-        update: yes
-        force: yes
-      ignore_errors: yes\n\n`;
-
-      if (buildCommand) {
-        tasksString += `    # Run Build Commands
-    - name: Run build command
-      ansible.builtin.shell:
-        cmd: "${buildCommand}"
-        chdir: "${destPath}"\n\n`;
-      }
-
-      if (startCommand) {
-        if (startCommand.includes('pm2 ') || appType === 'Node.js') {
-          tasksString += `    # Ensure PM2 is installed
-    - name: Check if PM2 is installed
-      ansible.builtin.command: which pm2
-      register: pm2_check
-      failed_when: false
-      changed_when: false
-
-    - name: Install PM2 process manager if missing
-      ansible.builtin.command: npm install -g pm2
-      when: pm2_check.rc != 0\n\n`;
-        }
-
-        tasksString += `    # Run Start Commands
-    - name: Start application daemon
-      ansible.builtin.shell:
-        cmd: "${startCommand}"
-        chdir: "${destPath}"\n\n`;
-      }
     }
     else if (data.isCustom && data.tech === 'Ansible') {
       const customTasks = data.rawCode || '';

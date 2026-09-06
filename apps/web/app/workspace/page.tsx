@@ -1331,6 +1331,7 @@ interface InspectorNodeParameters {
   repoUrl?: string;
   destPath?: string;
   branch?: string;
+  credentialId?: string;
   command?: string;
   chdir?: string;
   srcPath?: string;
@@ -2559,7 +2560,7 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                             <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Git Repository URL</label>
                             <input
                               type="text"
-                              value={p.repoUrl}
+                              value={p.repoUrl || ''}
                               onChange={(e) => {
                                 handleParameterChange('repoUrl', e.target.value);
                                 updateNodeData(selectedNode.id, { repoUrl: e.target.value });
@@ -2572,8 +2573,11 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                             <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Destination Path</label>
                             <input
                               type="text"
-                              value={p.destPath}
-                              onChange={(e) => handleParameterChange('destPath', e.target.value)}
+                              value={p.destPath || ''}
+                              onChange={(e) => {
+                                handleParameterChange('destPath', e.target.value);
+                                updateNodeData(selectedNode.id, { destPath: e.target.value });
+                              }}
                               placeholder="/var/www/app"
                               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all font-mono"
                             />
@@ -2582,7 +2586,7 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                             <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Version / Branch</label>
                             <input
                               type="text"
-                              value={p.branch}
+                              value={p.branch || ''}
                               onChange={(e) => {
                                 handleParameterChange('branch', e.target.value);
                                 updateNodeData(selectedNode.id, { branch: e.target.value });
@@ -2590,6 +2594,25 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                               placeholder="main"
                               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all font-mono"
                             />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">GitHub Credential (for Private Repos)</label>
+                            <div className="relative">
+                              <select
+                                value={p.credentialId || ''}
+                                onChange={(e) => {
+                                  handleParameterChange('credentialId', e.target.value);
+                                  updateNodeData(selectedNode.id, { credentialId: e.target.value });
+                                }}
+                                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground appearance-none focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all cursor-pointer"
+                              >
+                                <option value="">-- Public Repository (No Auth) --</option>
+                                {availableCredentials.filter(c => c.provider === 'GITHUB').map(c => (
+                                  <option key={c.id} value={c.id}>{c.name} ({c.key_fingerprint})</option>
+                                ))}
+                              </select>
+                              <Icon icon="lucide:chevron-down" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none" />
+                            </div>
                           </div>
                         </div>
                       )}
@@ -3478,14 +3501,6 @@ function getDefaultParametersForNode(nodeId: string): Record<string, unknown> {
 
 // --- MOCK LIBRARY DATA ---
 const LIBRARY_NODES: LibraryNode[] = [
-  {
-    id: 'code_repository',
-    tech: 'Source',
-    icon: 'lucide:git-branch',
-    title: 'Code Repository',
-    description: "Your app's source code. The pipeline clones this repo onto the target server before deployment.",
-    category: 'Source Code'
-  },
   {
     id: 'aws_target',
     tech: 'Target',
