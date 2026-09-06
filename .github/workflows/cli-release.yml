@@ -40,6 +40,10 @@ jobs:
           go-version-file: 'apps/cli/go.mod'
           cache-dependency-path: 'apps/cli/go.sum'
 
+      - name: Run Tests
+        working-directory: apps/cli
+        run: go test ./...
+
       - name: Build CLI Binary
         working-directory: apps/cli
         run: |
@@ -49,7 +53,7 @@ jobs:
           fi
           
           echo "Building binary: ${BINARY_NAME}"
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 go build -ldflags="-s -w" -o "${BINARY_NAME}" main.go
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 go build -ldflags="-s -w" -o "${BINARY_NAME}" .
           
           # Move binary to root directory for artifact uploading
           mv "${BINARY_NAME}" ../../

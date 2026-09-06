@@ -1,9 +1,12 @@
 services:
   api:
     build:
-      context: ./apps/api
-      dockerfile: Dockerfile
-    container_name: infracanvas-api
+      # Repo root (not ./apps/api) so the build can also reach apps/cli — the
+      # image needs the whiparc CLI binary on PATH for the local_agent
+      # SSH ProxyCommand bridge (see obsidian_memory/08.4's Phase 1).
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: whiparc-api
     ports:
       - "8080:8080"
     env_file:
@@ -25,7 +28,7 @@ services:
       - ubuntu_ssh_2
 
   localstack:
-    container_name: infra-localstack
+    container_name: whiparc-localstack
     image: localstack/localstack:3.4.0
     ports:
       - "4566:4566"
@@ -36,7 +39,7 @@ services:
       - "/var/run/docker.sock:/var/run/docker.sock"
 
   ubuntu_ssh_1:
-    container_name: ubuntu_ssh_1
+    container_name: whiparc-ubuntu_ssh_1
     build:
       context: ./sandbox
       dockerfile: Dockerfile.ssh
@@ -44,7 +47,7 @@ services:
       - "2222:22"
 
   ubuntu_ssh_2:
-    container_name: ubuntu_ssh_2
+    container_name: whiparc-ubuntu_ssh_2
     build:
       context: ./sandbox
       dockerfile: Dockerfile.ssh

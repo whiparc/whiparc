@@ -4,11 +4,18 @@ import React, { useState, useEffect } from 'react';
 import { Icon } from '@iconify/react';
 import { useAuthStore } from '../store/useAuthStore';
 import useCanvasStore from '../store/useCanvasStore';
+import type { CustomLibraryNode } from '../store/useCanvasStore';
 
 interface CustomNodeModalProps {
   isOpen: boolean;
   onClose: () => void;
   projectId: string;
+}
+
+interface ValidationError {
+  line: number;
+  column: number;
+  message: string;
 }
 
 export default function CustomNodeModal({ isOpen, onClose, projectId }: CustomNodeModalProps) {
@@ -23,7 +30,7 @@ export default function CustomNodeModal({ isOpen, onClose, projectId }: CustomNo
   const [rawCode, setRawCode] = useState('');
   
   const [isValidating, setIsValidating] = useState(false);
-  const [validationErrors, setValidationErrors] = useState<any[]>([]);
+  const [validationErrors, setValidationErrors] = useState<ValidationError[]>([]);
   const [extractedParams, setExtractedParams] = useState<string[]>([]);
   const [isValid, setIsValid] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -33,9 +40,12 @@ export default function CustomNodeModal({ isOpen, onClose, projectId }: CustomNo
   const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
   const isPremium = user?.plan === 'PRO' || user?.plan === 'ENTERPRISE';
 
-  // Sync default code template when tech changes
+  // Sync default code template when tech changes.
+  // Resetting the editor's template + validation state to match the
+  // selected tech is the intended effect here.
   useEffect(() => {
     if (tech === 'Terraform') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRawCode(`resource "aws_redis_cluster" "redis" {
   cluster_id           = "infra-cache"
   node_type            = "cache.t3.micro"
@@ -127,8 +137,9 @@ spec:
         const errText = await res.text();
         setValidationErrors([{ line: 1, column: 1, message: "Server validation failed: " + errText }]);
       }
-    } catch (err: any) {
-      setValidationErrors([{ line: 1, column: 1, message: "Failed to connect to syntax engine: " + err.message }]);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      setValidationErrors([{ line: 1, column: 1, message: "Failed to connect to syntax engine: " + message }]);
     } finally {
       setIsValidating(false);
     }
@@ -163,7 +174,7 @@ spec:
 
       if (res.ok) {
         const result = await res.json();
-        const customBlock = {
+        const customBlock: CustomLibraryNode = {
           id: result.id,
           project_id: projectId,
           title,
@@ -207,8 +218,9 @@ spec:
         const errText = await res.text();
         alert("Failed to save custom block template: " + errText);
       }
-    } catch (err: any) {
-      alert("Error saving custom template: " + err.message);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      alert("Error saving custom template: " + message);
     } finally {
       setIsSaving(false);
     }

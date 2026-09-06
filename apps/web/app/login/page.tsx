@@ -21,6 +21,7 @@ function LoginForm() {
   useEffect(() => {
     const mode = searchParams.get('mode');
     if (mode === 'signup') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsSignUp(true);
     } else {
       setIsSignUp(false);
@@ -243,7 +244,7 @@ function LoginForm() {
             </p>
           ) : (
             <p>
-              New to InfraCanvas?{' '}
+              New to Whiparc?{' '}
               <button 
                 type="button" 
                 onClick={() => router.push('/login?mode=signup')}

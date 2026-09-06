@@ -1,0 +1,61 @@
+name: CLA Check
+
+# Only required for contributions touching the Business Source License 1.1
+# paths (apps/web, apps/api) — see CLA.md and NOTICE.md.
+# MIT-licensed paths (apps/cli, sandbox, spikes, docs) never require this.
+#
+# Setup required before this workflow is live:
+#   1. Create a GitHub PAT (classic, `repo` scope) belonging to a maintainer
+#      or bot account, and add it as a repository secret named CLA_TOKEN.
+#   2. This workflow needs `pull-requests: write` / `issues: write` to
+#      comment on PRs and store signatures — already granted below.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, closed]
+    branches: [main, dev]
+  issue_comment:
+    types: [created]
+
+permissions:
+  actions: write
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  detect-bsl-paths:
+    name: Detect BSL-licensed paths
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    outputs:
+      requires_cla: ${{ steps.filter.outputs.bsl }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            bsl:
+              - 'apps/web/**'
+              - 'apps/api/**'
+
+  cla-check:
+    name: CLA Assistant
+    needs: detect-bsl-paths
+    if: >
+      github.event_name == 'issue_comment' ||
+      (github.event_name == 'pull_request_target' && needs.detect-bsl-paths.outputs.requires_cla == 'true')
+    runs-on: ubuntu-latest
+    steps:
+      - name: CLA Assistant
+        uses: contributor-assistant/github-action@v2.6.1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PERSONAL_ACCESS_TOKEN: ${{ secrets.CLA_TOKEN }}
+        with:
+          path-to-signatures: "signatures/cla.json"
+          path-to-document: "https://github.com/${{ github.repository }}/blob/main/CLA.md"
+          branch: "cla-signatures"
+          allowlist: dependabot[bot]
+          custom-pr-sign-comment: "I have read and agree to the [Contributor License Agreement](../CLA.md)."

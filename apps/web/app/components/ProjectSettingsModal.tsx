@@ -3,14 +3,39 @@ import { useRouter } from 'next/navigation';
 import { Icon } from '@iconify/react';
 import { useAuthStore } from '../store/useAuthStore';
 import { CredentialManagerTab } from './CredentialManagerModal';
+import type { Project } from '../lib/types';
+
+interface Member {
+  user_id: string;
+  user_name: string;
+  email: string;
+  role: string;
+}
+
+interface SandboxAgent {
+  agent_id: string;
+  name: string;
+  status: string;
+  registered_at: string;
+  last_seen_at?: string;
+}
+
+interface CredentialItem {
+  id: string;
+  project_id: string;
+  provider: string;
+  name: string;
+  key_fingerprint: string;
+  created_at: string;
+}
 
 interface ProjectSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  projectDetails: any;
-  onUpdateProjectDetails: (updated: any) => void;
+  projectDetails: Project;
+  onUpdateProjectDetails: (updated: Project) => void;
   projectId: string;
-  onCredentialsChange?: (credentials: any[]) => void;
+  onCredentialsChange?: (credentials: CredentialItem[]) => void;
 }
 
 export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
@@ -21,16 +46,20 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   projectId,
   onCredentialsChange
 }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'members' | 'credentials' | 'danger'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'members' | 'credentials' | 'agents' | 'danger'>('general');
   const [name, setName] = useState(projectDetails?.name || '');
   const [description, setDescription] = useState(projectDetails?.description || '');
   const [visibility, setVisibility] = useState(projectDetails?.visibility || 'PRIVATE');
-  const [members, setMembers] = useState<any[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('VIEWER');
   const [loading, setLoading] = useState(false);
   const [membersLoading, setMembersLoading] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState('');
+  const [agents, setAgents] = useState<SandboxAgent[]>([]);
+  const [agentsLoading, setAgentsLoading] = useState(false);
+  const [agentsSupported, setAgentsSupported] = useState(true);
+  const [revokingAgentId, setRevokingAgentId] = useState<string | null>(null);
   const router = useRouter();
 
   const { user, token } = useAuthStore();
@@ -41,6 +70,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   // Sync state if project details loaded after mount
   useEffect(() => {
     if (projectDetails) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setName(projectDetails.name || '');
       setDescription(projectDetails.description || '');
       setVisibility(projectDetails.visibility || 'PRIVATE');
@@ -69,6 +99,35 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
     };
 
     fetchMembers();
+  }, [isOpen, activeTab, projectId, API_URL, activeToken]);
+
+  // Fetch paired sandbox agents on load or tab switch to agents. A 404 means
+  // the SANDBOX_AGENT_BETA feature flag is off on this deployment entirely —
+  // treated as "hide this tab's content," not an error, the same way the
+  // workspace header's connection badge already treats a 404.
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'agents' || !activeToken) return;
+
+    const fetchAgents = async () => {
+      setAgentsLoading(true);
+      try {
+        const res = await fetch(`${API_URL}/api/projects/${projectId}/agents`, {
+          headers: { 'Authorization': `Bearer ${activeToken}` }
+        });
+        if (res.ok) {
+          setAgentsSupported(true);
+          setAgents(await res.json());
+        } else if (res.status === 404) {
+          setAgentsSupported(false);
+        }
+      } catch (err) {
+        console.error("Failed to fetch paired agents", err);
+      } finally {
+        setAgentsLoading(false);
+      }
+    };
+
+    fetchAgents();
   }, [isOpen, activeTab, projectId, API_URL, activeToken]);
 
   if (!isOpen) return null;
@@ -182,6 +241,29 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
     }
   };
 
+  const handleRevokeAgent = async (agentId: string) => {
+    if (!activeToken || !confirm("Revoke this agent? It will be disconnected immediately and its pairing token invalidated — the machine will need to re-run `infracanvas sandbox up` to pair again.")) return;
+
+    setRevokingAgentId(agentId);
+    try {
+      const res = await fetch(`${API_URL}/api/projects/${projectId}/agents/${agentId}/revoke`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${activeToken}` }
+      });
+      if (res.ok) {
+        setAgents(prev => prev.map(a => a.agent_id === agentId ? { ...a, status: 'REVOKED' } : a));
+      } else {
+        const errText = await res.text();
+        alert("Failed to revoke agent: " + errText);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error revoking agent");
+    } finally {
+      setRevokingAgentId(null);
+    }
+  };
+
   const handleDeleteProject = async (e: React.FormEvent) => {
     e.preventDefault();
     if (deleteConfirm !== projectDetails?.name) {
@@ -254,6 +336,14 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
             }`}
           >
             Cloud Credentials
+          </button>
+          <button
+            onClick={() => setActiveTab('agents')}
+            className={`py-3 border-b-2 font-medium transition-all cursor-pointer ${
+              activeTab === 'agents' ? 'border-primary text-primary' : 'border-transparent text-slate-400 hover:text-white'
+            }`}
+          >
+            Sandbox Agents
           </button>
           {isAdmin && (
             <button
@@ -446,6 +536,64 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* SANDBOX AGENTS */}
+          {activeTab === 'agents' && (
+            <div className="space-y-3">
+              <div>
+                <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Paired Sandbox Agents</h4>
+                <p className="text-xs text-slate-500 mt-1">Machines paired via `infracanvas sandbox up` that can run this project&apos;s deploys locally. Revoking disconnects an agent immediately and invalidates its pairing token.</p>
+              </div>
+              {agentsLoading ? (
+                <div className="py-6 flex justify-center text-slate-400">
+                  <Icon icon="lucide:loader-2" className="animate-spin text-xl text-primary" />
+                </div>
+              ) : !agentsSupported ? (
+                <div className="py-6 text-center text-sm text-slate-400">Local Sandbox Agents aren&apos;t enabled on this deployment.</div>
+              ) : agents.length === 0 ? (
+                <div className="py-6 text-center text-sm text-slate-400">No sandbox agents have been paired to this project yet.</div>
+              ) : (
+                <div className="divide-y divide-slate-800 border border-border rounded-xl overflow-hidden bg-background/10">
+                  {agents.map((a) => {
+                    const statusStyle: Record<string, string> = {
+                      ACTIVE: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+                      PENDING: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+                      DISCONNECTED: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
+                      REVOKED: 'bg-secondary text-slate-400 border-border',
+                    };
+                    const isRevoked = a.status === 'REVOKED';
+                    return (
+                      <div key={a.agent_id} className="p-3.5 flex items-center justify-between text-sm">
+                        <div>
+                          <div className="font-semibold text-white flex items-center gap-2">
+                            {a.name}
+                            <span className={`px-1.5 py-0.5 text-[9px] font-bold uppercase rounded border ${statusStyle[a.status] || statusStyle.REVOKED}`}>
+                              {a.status}
+                            </span>
+                          </div>
+                          <div className="text-xs text-slate-400 font-mono">{a.agent_id}</div>
+                          <div className="text-[11px] text-slate-500 mt-0.5">
+                            Paired {new Date(a.registered_at).toLocaleString()}
+                            {a.last_seen_at && ` · Last seen ${new Date(a.last_seen_at).toLocaleString()}`}
+                          </div>
+                        </div>
+                        {!isRevoked && (
+                          <button
+                            onClick={() => handleRevokeAgent(a.agent_id)}
+                            disabled={revokingAgentId === a.agent_id}
+                            className="px-3 py-1.5 bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 rounded-lg text-xs font-semibold transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5 shrink-0"
+                          >
+                            {revokingAgentId === a.agent_id && <Icon icon="lucide:loader-2" className="animate-spin text-xs" />}
+                            Revoke
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 

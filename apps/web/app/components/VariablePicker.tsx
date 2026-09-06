@@ -30,7 +30,7 @@ export function InputWithVariablePicker({ nodes, onValueChange, className, value
   // Close when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (containerRef.current && !containerRef.current.contains(event.target as any)) {
+      if (containerRef.current && !containerRef.current.contains(event.target as globalThis.Node)) {
         setIsOpen(false);
       }
     }

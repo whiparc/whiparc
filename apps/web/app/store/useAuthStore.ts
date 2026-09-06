@@ -25,8 +25,8 @@ interface AuthState {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
-const networkErrorMessage = (err: any, fallback: string) => {
-  const msg = err.message || fallback;
+const networkErrorMessage = (err: unknown, fallback: string) => {
+  const msg = err instanceof Error ? err.message || fallback : fallback;
   if (msg === 'Failed to fetch' || msg.includes('fetch failed') || msg.includes('NetworkError')) {
     return 'Cannot connect to the backend server. Please verify the API service is running and try again.';
   }
@@ -85,7 +85,7 @@ export const useAuthStore = create<AuthState>()(
           const data = await res.json();
           set({ token: data.token, user: data.user, isLoading: false });
           return true;
-        } catch (err: any) {
+        } catch (err: unknown) {
           set({ error: networkErrorMessage(err, 'Login failed'), isLoading: false });
           return false;
         }
@@ -110,7 +110,7 @@ export const useAuthStore = create<AuthState>()(
           // Auto login after signup
           set({ isLoading: false });
           return get().login(email, password);
-        } catch (err: any) {
+        } catch (err: unknown) {
           set({ error: networkErrorMessage(err, 'Signup failed'), isLoading: false });
           return false;
         }
@@ -147,7 +147,7 @@ export const useAuthStore = create<AuthState>()(
           const data = await res.json();
           set({ token: data.token, user: data.user });
           return true;
-        } catch (err: any) {
+        } catch (err: unknown) {
           console.error("Upgrade error", err);
           return false;
         }

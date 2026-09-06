@@ -59,7 +59,7 @@ function Navbar() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14 15h5M14 19h5" />
               </svg>
             </div>
-            <span className="text-sm font-bold tracking-wide text-white">InfraCanvas</span>
+            <span className="text-sm font-bold tracking-wide text-white">Whiparc</span>
           </Link>
 
           {/* Desktop nav */}
@@ -1050,7 +1050,7 @@ function Footer() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M14 15h5M14 19h5" />
                 </svg>
               </div>
-              <span className="text-sm font-bold text-white">InfraCanvas</span>
+              <span className="text-sm font-bold text-white">Whiparc</span>
             </div>
             <p className="text-sm text-slate-500 leading-relaxed max-w-xs">
               The visual compiler and local sandbox for modern DevOps. Design, simulate, and deploy cloud infrastructure from a single canvas.
@@ -1112,7 +1112,7 @@ function Footer() {
       {/* Bottom bar */}
       <div className="border-t border-white/[0.04]">
         <div className="mx-auto max-w-7xl flex flex-col gap-4 px-6 py-6 text-xs text-slate-600 lg:flex-row lg:items-center lg:justify-between lg:px-10">
-          <p>&copy; 2026 InfraCanvas Inc. All rights reserved.</p>
+          <p>&copy; 2026 Whiparc Inc. All rights reserved.</p>
           <div className="flex gap-6">
             <span className="hover:text-slate-400 transition cursor-pointer">Privacy</span>
             <span className="hover:text-slate-400 transition cursor-pointer">Terms</span>

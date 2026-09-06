@@ -47,3 +47,17 @@ next-env.d.ts
 
 # build
 .turbo
+
+# local dev builds
+/apps/api/data
+/apps/api/dev.db
+
+# compiled CLI binaries (build outputs, not source)
+/apps/cli/cli
+/apps/cli/cli.exe
+/apps/cli/dist/
+
+# internal Obsidian knowledge base: contains business-strategy and
+# security-implementation notes not meant to ship in a public repo
+/obsidian_memory/
+

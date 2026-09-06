@@ -1,24 +1,13 @@
 'use client';
 
-import React, { useEffect, useState, Suspense } from 'react';
+import React, { useEffect, useState, Suspense, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Icon } from '@iconify/react';
 import { useAuthStore } from '../store/useAuthStore';
 import { ProjectSettingsModal } from '../components/ProjectSettingsModal';
 import { TiltCard } from '../components/landing/TiltCard';
-
-interface Project {
-	id: string;
-	team_id: string;
-	name: string;
-	description: string;
-	visibility: string;
-	created_by: string;
-	created_at: string;
-	updated_at: string;
-	user_role: string;
-}
+import type { Project } from '../lib/types';
 
 interface Team {
 	id: string;
@@ -84,13 +73,14 @@ function DashboardContent() {
 	// (e.g. redirected here from a bare /workspace URL with no project selected)
 	useEffect(() => {
 		if (searchParams.get('create') === '1') {
+			// eslint-disable-next-line react-hooks/set-state-in-effect
 			setIsCreateModalOpen(true);
 			router.replace('/dashboard');
 		}
 	}, [searchParams, router]);
 
 	// Fetch teams, projects, and pending requests
-	const fetchData = async () => {
+	const fetchData = useCallback(async () => {
 		const activeToken = token;
 		if (!activeToken) return;
 
@@ -144,13 +134,15 @@ function DashboardContent() {
 		} finally {
 			setIsLoadingData(false);
 		}
-	};
+	}, [token]);
 
 	useEffect(() => {
 		if (user) {
+			// Fetching on mount is the intended synchronization with the dashboard API.
+			// eslint-disable-next-line react-hooks/set-state-in-effect
 			fetchData();
 		}
-	}, [user]);
+	}, [user, fetchData]);
 
 	const handleOpenWorkspace = (projectId: string) => {
 		router.push(`/workspace?project=${projectId}`);
@@ -201,8 +193,8 @@ function DashboardContent() {
 			setNewProjDesc('');
 			fetchData();
 			router.push(`/workspace?project=${newProject.id}`);
-		} catch (err: any) {
-			setCreateError(err.message || 'Internal Server Error');
+		} catch (err: unknown) {
+			setCreateError(err instanceof Error ? err.message : 'Internal Server Error');
 			setIsCreating(false);
 		}
 	};
@@ -239,8 +231,8 @@ function DashboardContent() {
 				setJoinSuccess(null);
 				fetchData();
 			}, 2000);
-		} catch (err: any) {
-			setJoinError(err.message || 'Internal Server Error');
+		} catch (err: unknown) {
+			setJoinError(err instanceof Error ? err.message : 'Internal Server Error');
 		}
 	};
 
@@ -294,7 +286,7 @@ function DashboardContent() {
 							<div className="h-4 w-4 rounded-md bg-gradient-to-br from-primary to-amber-400"></div>
 						</div>
 						<div>
-							<p className="text-sm font-semibold tracking-wide text-white">InfraCanvas</p>
+							<p className="text-sm font-semibold tracking-wide text-white">Whiparc</p>
 							<p className="text-xs text-slate-400">Workspace Dashboard</p>
 						</div>
 					</Link>
@@ -333,7 +325,7 @@ function DashboardContent() {
 				<div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border/40 pb-8">
 					<div>
 						<h1 className="text-3xl font-bold tracking-tight text-white">Welcome back, {user.name}!</h1>
-						<p className="text-sm text-slate-400 mt-1">Select a workspace to design and deploy, or request access to other teams' projects.</p>
+						<p className="text-sm text-slate-400 mt-1">Select a workspace to design and deploy, or request access to other teams&apos; projects.</p>
 					</div>
 					<button
 						onClick={() => setIsCreateModalOpen(true)}
@@ -360,7 +352,7 @@ function DashboardContent() {
 										</p>
 										{req.note && (
 											<p className="mt-2 text-xs italic text-slate-500 bg-background px-2.5 py-1.5 rounded-lg border border-border/80">
-												"{req.note}"
+												&quot;{req.note}&quot;
 											</p>
 										)}
 									</div>

@@ -52,7 +52,7 @@ var (
 
 func main() {
 	log.Println("===================================================")
-	log.Println("  InfraCanvas Runner Go Backend Initialization   ")
+	log.Println("  Whiparc Runner Go Backend Initialization   ")
 	log.Println("===================================================")
 
 	// Ensure the db folder exists
@@ -71,6 +71,20 @@ func main() {
 		log.Fatalf("[DB] Failed to open database: %v\n", err)
 	}
 	defer db.Close()
+
+	// SQLite only ever allows one writer at a time, but database/sql's
+	// connection pool opens multiple physical connections to this file by
+	// default — a second writer then gets an immediate "database is locked"
+	// error (SQLITE_BUSY) instead of waiting, since no busy_timeout is set.
+	// Forcing a single connection makes Go's pool respect SQLite's actual
+	// concurrency model instead of fighting it; busy_timeout is kept as a
+	// belt-and-suspenders guard against an external lock (e.g. a manual
+	// sqlite3 CLI session touching the same file). See
+	// obsidian_memory/07.2 for the incident this was found from.
+	db.SetMaxOpenConns(1)
+	if _, err := db.Exec("PRAGMA busy_timeout = 5000;"); err != nil {
+		log.Fatalf("[DB] Failed to set busy_timeout pragma: %v\n", err)
+	}
 
 	// Create table if not exists
 	schemaQuery := `
@@ -223,6 +237,31 @@ func main() {
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
 		FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+	);
+	CREATE TABLE IF NOT EXISTS paired_agents (
+		id TEXT PRIMARY KEY,
+		project_id TEXT NOT NULL,
+		agent_id TEXT UNIQUE NOT NULL,
+		name TEXT NOT NULL,
+		public_key TEXT NOT NULL,
+		encrypted_private_key BLOB NOT NULL,
+		nonce BLOB NOT NULL,
+		auth_tag BLOB NOT NULL,
+		key_fingerprint TEXT NOT NULL,
+		status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACTIVE', 'REVOKED', 'DISCONNECTED')),
+		created_by TEXT NOT NULL,
+		registered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		last_seen_at DATETIME,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+		FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
+	);
+	CREATE TABLE IF NOT EXISTS agent_pairing_tokens (
+		token_hash TEXT PRIMARY KEY,
+		project_id TEXT NOT NULL,
+		agent_id TEXT,
+		issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		revoked_at DATETIME,
+		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 	);`
 	if _, err := db.Exec(schemaQuery); err != nil {
 		log.Fatalf("[DB] Failed to initialize schema: %v\n", err)
@@ -236,6 +275,9 @@ func main() {
 	}
 	if err := migrateCloudCredentialsProviderGithub(); err != nil {
 		log.Fatalf("[DB] Failed to migrate cloud_credentials to allow GITHUB: %v\n", err)
+	}
+	if err := migratePairedAgentsStatusAllowsDisconnected(); err != nil {
+		log.Fatalf("[DB] Failed to migrate paired_agents.status CHECK constraint: %v\n", err)
 	}
 	log.Println("[DB] Database initialized successfully.")
 
@@ -291,6 +333,21 @@ func main() {
 	mux.Handle("POST /api/projects/{id}/join-requests/{reqId}/approve", AuthMiddleware(RequireProjectRole("ADMIN")(http.HandlerFunc(handleApproveJoinRequest))))
 	mux.Handle("POST /api/projects/{id}/join-requests/{reqId}/reject", AuthMiddleware(RequireProjectRole("ADMIN")(http.HandlerFunc(handleRejectJoinRequest))))
 
+	// Sandbox Agent Routes (Phase 1 opt-in beta — see obsidian_memory/08.4)
+	if os.Getenv("SANDBOX_AGENT_BETA") == "true" {
+		mux.Handle("POST /api/projects/{id}/agents/register", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleRegisterAgent))))
+		mux.Handle("POST /api/projects/{id}/agents/pair", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handlePairAgent))))
+		mux.Handle("GET /api/projects/{id}/agents/latest", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleGetLatestAgentStatus))))
+		mux.Handle("GET /api/projects/{id}/agents", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleListAgents))))
+		mux.Handle("POST /api/projects/{id}/agents/{agentId}/revoke", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleRevokeAgent))))
+		mux.Handle("GET /api/projects/{id}/sandbox-migration-status", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleGetSandboxMigrationStatus))))
+		mux.Handle("GET /api/projects/{id}/agents/{agentId}", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleGetAgentStatus))))
+		mux.HandleFunc("POST /api/internal/agents/{agentId}/callback", handleAgentStatusCallback)
+		mux.HandleFunc("POST /api/internal/agent-tokens", handleRegisterAgentToken)
+		mux.HandleFunc("POST /api/internal/agent-tokens/validate", handleValidateAgentToken)
+		log.Println("[SANDBOX AGENT] Beta routes registered (SANDBOX_AGENT_BETA=true)")
+	}
+
 	// Static downloads serving with fallback redirection to GitHub Releases
 	_ = os.MkdirAll("./static/downloads", 0755)
 	mux.Handle("GET /downloads/{filename...}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -323,7 +380,7 @@ func main() {
 func CORSWrapper(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == "OPTIONS" {
 			w.WriteHeader(http.StatusOK)
@@ -497,6 +554,45 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Resolve credentials/env before committing to a run: a live cloud deploy
+	// (not a LocalStack sandbox run) with no SSH credential configured for
+	// this project is rejected here, cleanly, rather than being accepted and
+	// failing several seconds later deep inside a Terraform provider error
+	// about an invalid key format — see extractSecretsAndEnvironment.
+	extraEnv, secretsToMask, sshCredentialAvailable := extractSecretsAndEnvironment(projectID, canvasStr)
+	if !runner.IsSandbox(canvasStr) && !sshCredentialAvailable {
+		http.Error(w, "This live deploy has no SSH credential configured. Add one under Project Credentials before deploying to a real cloud target — the shared sandbox key cannot be used for real infrastructure.", http.StatusBadRequest)
+		return
+	}
+	// A project's most-recently-registered paired agent being PENDING (pairing
+	// never finished) or DISCONNECTED (was ACTIVE, its tunnel died — see
+	// obsidian_memory/08.4's Phase 2 heartbeat item) must not be allowed to
+	// silently fall through to the normal Docker-sandbox/live path:
+	// RunPipeline's local_agent branch is project-wide and automatic whenever
+	// resolvePairedAgent finds an ACTIVE row, so once status leaves ACTIVE, the
+	// very next deploy would otherwise route to Ansible targets the user never
+	// intended. A REVOKED latest agent is deliberately NOT blocked here — that
+	// status means the user intentionally turned off the local-agent
+	// integration for this project, so it correctly falls back to normal
+	// sandbox/live behavior exactly like "never paired."
+	if latestStatus, ok := latestPairedAgentStatus(projectID); ok && (latestStatus == "PENDING" || latestStatus == "DISCONNECTED") {
+		http.Error(w, "This project's local Sandbox Agent is not connected (status: "+latestStatus+"). Run `infracanvas sandbox up` (or check `infracanvas sandbox status`) before deploying, or revoke the paired agent under Project Credentials to deploy without it.", http.StatusBadRequest)
+		return
+	}
+	agentCtx := resolvePairedAgent(projectID)
+
+	// Phase 3's default flip (obsidian_memory/08.4): a FREE-plan project with
+	// no ACTIVE paired agent would otherwise silently fall through to the
+	// cost-bearing hosted sandbox exactly like it always has — gate that
+	// specific case once SANDBOX_AGENT_DEFAULT_CUTOFF makes it apply to this
+	// user. Deliberately scoped to deploy only, not destroy: a user who
+	// already has hosted-sandbox resources up must always be able to tear
+	// them down, cutoff or not.
+	if runner.IsSandbox(canvasStr) && agentCtx == nil && sandboxDeployGatedForFreeTier(user.ID, user.Plan) {
+		http.Error(w, "Free-tier sandbox deploys now run through your own machine via the local Sandbox Agent. Run `infracanvas sandbox up` to pair one for this project, or upgrade to Pro for a hosted sandbox. See /docs for setup.", http.StatusBadRequest)
+		return
+	}
+
 	runID := generateUUID()
 
 	// Insert into DB as PENDING
@@ -546,10 +642,8 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 
-		extraEnv, secretsToMask := extractSecretsAndEnvironment(projectID, canvasStr)
-
 		// Start executing runner
-		runner.RunPipeline(runID, canvasStr, payload.Files, "deploy", payload.AutoDestroy, extraEnv, secretsToMask, logChan, func(nodeId, status string) {
+		runner.RunPipeline(runID, canvasStr, payload.Files, "deploy", payload.AutoDestroy, extraEnv, secretsToMask, agentCtx, logChan, func(nodeId, status string) {
 			broadcastNodeStatus(runID, nodeId, status)
 		}, func(status string) {
 			broadcastToTracker(runID, "status_change", status)
@@ -765,6 +859,16 @@ func handleDestroy(w http.ResponseWriter, r *http.Request) {
 		canvasStr = string(canvasBytes)
 	}
 
+	// Same pre-flight rejection as handleDeploy, and for the same reason:
+	// RunPipeline's local_agent branch is automatic whenever resolvePairedAgent
+	// finds an ACTIVE row, so a PENDING/DISCONNECTED latest paired agent must
+	// not be allowed to silently fall through to the Docker-sandbox/live path
+	// here either — see obsidian_memory/08.4's Phase 2 heartbeat item.
+	if latestStatus, ok := latestPairedAgentStatus(projectID); ok && (latestStatus == "PENDING" || latestStatus == "DISCONNECTED") {
+		http.Error(w, "This project's local Sandbox Agent is not connected (status: "+latestStatus+"). Run `infracanvas sandbox up` (or check `infracanvas sandbox status`) before destroying, or revoke the paired agent under Project Credentials to proceed without it.", http.StatusBadRequest)
+		return
+	}
+
 	runID := generateUUID()
 
 	// Insert into DB as PENDING
@@ -812,9 +916,10 @@ func handleDestroy(w http.ResponseWriter, r *http.Request) {
 			}
 		}()
 
-		extraEnv, secretsToMask := extractSecretsAndEnvironment(projectID, canvasStr)
+		extraEnv, secretsToMask, _ := extractSecretsAndEnvironment(projectID, canvasStr)
+		agentCtx := resolvePairedAgent(projectID)
 
-		runner.RunPipeline(runID, canvasStr, nil, "destroy", false, extraEnv, secretsToMask, logChan, func(nodeId, status string) {
+		runner.RunPipeline(runID, canvasStr, nil, "destroy", false, extraEnv, secretsToMask, agentCtx, logChan, func(nodeId, status string) {
 			broadcastNodeStatus(runID, nodeId, status)
 		}, nil, func(finalStatus string, logs string) {
 			tracker.Lock()
@@ -1311,9 +1416,17 @@ func handleUpgradePlan(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func extractSecretsAndEnvironment(projectID string, canvasStr string) ([]string, []string) {
+// extractSecretsAndEnvironment returns the runner env vars, the secret
+// values to redact from logs, and whether a real SSH public key ended up
+// available (either from a configured project credential, or the sandbox
+// fallback for a LocalStack run) — the caller uses that third value to
+// reject a live cloud deploy upfront, before ever starting Terraform, rather
+// than letting it fail deep inside a confusing provider error. See the
+// pre-flight check in handleDeploy.
+func extractSecretsAndEnvironment(projectID string, canvasStr string) ([]string, []string, bool) {
 	var extraEnv []string
 	var secretsToMask []string
+	sshPubKeyInjected := false
 
 	loadCredential := func(credID string) {
 		var provider, name string
@@ -1380,6 +1493,7 @@ func extractSecretsAndEnvironment(projectID string, canvasStr string) ([]string,
 					extraEnv = append(extraEnv, "TF_VAR_aws_ssh_pub_key="+pubKeyStr)
 					extraEnv = append(extraEnv, "TF_VAR_gcp_ssh_pub_key="+pubKeyStr)
 					extraEnv = append(extraEnv, "TF_VAR_azure_ssh_pub_key="+pubKeyStr)
+					sshPubKeyInjected = true
 				}
 			}
 		} else if provider == "GITHUB" {
@@ -1423,7 +1537,50 @@ func extractSecretsAndEnvironment(projectID string, canvasStr string) ([]string,
 		}
 	}
 
-	return extraEnv, secretsToMask
+	// No project SSH credential provided a real public key. For a LocalStack
+	// sandbox run, fall back to the actual sandbox/id_rsa.pub content rather
+	// than leaving the placeholder dummy key baked into bundleGenerator.ts's
+	// Terraform template in place — that placeholder is not a syntactically
+	// valid OpenSSH key, so it fails aws_key_pair's real-AWS ImportKeyPair
+	// call with "Key is not in valid OpenSSH public key format" (LocalStack's
+	// mock doesn't validate this, which is why the placeholder silently
+	// "worked" there). This also keeps the injected public key consistent
+	// with the private key the Ansible phase's sandbox-key fallback (below,
+	// in runner.go) actually uses when no custom SSH credential is configured.
+	//
+	// For a real AWS/GCP/Azure deploy, this fallback must NOT apply — an SSH
+	// credential is mandatory there. Silently reusing the shared sandbox
+	// keypair against a real cloud resource is exactly the "shared key baked
+	// into every install" risk flagged in obsidian_memory/08.4; the deploy
+	// should fail clearly instead, prompting the user to configure a real
+	// credential, not succeed with a key nobody but every sandbox install can
+	// use to SSH in.
+	if !sshPubKeyInjected && runner.IsSandbox(canvasStr) {
+		if pubKeyStr, err := readSandboxPublicKey(); err == nil {
+			extraEnv = append(extraEnv, "TF_VAR_aws_ssh_pub_key="+pubKeyStr)
+			extraEnv = append(extraEnv, "TF_VAR_gcp_ssh_pub_key="+pubKeyStr)
+			extraEnv = append(extraEnv, "TF_VAR_azure_ssh_pub_key="+pubKeyStr)
+			sshPubKeyInjected = true
+		}
+	}
+
+	return extraEnv, secretsToMask, sshPubKeyInjected
+}
+
+// readSandboxPublicKey reads the real sandbox SSH public key, mirroring the
+// path-resolution runner.go's Ansible-phase key fallback already uses for the
+// matching private half (/app/sandbox/id_rsa under Docker, ../../sandbox/id_rsa
+// when running the API natively).
+func readSandboxPublicKey() (string, error) {
+	path := "/app/sandbox/id_rsa.pub"
+	if _, err := os.Stat(path); err != nil {
+		path = "../../sandbox/id_rsa.pub"
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
 }
 
 // migrateCloudCredentialsProviderGithub performs a table-rebuild migration on the

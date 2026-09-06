@@ -21,6 +21,13 @@ import (
 type Config struct {
 	APIURL string `json:"api_url"`
 	Token  string `json:"token"`
+	// SandboxAgentBeta gates the `sandbox` command group (Phase 1 opt-in beta —
+	// see obsidian_memory/08.4). Off by default; enable via
+	// `infracanvas config set sandbox-agent-beta true`.
+	SandboxAgentBeta bool `json:"sandbox_agent_beta"`
+	// GatewayURL is the Agent Gateway (apps/agent-gateway) the sandbox commands
+	// talk to for pairing and tunneling. Defaults to http://localhost:9090.
+	GatewayURL string `json:"gateway_url"`
 }
 
 type Project struct {
@@ -45,7 +52,7 @@ var (
 func main() {
 	var rootCmd = &cobra.Command{
 		Use:   "infracanvas",
-		Short: "InfraCanvas CLI - provision, validate, and manage workspaces.",
+		Short: "Whiparc CLI - provision, validate, and manage workspaces.",
 	}
 
 	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Override API backend URL (default is http://localhost:8080 or config value)")
@@ -115,7 +122,7 @@ func main() {
 	deployCmd.Flags().String("project", "", "Target project workspace ID")
 	deployCmd.Flags().Bool("auto-destroy", false, "Auto-destroy pipeline resources after deploy finishes")
 
-	rootCmd.AddCommand(loginCmd, logoutCmd, projectsCmd, importCmd, deployCmd)
+	rootCmd.AddCommand(loginCmd, logoutCmd, projectsCmd, importCmd, deployCmd, configCmd(), sandboxCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
@@ -136,7 +143,7 @@ func getClientConfig() (*Config, error) {
 		if apiURLFlag != "" {
 			url = apiURLFlag
 		}
-		return &Config{APIURL: url}, nil
+		return &Config{APIURL: url, GatewayURL: "http://localhost:9090"}, nil
 	}
 	var cfg Config
 	_ = json.Unmarshal(file, &cfg)
@@ -145,6 +152,9 @@ func getClientConfig() (*Config, error) {
 	}
 	if cfg.APIURL == "" {
 		cfg.APIURL = "http://localhost:8080"
+	}
+	if cfg.GatewayURL == "" {
+		cfg.GatewayURL = "http://localhost:9090"
 	}
 	if tokenFlag != "" {
 		cfg.Token = tokenFlag

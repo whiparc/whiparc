@@ -1,0 +1,21 @@
+# Default owner for anything not matched more specifically below.
+# As the project grows, replace individual entries with a team/component
+# owner without touching the rest of this file.
+*                       @bishalprasad321
+
+# --- Business Source License 1.1 paths (core product) ---
+/apps/web/              @bishalprasad321
+/apps/api/               @bishalprasad321
+
+# --- MIT paths (permissive shell) ---
+/apps/cli/               @bishalprasad321
+/sandbox/                @bishalprasad321
+/spikes/                 @bishalprasad321
+
+# --- Governance / license files: keep these reviewed by a maintainer ---
+/LICENSE                 @bishalprasad321
+/NOTICE.md               @bishalprasad321
+/CLA.md                  @bishalprasad321
+/CODE_OF_CONDUCT.md      @bishalprasad321
+/SECURITY.md             @bishalprasad321
+/.github/                @bishalprasad321

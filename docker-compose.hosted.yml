@@ -1,0 +1,96 @@
+# Simulates the "hosted backend" half of the local sandbox agent architecture
+# (obsidian_memory/08.4's Phase 1 / 03.6's bridging protocol) as its own,
+# separate container group — api + agent-gateway + LocalStack, no SSH target
+# containers, and no shared network with those.
+#
+# LocalStack belongs here, not with the SSH targets: it's a cloud-API mock the
+# Runner calls directly over the network, exactly like real AWS would be — it
+# has nothing to do with the Agent/tunnel bridging, which is specifically
+# about reaching Ansible/SSH targets the Runner can't dial directly. Only the
+# SSH targets (the user's simulated "local machine") live in the separate
+# stack below.
+#
+# The "local machine" half is intentionally a *separate* Compose project:
+# sandbox/docker-compose.sandbox.yml (driven by `whiparc sandbox up`),
+# reachable only through this stack's published ports (8080/9090), never by
+# container DNS name — that separation is the actual thing being tested here.
+#
+# Usage:
+#   docker compose -f docker-compose.hosted.yml up --build
+#   (then, in a separate terminal / separate machine once cross-host testing
+#   is set up) whiparc sandbox up --project <id>
+#
+# Set GATEWAY_RUNNER_SECRET in a .env file alongside this compose file (or
+# your shell environment) to override the default dev-only secret below —
+# it must match on both services, which the shared variable here guarantees.
+#
+# Explicit project name: without this, Compose derives the project name from
+# the directory (same as docker-compose.yml's default), which makes it treat
+# this file's "api" service as the SAME logical service as the main stack's —
+# and replaces whichever one is already running. Keeping this on its own
+# project namespace lets both stacks run side by side safely.
+name: whiparc-hosted
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: whiparc-api-hosted
+    ports:
+      - "8080:8080"
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - PORT=8080
+      - IS_DOCKER=true
+      - VERBOSE=true
+      - SANDBOX_AGENT_BETA=true
+      - GATEWAY_URL=http://agent-gateway:9090
+      - GATEWAY_RUNNER_SECRET=${GATEWAY_RUNNER_SECRET:-hosted-dev-secret}
+      - whiparc_GATEWAY_SECRET=${GATEWAY_RUNNER_SECRET:-hosted-dev-secret}
+    volumes:
+      - hosted-api-db-data:/app/data
+      # Read-only: the api container only ever *reads* the shared sandbox
+      # public key (readSandboxPublicKey in main.go) as a fallback for
+      # LocalStack runs with no project SSH credential configured. Writing a
+      # fresh per-installation key here is `whiparc sandbox up`'s job,
+      # on the separate "local machine" stack, never this container. Missing
+      # this mount (as this file originally did) makes that fallback fail
+      # silently, and Terraform falls back to bundleGenerator.ts's invalid
+      # placeholder key instead — the exact "InvalidKeyPair.Format" bug this
+      # mount fixes.
+      - ./sandbox:/app/sandbox:ro
+    depends_on:
+      - agent-gateway
+      - localstack
+
+  agent-gateway:
+    # Built and published by whiparc/cloud's publish-agent-gateway.yml workflow
+    # (apps/agent-gateway was extracted there with full history preserved via
+    # `git subtree`, and now lives at github.com/whiparc/cloud/agent-gateway).
+    # Requires `docker login ghcr.io` with read:packages on the whiparc org,
+    # since whiparc/cloud is a private repo.
+    image: ghcr.io/whiparc/cloud/agent-gateway:latest
+    container_name: whiparc-agent-gateway-hosted
+    ports:
+      - "9090:9090"
+    command:
+      - "--listen=:9090"
+      - "--api-url=http://api:8080"
+      - "--runner-secret=${GATEWAY_RUNNER_SECRET:-hosted-dev-secret}"
+
+  localstack:
+    container_name: infra-localstack-hosted
+    image: localstack/localstack:3.4.0
+    ports:
+      - "4566:4566"
+    environment:
+      - SERVICES=ec2,s3
+      - DOCKER_HOST=unix:///var/run/docker.sock
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock"
+
+volumes:
+  hosted-api-db-data:

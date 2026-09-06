@@ -1,0 +1,15 @@
+# Build context is the repo root (see docker-compose.yml's api service).
+# Docker doesn't honor .gitignore, so this needs its own list — keep it in
+# sync with the entries there that matter for image build size/speed.
+node_modules
+.git
+.next
+.turbo
+apps/web/.next
+apps/api/data
+apps/cli/*.exe
+spikes
+apps/agent-gateway
+obsidian_memory
+.claude
+*.md

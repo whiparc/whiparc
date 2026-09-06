@@ -22,6 +22,7 @@ export default function OAuthCallbackPage() {
     const token = params.get('token');
 
     if (!token || !setSessionFromToken(token)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setError('Sign-in failed. Please try again.');
       return;
     }

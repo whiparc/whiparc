@@ -74,6 +74,15 @@ func extractRepositoryConfig(canvasJSON string) RepositoryConfig {
 }
 
 // isSandbox parses the canvas JSON and determines if the current deployment targets the sandbox environment.
+// IsSandbox is the exported entry point isSandbox's logic, used by main.go
+// (outside this package) to decide whether it's safe to fall back to the
+// shared sandbox SSH keypair for a deploy — see extractSecretsAndEnvironment
+// and readSandboxPublicKey in main.go. A real AWS/GCP/Azure deploy must never
+// silently reuse that shared key; only a LocalStack sandbox run may.
+func IsSandbox(canvasJSON string) bool {
+	return isSandbox(canvasJSON)
+}
+
 func isSandbox(canvasJSON string) bool {
 	var canvas struct {
 		Nodes []struct {
@@ -89,12 +98,27 @@ func isSandbox(canvasJSON string) bool {
 	for _, node := range canvas.Nodes {
 		if strings.HasPrefix(node.ID, "aws_target") {
 			hasCloudTarget = true
+			// The frontend's AWS Target inspector only writes an explicit
+			// "environment" value into the saved node data once the user
+			// actually touches the dropdown — a freshly dropped node just
+			// *displays* "LocalStack (Sandbox)" as its default without
+			// persisting it (see apps/web/app/workspace/page.tsx's
+			// `environmentVal = data?.environment || 'localstack'`). So an
+			// absent/empty environment field means the same thing the UI
+			// shows: LocalStack. Only an explicit non-"localstack" value
+			// (e.g. "aws") means a real live deploy.
+			env := ""
 			if params, ok := node.Data["parameters"].(map[string]interface{}); ok {
-				if env, ok := params["environment"].(string); ok && env == "localstack" {
-					return true
+				if e, ok := params["environment"].(string); ok {
+					env = e
 				}
 			}
-			if env, ok := node.Data["environment"].(string); ok && env == "localstack" {
+			if env == "" {
+				if e, ok := node.Data["environment"].(string); ok {
+					env = e
+				}
+			}
+			if env == "" || env == "localstack" {
 				return true
 			}
 		} else if strings.HasPrefix(node.ID, "gcp_target") {
@@ -124,6 +148,87 @@ func registerLocalStackAMI(localstackHost string) (string, error) {
 		return "", fmt.Errorf("could not parse AMI ID from LocalStack response: %s", string(out))
 	}
 	return string(m[1]), nil
+}
+
+// AgentContext carries the resolved local sandbox agent for a project's
+// `local_agent` deployment target (Phase 1 opt-in beta — see
+// obsidian_memory/08.4 and 03.6). It is resolved by the caller (main.go's
+// handleDeploy/handleDestroy, via a DB lookup) and passed in, keeping this
+// package free of database/sql — it never talks to the DB itself.
+type AgentContext struct {
+	AgentID       string
+	ProjectID     string
+	GatewayURL    string
+	PrivateKeyPEM string
+}
+
+// localAgentHostsINI is the Ansible inventory for a local_agent run. The
+// host/port values here are never dialed directly over TCP/IP — each host's
+// own ansible_ssh_common_args carries a ProxyCommand naming that host's
+// --service, which is what actually routes the connection through the
+// Gateway tunnel to a specific local SSH container.
+//
+// Per-host (not global) common-args is required, not a style choice: a
+// single global --ssh-common-args CLI flag can't express two different
+// ProxyCommands for two different hosts, and Ansible's inventory-level vars
+// take precedence over that CLI flag anyway (obsidian_memory/08.4's Phase 1
+// hardening item #4 hit exactly this — a global override for one thing
+// silently discarding another). This previously hardcoded a single
+// "agent-tunnel" host wired to --service=ssh:2222 unconditionally, so a node
+// needing the sandbox's second SSH container (ubuntu_ssh_2, ssh:2223) could
+// never be reached via local_agent even though the Agent's own allowlist
+// (Phase 2) already permits it.
+//
+// Mirrors the docker-sandbox path's own !hasTfNodes shape immediately below
+// this function (both ubuntu_ssh_1 and ubuntu_ssh_2 exposed under one
+// [webservers] group) so a pure-Ansible local_agent run reaches both sandbox
+// SSH containers, not just the first. The hasTfNodes case still targets a
+// single host, matching a real Terraform-provisioned instance's single
+// public IP — there is only ever one such instance today.
+func localAgentHostsINI(agentCtx *AgentContext, hasTfNodes bool) string {
+	hostLine := func(name, service string) string {
+		return fmt.Sprintf("%s ansible_host=%s ansible_port=2222 ansible_user=ubuntu ansible_ssh_common_args=%s\n",
+			name, name, localAgentHostSSHCommonArgs(agentCtx, service))
+	}
+
+	var hosts string
+	if hasTfNodes {
+		hosts = hostLine("agent-tunnel", "ssh:2222")
+	} else {
+		hosts = hostLine("agent-tunnel-1", "ssh:2222") + hostLine("agent-tunnel-2", "ssh:2223")
+	}
+
+	return strings.ReplaceAll(fmt.Sprintf(`[webservers]
+%s
+[all__COLON__vars]
+ansible_python_interpreter=/usr/bin/python3`, hosts), "__COLON__", ":")
+}
+
+// localAgentHostSSHCommonArgs builds one host's ansible_ssh_common_args
+// inventory value: a ProxyCommand that bridges Ansible's SSH connection for
+// that specific host through the Gateway tunnel to the named service,
+// instead of a direct dial (see obsidian_memory/08.4's Phase 1 design).
+// OpenSSH itself spawns this as a subprocess, feeding it stdin/stdout as the
+// transport; the ansible-playbook subprocess model otherwise stays exactly as
+// it is for the live/docker targets. Single-quote-wrapped to match this
+// file's existing ansible_ssh_common_args='...' convention (see the
+// [all:vars] block below) — required here since the value contains spaces
+// and, via %q, embedded double quotes around the ProxyCommand itself.
+func localAgentHostSSHCommonArgs(agentCtx *AgentContext, service string) string {
+	proxyCommand := fmt.Sprintf("%s sandbox proxy --agent-id=%s --service=%s --gateway=%s --project=%s",
+		cliHelperPath(), agentCtx.AgentID, service, agentCtx.GatewayURL, agentCtx.ProjectID)
+	return fmt.Sprintf("'-o StrictHostKeyChecking=no -o ProxyCommand=%q'", proxyCommand)
+}
+
+// cliHelperPath resolves the `infracanvas` CLI binary used as the SSH
+// ProxyCommand target for local_agent runs (see the ansibleArgs branch in
+// RunPipeline). The hosted Runner's host/container must have this binary
+// available — it already does, via the existing CLI release pipeline.
+func cliHelperPath() string {
+	if p := os.Getenv("INFRACANVAS_CLI_PATH"); p != "" {
+		return p
+	}
+	return "infracanvas"
 }
 
 // SecretRedactor masks sensitive credentials values inside log lines
@@ -228,6 +333,7 @@ func RunPipeline(
 	autoDestroy bool,
 	extraEnv []string,
 	secretsToMask []string,
+	agentCtx *AgentContext,
 	logChan chan<- string,
 	onNodeStatus func(nodeId, status string),
 	onStatusChange func(status string),
@@ -235,6 +341,7 @@ func RunPipeline(
 ) {
 	isDocker := os.Getenv("IS_DOCKER") == "true"
 	isSandboxRun := isSandbox(canvasJSON)
+	isLocalAgentRun := agentCtx != nil && agentCtx.AgentID != ""
 	runDir := "/app/data/workspace/current"
 	if !isDocker {
 		runDir = "./data/workspace/current"
@@ -445,7 +552,9 @@ func RunPipeline(
 			content = strings.ReplaceAll(content, "http://localhost:4566", fmt.Sprintf("http://%s:4566", localstackHost))
 		}
 
-		if file.Path == "ansible/hosts.ini" && isSandboxRun && isDocker {
+		if file.Path == "ansible/hosts.ini" && isLocalAgentRun {
+			content = localAgentHostsINI(agentCtx, hasTfNodes)
+		} else if file.Path == "ansible/hosts.ini" && isSandboxRun && isDocker {
 			if !hasTfNodes {
 				content = strings.ReplaceAll(`[webservers]
 ubuntu_ssh_1 ansible_host=ubuntu_ssh_1 ansible_port=22 ansible_user=ubuntu
@@ -459,8 +568,17 @@ ansible_python_interpreter=/usr/bin/python3`, "__COLON__", ":")
 			}
 		}
 
-		// Inject custom SSH key path and username into hosts.ini if ANSIBLE_SSH_KEY_PATH is present
-		if file.Path == "ansible/hosts.ini" {
+		// Inject custom SSH key path and username into hosts.ini if ANSIBLE_SSH_KEY_PATH is present.
+		// Skipped entirely for a local_agent run: this block writes
+		// ansible_ssh_private_key_file / ansible_ssh_common_args into
+		// hosts.ini's [all:vars], and Ansible's inventory-level vars take
+		// precedence over the --private-key/--ssh-common-args CLI flags
+		// localAgentSSHCommonArgs already set — so leaving this block
+		// unconditional silently discarded the ProxyCommand tunnel bridge
+		// whenever a project had BOTH a paired agent and a separately
+		// configured project SSH credential, falling back to a direct
+		// (unreachable) connection to the "agent-tunnel" placeholder host.
+		if file.Path == "ansible/hosts.ini" && !isLocalAgentRun {
 			if !isSandboxRun {
 				var customSshUser string
 				for _, kv := range extraEnv {
@@ -576,7 +694,16 @@ ansible_python_interpreter=/usr/bin/python3`, "__COLON__", ":")
 		// Clean up previous backend state pointer to avoid "Unsetting previously set backend s3" init errors when switching targets
 		_ = os.Remove(filepath.Join(tfDir, ".terraform", "terraform.tfstate"))
 
-		if err := spawnCommand("terraform", []string{"init", "-reconfigure", "-input=false"}, tfDir, tfEnv, redactor, logChan); err != nil {
+		// -force-copy answers "yes" to Terraform's backend state-migration
+		// prompt automatically. Without it, `-input=false` (required since
+		// this runs unattended) makes init fail outright with "Can't ask
+		// approval for state migration" whenever the backend config changes
+		// between runs of the same workspace and existing state needs
+		// migrating — e.g. LocalStack sandbox runs re-targeting the same
+		// state bucket after prior runs. Safe to force here: this is
+		// throwaway sandbox/live state Terraform manages itself, not a
+		// destructive action on user data.
+		if err := spawnCommand("terraform", []string{"init", "-reconfigure", "-input=false", "-force-copy"}, tfDir, tfEnv, redactor, logChan); err != nil {
 			emit(fmt.Sprintf("[ERROR] Terraform init failed: %v", err))
 			emitSliceStatus(tfNodeIDs, "failed")
 			onComplete("FAILED", accumulatedLogs)
@@ -668,10 +795,25 @@ ansible_python_interpreter=/usr/bin/python3`, "__COLON__", ":")
 		emit("=========================================\n")
 
 		var activeKeyPath string
-		if sshKeyFilePath != "" {
+		if isLocalAgentRun {
+			// Per-installation key uploaded once during pairing (see
+			// obsidian_memory/08.4) — decrypted by the caller and handed in via
+			// agentCtx, never persisted server-side outside the vault.
+			tmpKeyPath := fmt.Sprintf("/tmp/agent_key_%s", runID)
+			_ = os.WriteFile(tmpKeyPath, []byte(agentCtx.PrivateKeyPEM), 0600)
+			defer os.Remove(tmpKeyPath)
+			activeKeyPath = tmpKeyPath
+		} else if sshKeyFilePath != "" {
 			activeKeyPath = sshKeyFilePath
-		} else {
-			// Sandbox fallback
+		} else if isSandboxRun {
+			// Sandbox fallback — only for a LocalStack sandbox run. A real
+			// AWS/GCP/Azure deploy must never silently reuse this shared,
+			// every-install key; see the matching gate on the Terraform-side
+			// public key injection in apps/api/main.go's
+			// extractSecretsAndEnvironment. Falling through with
+			// activeKeyPath == "" here surfaces the "Private SSH key not
+			// found" error below instead, which is the correct outcome for a
+			// live deploy with no credential configured.
 			keySourcePath := "/app/sandbox/id_rsa"
 			if !fileExists(keySourcePath) {
 				keySourcePath = "../../sandbox/id_rsa"
@@ -686,17 +828,29 @@ ansible_python_interpreter=/usr/bin/python3`, "__COLON__", ":")
 		}
 
 		if activeKeyPath == "" {
-			emit("[ERROR] Private SSH key not found. Ensure keys are configured.")
+			if isSandboxRun {
+				emit("[ERROR] Private SSH key not found. Ensure keys are configured.")
+			} else {
+				emit("[ERROR] This live deploy has no SSH credential configured. Add one under Project Credentials before deploying to a real cloud target — the shared sandbox key cannot be used for real infrastructure.")
+			}
 			emitSliceStatus(ansibleNodeIDs, "failed")
 			onComplete("FAILED", accumulatedLogs)
 			return
 		}
 
+		// For a local_agent run, this global default is deliberately left
+		// without a ProxyCommand: every host in a local_agent hosts.ini is
+		// generated by localAgentHostsINI above with its own per-host
+		// ansible_ssh_common_args (a distinct ProxyCommand per host, needed
+		// once a run can address more than one sandbox SSH container), and
+		// Ansible's inventory-level vars take precedence over this CLI flag
+		// regardless.
+		sshCommonArgs := "-o StrictHostKeyChecking=no"
 		ansibleArgs := []string{
 			"-i", "hosts.ini",
 			"playbook.yml",
 			"--private-key=" + activeKeyPath,
-			"--ssh-common-args=-o StrictHostKeyChecking=no",
+			"--ssh-common-args=" + sshCommonArgs,
 		}
 		if verboseMode {
 			ansibleArgs = append(ansibleArgs, "-vvv")

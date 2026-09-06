@@ -2,6 +2,116 @@ import { Node, Edge } from '@xyflow/react';
 import { generateAnsibleYAML } from './exportYaml';
 import { DEFAULT_INSTANCE_PARAMS, DEFAULT_SG_PARAMS } from './terraformDefaults';
 
+// Canvas node `data.parameters` is a loosely-shaped, user-editable JSON bag —
+// different node "tech" types (Terraform/Ansible/Kubernetes) populate different
+// subsets of these fields, so everything here is optional. The index signature
+// covers custom-node template substitution, which reads/writes arbitrary keys.
+export interface Tag {
+  key: string;
+  value: string;
+}
+
+interface NodeParams {
+  // AWS EC2 instance
+  instanceName?: string;
+  amiId?: string;
+  instanceType?: string;
+  rootVolumeSize?: number;
+  tags?: Tag[];
+  subnetId?: string;
+  securityGroupId?: string;
+  // AWS security group
+  sgName?: string;
+  description?: string;
+  allowedCidr?: string;
+  httpPort?: number;
+  httpsPort?: number;
+  sshEnabled?: boolean;
+  ingressPorts?: string;
+  vpcId?: string;
+  // AWS S3 bucket
+  bucketName?: string;
+  forceDestroy?: boolean;
+  versioningEnabled?: boolean;
+  // AWS RDS instance
+  dbName?: string;
+  allocatedStorage?: number;
+  instanceClass?: string;
+  username?: string;
+  password?: string;
+  engineVersion?: string;
+  dbSubnetGroupName?: string;
+  vpcSecurityGroupIds?: string;
+  // AWS VPC
+  vpcName?: string;
+  cidrBlock?: string;
+  enableDnsHostnames?: boolean;
+  // AWS subnet
+  subnetName?: string;
+  availabilityZone?: string;
+  mapPublicIp?: boolean;
+  // GCP compute instance
+  gcpInstanceName?: string;
+  gcpMachineType?: string;
+  gcpDiskSize?: number;
+  gcpImage?: string;
+  // Azure VM
+  azureVmName?: string;
+  azureVmSize?: string;
+  azureDiskSize?: number;
+  azurePublisher?: string;
+  azureOffer?: string;
+  azureSku?: string;
+  // Kubernetes deployment
+  deploymentName?: string;
+  replicas?: number;
+  imageName?: string;
+  containerPort?: number;
+  cpuLimit?: string;
+  memoryLimit?: string;
+  // Kubernetes service
+  serviceName?: string;
+  serviceType?: string;
+  port?: number;
+  targetPort?: number;
+  // Kubernetes configmap
+  configMapName?: string;
+  dataKey?: string;
+  dataValue?: string;
+  // Kubernetes secret
+  secretName?: string;
+  secretKey?: string;
+  secretValue?: string;
+  // Kubernetes ingress
+  ingressName?: string;
+  host?: string;
+  path?: string;
+  servicePort?: number;
+  // Kubernetes PVC
+  pvcName?: string;
+  storageSize?: string;
+  storageClass?: string;
+  // Ansible node fallback host wiring
+  ansibleUser?: string;
+  ansibleHost?: string;
+  [key: string]: unknown;
+}
+
+// Shape of a canvas node's `data` payload as read across bundle generation.
+interface CanvasNodeData {
+  tech?: string;
+  label?: string;
+  environment?: string;
+  region?: string;
+  gcpZone?: string;
+  projectId?: string;
+  isCustom?: boolean;
+  rawCode?: string;
+  codeType?: string;
+  parameters?: NodeParams;
+  [key: string]: unknown;
+}
+
 export interface FileItem {
   path: string;
   name: string;
@@ -21,14 +131,14 @@ export interface TerraformFiles {
 
 export function generateTerraformFiles(nodes: Node[], edges: Edge[] = []): TerraformFiles {
   // Collect all Target nodes present on the canvas
-  let connectedTargets: Node[] = nodes.filter(n => (n.data as any)?.tech === 'Target' || n.id.startsWith('aws_target') || n.id.startsWith('gcp_target') || n.id.startsWith('azure_target'));
+  let connectedTargets: Node[] = nodes.filter(n => (n.data as unknown as CanvasNodeData)?.tech === 'Target' || n.id.startsWith('aws_target') || n.id.startsWith('gcp_target') || n.id.startsWith('azure_target'));
 
   // Default fallback if no target node exists on canvas
   if (connectedTargets.length === 0) {
     connectedTargets = [{
       id: 'aws_target_default',
       data: { tech: 'Target', environment: 'localstack', region: 'us-east-1' }
-    } as any];
+    } as unknown as Node];
   }
 
   const hasAws = connectedTargets.some(t => t.id.startsWith('aws_target'));
@@ -40,8 +150,8 @@ export function generateTerraformFiles(nodes: Node[], edges: Edge[] = []): Terra
 
   if (hasAws) {
     const awsTarget = connectedTargets.find(t => t.id.startsWith('aws_target'));
-    const awsRegion = ((awsTarget?.data as any)?.region as string) || 'us-east-1';
-    const environment = ((awsTarget?.data as any)?.environment as string) || 'localstack';
+    const awsRegion = (awsTarget?.data as unknown as CanvasNodeData)?.region || 'us-east-1';
+    const environment = (awsTarget?.data as unknown as CanvasNodeData)?.environment || 'localstack';
 
     requiredProviders += `    aws = {
       source  = "hashicorp/aws"
@@ -100,8 +210,8 @@ ${requiredProviders}  }
 `;
 
   const awsTarget = connectedTargets.find(t => t.id.startsWith('aws_target'));
-  if (awsTarget && ((awsTarget?.data as any)?.environment as string) === 'localstack') {
-    const awsRegion = ((awsTarget?.data as any)?.region as string) || 'us-east-1';
+  if (awsTarget && (awsTarget?.data as unknown as CanvasNodeData)?.environment === 'localstack') {
+    const awsRegion = (awsTarget?.data as unknown as CanvasNodeData)?.region || 'us-east-1';
     providerBlock += `
   backend "s3" {
     bucket                      = "infracanvas-state-bucket"
@@ -118,7 +228,7 @@ ${requiredProviders}  }
 
   providerBlock += `}`;
 
-  const tfNodes = nodes.filter(n => (n.data as any)?.tech === 'Terraform');
+  const tfNodes = nodes.filter(n => (n.data as unknown as CanvasNodeData)?.tech === 'Terraform');
   const dummySshKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQC2R1m2hJc6eC+7737t8t8O1/Y2N5hDkK1aP4+rD2mZ6bJ9mF7C8F9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2= dummy-infracanvas-key";
   let tfResourcesBlock = '';
   let subnetBlock = '';
@@ -128,7 +238,7 @@ ${requiredProviders}  }
   // Read AWS instance params if AWS is used
   let awsInstanceType = 't3.medium';
   const instanceNode = nodes.find(n => n.id.startsWith('aws_instance.web_server'));
-  const p = (instanceNode?.data as any)?.parameters || {};
+  const p: NodeParams = (instanceNode?.data as unknown as CanvasNodeData)?.parameters || {};
   if (p.instanceType) {
     awsInstanceType = p.instanceType;
   }
@@ -136,7 +246,7 @@ ${requiredProviders}  }
   if (hasAws) {
     variablesTf += `variable "aws_region" {
   type        = string
-  default     = "${awsTarget && ((awsTarget?.data as any)?.region as string) || 'us-east-1'}"
+  default     = "${awsTarget && (awsTarget?.data as unknown as CanvasNodeData)?.region || 'us-east-1'}"
   description = "Target AWS region for deployment"
 }
 
@@ -155,9 +265,9 @@ variable "aws_ssh_pub_key" {
 
   if (hasGcp) {
     const gcpTarget = connectedTargets.find(t => t.id.startsWith('gcp_target'));
-    const gcpRegion = ((gcpTarget?.data as any)?.region as string) || 'us-central1';
-    const gcpZone = ((gcpTarget?.data as any)?.gcpZone as string) || 'us-central1-a';
-    const gcpProjectId = ((gcpTarget?.data as any)?.projectId as string) || 'infracanvas-prod-12345';
+    const gcpRegion = (gcpTarget?.data as unknown as CanvasNodeData)?.region || 'us-central1';
+    const gcpZone = (gcpTarget?.data as unknown as CanvasNodeData)?.gcpZone || 'us-central1-a';
+    const gcpProjectId = (gcpTarget?.data as unknown as CanvasNodeData)?.projectId || 'infracanvas-prod-12345';
 
     variablesTf += `variable "gcp_project_id" {
   type    = string
@@ -189,7 +299,7 @@ variable "gcp_ssh_pub_key" {
 
   tfNodes.forEach(node => {
     const id = node.id;
-    const p = (node.data as any)?.parameters || {};
+    const p: NodeParams = (node.data as unknown as CanvasNodeData)?.parameters || {};
 
     if (id.startsWith('aws_instance.web_server')) {
       if (hasAws) {
@@ -198,10 +308,10 @@ variable "gcp_ssh_pub_key" {
         const type = p.instanceType || 't3.medium';
         const rootVolume = p.rootVolumeSize || 50;
         const tagsList = p.tags || [{ key: 'Environment', value: 'prod' }, { key: 'Role', value: 'web' }];
-        const tagLines = tagsList.map((t: any) => `${t.key} = "${t.value}"`).join('\n    ');
+        const tagLines = tagsList.map((t: Tag) => `${t.key} = "${t.value}"`).join('\n    ');
 
         const awsTargetNode = connectedTargets.find(t => t.id.startsWith('aws_target'));
-        const awsEnv = ((awsTargetNode?.data as any)?.environment as string) || 'localstack';
+        const awsEnv = (awsTargetNode?.data as unknown as CanvasNodeData)?.environment || 'localstack';
         let subnetLine = '';
         if (p.subnetId) {
           const val = p.subnetId.trim();
@@ -215,19 +325,19 @@ variable "gcp_ssh_pub_key" {
           const incomingSubnetEdges = edges.filter(e => e.target === id && e.source.startsWith('aws_subnet'));
           if (incomingSubnetEdges.length > 0) {
             const subnetNode = nodes.find(n => n.id === incomingSubnetEdges[0].source);
-            const subnetName = ((subnetNode?.data as any)?.parameters?.subnetName) || 'app_subnet_1a';
+            const subnetName = ((subnetNode?.data as unknown as CanvasNodeData)?.parameters?.subnetName) || 'app_subnet_1a';
             subnetLine = `\n  subnet_id     = aws_subnet.${subnetName}.id`;
           } else {
             // Check if there is any subnet node on the canvas
             const firstSubnet = tfNodes.find(n => n.id.startsWith('aws_subnet'));
             if (firstSubnet) {
-              const subnetName = ((firstSubnet.data as any)?.parameters?.subnetName) || 'app_subnet_1a';
+              const subnetName = ((firstSubnet.data as unknown as CanvasNodeData)?.parameters?.subnetName) || 'app_subnet_1a';
               subnetLine = `\n  subnet_id     = aws_subnet.${subnetName}.id`;
             } else {
               // Check if a VPC exists on the canvas. If so, automatically generate a subnet inside it
               const firstVpc = tfNodes.find(n => n.id.startsWith('aws_vpc'));
               if (firstVpc) {
-                const vpcName = ((firstVpc.data as any)?.parameters?.vpcName) || 'app_vpc';
+                const vpcName = ((firstVpc.data as unknown as CanvasNodeData)?.parameters?.vpcName) || 'app_vpc';
                 subnetBlock = `resource "aws_subnet" "infracanvas_auto_subnet" {
   vpc_id                  = aws_vpc.${vpcName}.id
   cidr_block              = "10.0.1.0/24"
@@ -273,14 +383,14 @@ data "aws_subnets" "default" {
           const incomingSgEdges = edges.filter(e => e.target === id && e.source.startsWith('aws_security_group'));
           if (incomingSgEdges.length > 0) {
             const sgNode = nodes.find(n => n.id === incomingSgEdges[0].source);
-            const sgName = ((sgNode?.data as any)?.parameters?.sgName) || 'web_sg';
+            const sgName = ((sgNode?.data as unknown as CanvasNodeData)?.parameters?.sgName) || 'web_sg';
             sgLine = `\n  vpc_security_group_ids = [aws_security_group.${sgName}.id]`;
           } else {
             // Fallback to old behavior: if any sg node exists
             const hasSg = tfNodes.some(n => n.id.startsWith('aws_security_group'));
             if (hasSg) {
               const sgNode = tfNodes.find(n => n.id.startsWith('aws_security_group'));
-              const sgName = ((sgNode?.data as any)?.parameters?.sgName) || 'web_sg';
+              const sgName = ((sgNode?.data as unknown as CanvasNodeData)?.parameters?.sgName) || 'web_sg';
               sgLine = `\n  vpc_security_group_ids = [aws_security_group.${sgName}.id]`;
             }
           }
@@ -504,19 +614,19 @@ resource "azurerm_linux_virtual_machine" "vm" {
         const incomingVpcEdges = edges.filter(e => e.target === id && e.source.startsWith('aws_vpc'));
         if (incomingVpcEdges.length > 0) {
           const vpcNode = nodes.find(n => n.id === incomingVpcEdges[0].source);
-          const vpcName = ((vpcNode?.data as any)?.parameters?.vpcName) || 'app_vpc';
+          const vpcName = ((vpcNode?.data as unknown as CanvasNodeData)?.parameters?.vpcName) || 'app_vpc';
           vpcLine = `\n  vpc_id      = aws_vpc.${vpcName}.id`;
         } else {
           // If any VPC node exists on the canvas, default to it
           const firstVpc = tfNodes.find(n => n.id.startsWith('aws_vpc'));
           if (firstVpc) {
-            const vpcName = ((firstVpc.data as any)?.parameters?.vpcName) || 'app_vpc';
+            const vpcName = ((firstVpc.data as unknown as CanvasNodeData)?.parameters?.vpcName) || 'app_vpc';
             vpcLine = `\n  vpc_id      = aws_vpc.${vpcName}.id`;
           }
         }
       }
 
-      let hasSshRule = ingressRules.includes('from_port   = 22') || ingressRules.includes('from_port = 22') || ingressRules.includes('from_port   = 22\n') || ingressRules.includes('from_port = 22\n');
+      const hasSshRule = ingressRules.includes('from_port   = 22') || ingressRules.includes('from_port = 22') || ingressRules.includes('from_port   = 22\n') || ingressRules.includes('from_port = 22\n');
       let sshRuleStr = '';
       if (!hasSshRule) {
         sshRuleStr = `\n  ingress {
@@ -586,7 +696,7 @@ resource "aws_s3_bucket_versioning" "${name}_versioning" {
         const incomingSgEdges = edges.filter(e => e.target === id && e.source.startsWith('aws_security_group'));
         if (incomingSgEdges.length > 0) {
           const sgNode = nodes.find(n => n.id === incomingSgEdges[0].source);
-          const sgName = ((sgNode?.data as any)?.parameters?.sgName) || 'web_sg';
+          const sgName = ((sgNode?.data as unknown as CanvasNodeData)?.parameters?.sgName) || 'web_sg';
           extraParams += `\n  vpc_security_group_ids = [aws_security_group.${sgName}.id]`;
         }
       }
@@ -657,14 +767,14 @@ resource "aws_route_table" "${name}_rt" {
         const incomingVpcEdges = edges.filter(e => e.target === id && e.source.startsWith('aws_vpc'));
         if (incomingVpcEdges.length > 0) {
           const vpcNode = nodes.find(n => n.id === incomingVpcEdges[0].source);
-          const vpcName = ((vpcNode?.data as any)?.parameters?.vpcName) || 'app_vpc';
+          const vpcName = ((vpcNode?.data as unknown as CanvasNodeData)?.parameters?.vpcName) || 'app_vpc';
           vpc = `aws_vpc.${vpcName}.id`;
           vpcNameForRt = vpcName;
         } else {
           // Fallback to first VPC found or placeholder
           const firstVpc = tfNodes.find(n => n.id.startsWith('aws_vpc'));
           if (firstVpc) {
-            const vpcName = ((firstVpc?.data as any)?.parameters?.vpcName) || 'app_vpc';
+            const vpcName = ((firstVpc?.data as unknown as CanvasNodeData)?.parameters?.vpcName) || 'app_vpc';
             vpc = `aws_vpc.${vpcName}.id`;
             vpcNameForRt = vpcName;
           } else {
@@ -693,13 +803,14 @@ resource "aws_route_table" "${name}_rt" {
 }\n\n`;
       }
     }
-    else if ((node.data as any)?.isCustom && (node.data as any)?.tech === 'Terraform') {
-      let customCode = (node.data as any).rawCode || '';
-      const params = (node.data as any).parameters || {};
+    else if ((node.data as unknown as CanvasNodeData)?.isCustom && (node.data as unknown as CanvasNodeData)?.tech === 'Terraform') {
+      const nodeData = node.data as unknown as CanvasNodeData;
+      let customCode = nodeData.rawCode || '';
+      const params: NodeParams = nodeData.parameters || {};
       Object.keys(params).forEach(key => {
         customCode = customCode.replace(new RegExp(`var\\.${key}`, 'g'), `"${params[key]}"`);
       });
-      tfResourcesBlock += `# Custom Node: ${node.data?.label || id}\n${customCode}\n\n`;
+      tfResourcesBlock += `# Custom Node: ${nodeData.label || id}\n${customCode}\n\n`;
     }
   });
 
@@ -716,7 +827,7 @@ ${tfResourcesBlock}`;
 
   tfNodes.forEach(node => {
     const id = node.id;
-    const p = (node.data as any)?.parameters || {};
+    const p: NodeParams = (node.data as unknown as CanvasNodeData)?.parameters || {};
     if (id.startsWith('aws_s3_bucket') && hasAws) {
       const name = p.bucketName || 'infracanvas-user-bucket';
       outputsTfContent += `output "${name}_bucket_arn" {
@@ -735,7 +846,7 @@ ${tfResourcesBlock}`;
 
   // Dynamic parameters HCL output resolver
   const getDynamicHclOutputExpr = (node: Node, outputKey: string, isGcp: boolean): string => {
-    const p = (node.data as any)?.parameters || {};
+    const p: NodeParams = (node.data as unknown as CanvasNodeData)?.parameters || {};
     const id = node.id;
     
     if (isGcp) {
@@ -839,9 +950,9 @@ export async function downloadTerraformZip(nodes: Node[], edges: Edge[] = []): P
 }
 
 export function generateBundleFiles(nodes: Node[], edges: Edge[]): FileItem[] {
-  const hasTerraform = nodes.some(n => (n.data as any)?.tech === 'Terraform');
-  const hasAnsible = nodes.some(n => (n.data as any)?.tech === 'Ansible' || (n.data as any)?.tech === 'Source');
-  const hasKubernetes = nodes.some(n => (n.data as any)?.tech === 'Kubernetes');
+  const hasTerraform = nodes.some(n => (n.data as unknown as CanvasNodeData)?.tech === 'Terraform');
+  const hasAnsible = nodes.some(n => (n.data as unknown as CanvasNodeData)?.tech === 'Ansible' || (n.data as unknown as CanvasNodeData)?.tech === 'Source');
+  const hasKubernetes = nodes.some(n => (n.data as unknown as CanvasNodeData)?.tech === 'Kubernetes');
 
   const countLines = (str: string) => str.split('\n').length;
   const getSizeKb = (str: string) => `${(str.length / 1024).toFixed(1)} KB`;
@@ -858,20 +969,20 @@ export function generateBundleFiles(nodes: Node[], edges: Edge[]): FileItem[] {
   }
 
   if (hasAnsible) {
-    const targetNode = nodes.find(n => (n.data as any)?.tech === 'Target');
+    const targetNode = nodes.find(n => (n.data as unknown as CanvasNodeData)?.tech === 'Target');
     const isGcp = targetNode?.id.startsWith('gcp_target');
     const playbookYml = generateAnsibleYAML(nodes, edges);
     const colon = ':';
-    
+
     // Find starting Ansible node
-    const ansibleNodes = nodes.filter(n => (n.data as any)?.tech === 'Ansible' || (n.data as any)?.tech === 'Source');
+    const ansibleNodes = nodes.filter(n => (n.data as unknown as CanvasNodeData)?.tech === 'Ansible' || (n.data as unknown as CanvasNodeData)?.tech === 'Source');
     const ansibleNodeIds = new Set(ansibleNodes.map(n => n.id));
     const nonStartAnsibleIds = new Set(
       edges.filter(e => ansibleNodeIds.has(e.target) && ansibleNodeIds.has(e.source)).map(e => e.target)
     );
     const startAnsibleNodes = ansibleNodes.filter(n => !nonStartAnsibleIds.has(n.id));
     const startNode = startAnsibleNodes[0];
-    const startParams = (startNode?.data as any)?.parameters || {};
+    const startParams: NodeParams = (startNode?.data as unknown as CanvasNodeData)?.parameters || {};
 
     let hostLine = '';
     // Check if starting Ansible node has incoming VM connection
@@ -884,7 +995,7 @@ export function generateBundleFiles(nodes: Node[], edges: Edge[]): FileItem[] {
 
     if (incomingVmEdges.length > 0) {
       const vmNode = nodes.find(n => n.id === incomingVmEdges[0].source);
-      const vmParams = (vmNode?.data as any)?.parameters || {};
+      const vmParams: NodeParams = (vmNode?.data as unknown as CanvasNodeData)?.parameters || {};
       const vmName = vmParams.instanceName || 'web_server';
       if (vmNode?.id.startsWith('aws_instance')) {
         hostLine = `web_server_1 ansible_host=aws_instance.${vmName}.public_ip ansible_user=${sshUser}`;
@@ -901,7 +1012,7 @@ export function generateBundleFiles(nodes: Node[], edges: Edge[]): FileItem[] {
       // Fallback to first VM on canvas
       const fallbackVm = nodes.find(n => n.id.startsWith('aws_instance.web_server'));
       if (fallbackVm) {
-        const vmParams = (fallbackVm.data as any)?.parameters || {};
+        const vmParams: NodeParams = (fallbackVm.data as unknown as CanvasNodeData)?.parameters || {};
         const vmName = vmParams.instanceName || 'web_server';
         hostLine = `web_server_1 ansible_host=aws_instance.${vmName}.public_ip ansible_user=${sshUser}`;
       } else {
@@ -928,10 +1039,10 @@ ansible_python_interpreter=/usr/bin/python3`;
 
   if (hasKubernetes) {
     const k8sManifests: string[] = [];
-    const k8sNodes = nodes.filter(n => (n.data as any)?.tech === 'Kubernetes');
+    const k8sNodes = nodes.filter(n => (n.data as unknown as CanvasNodeData)?.tech === 'Kubernetes');
     k8sNodes.forEach(node => {
       const id = node.id;
-      const p = (node.data as any)?.parameters || {};
+      const p: NodeParams = (node.data as unknown as CanvasNodeData)?.parameters || {};
 
       if (id.startsWith('k8s_deployment')) {
         const name = p.deploymentName || 'app-deploy';
@@ -1054,10 +1165,11 @@ spec:
       storage: ${size}
   storageClassName: ${storageClass}`);
       }
-      else if ((node.data as any)?.isCustom && (node.data as any)?.tech === 'Kubernetes') {
-        let customYaml = (node.data as any).rawCode || '';
-        const params = (node.data as any).parameters || {};
-        
+      else if ((node.data as unknown as CanvasNodeData)?.isCustom && (node.data as unknown as CanvasNodeData)?.tech === 'Kubernetes') {
+        const nodeData = node.data as unknown as CanvasNodeData;
+        let customYaml = nodeData.rawCode || '';
+        const params: NodeParams = nodeData.parameters || {};
+
         Object.entries(params).forEach(([key, val]) => {
           const re = new RegExp(`\\{\\{\\s*${key}\\s*\\}\\}`, 'g');
           customYaml = customYaml.replace(re, `${val}`);

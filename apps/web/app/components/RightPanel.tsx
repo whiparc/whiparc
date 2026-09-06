@@ -6,7 +6,7 @@ import { useMemo, useState, ReactNode } from 'react';
 import { Node } from '@xyflow/react';
 import useCanvasStore from '../store/useCanvasStore';
 import { generateAnsibleYAML } from '../lib/exportYaml';
-import { Button, IconButton, Badge } from '../lib/uiComponents';
+import { Button, Badge } from '../lib/uiComponents';
 
 // YAML Syntax Highlighting Function
 function highlightYAML(code: string): ReactNode[] {

@@ -38,7 +38,7 @@ jobs:
           context: ./apps/api
           file: ./apps/api/Dockerfile.base
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/infra-canvas-runner-base:latest
+          tags: ghcr.io/${{ github.repository_owner }}/whiparc-runner-base:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -48,6 +48,6 @@ jobs:
           context: ./sandbox
           file: ./sandbox/Dockerfile.ssh.base
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/infra-canvas-sandbox-base:latest
+          tags: ghcr.io/${{ github.repository_owner }}/whiparc-sandbox-base:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max

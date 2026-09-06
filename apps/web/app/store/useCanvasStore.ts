@@ -12,6 +12,23 @@ import {
 
 export type NodeExecutionStatus = 'idle' | 'pending' | 'running' | 'completed' | 'failed';
 
+// A custom automation block created via CustomNodeModal and persisted through
+// the /api/projects/:id/custom-nodes endpoint. Kept separate from the
+// canvas's react-flow `Node` type since these are library templates, not
+// placed nodes — see LibraryNode in app/workspace/page.tsx for the shape
+// these get mapped into before rendering in the node palette.
+export interface CustomLibraryNode {
+    id: string;
+    project_id?: string;
+    title: string;
+    tech: 'Terraform' | 'Ansible' | 'Kubernetes';
+    category: string;
+    description: string;
+    code_type: 'tf' | 'yml';
+    raw_code: string;
+    parsed_meta_json: string;
+}
+
 // Define the shape of your state
 type CanvasState = {
     nodes: Node[];
@@ -27,7 +44,7 @@ type CanvasState = {
     deleteNode: (nodeId: string) => void;
     setSelectedNodeId: (id: string | null) => void;
     setSelectedEdgeId: (id: string | null) => void;
-    updateNodeData: (nodeId: string, newData: any) => void;
+    updateNodeData: (nodeId: string, newData: Record<string, unknown>) => void;
     updateEdgeData: (edgeId: string, label: string, animated: boolean, stroke: string, strokeWidth: number) => void;
     deleteEdge: (edgeId: string) => void;
     resetCanvas: () => void;
@@ -46,9 +63,9 @@ type CanvasState = {
     setSaveStatus: (status: 'saved' | 'saving' | 'error' | 'readonly') => void;
     version: number;
     setVersion: (version: number) => void;
-    customLibraryNodes: any[];
-    setCustomLibraryNodes: (nodes: any[]) => void;
-    addCustomLibraryNode: (node: any) => void;
+    customLibraryNodes: CustomLibraryNode[];
+    setCustomLibraryNodes: (nodes: CustomLibraryNode[]) => void;
+    addCustomLibraryNode: (node: CustomLibraryNode) => void;
     deleteCustomLibraryNode: (nodeId: string) => void;
 };
 
@@ -178,7 +195,7 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
     setSelectedNodeId: (id) => set({ selectedNodeId: id }),
     setSelectedEdgeId: (id) => set({ selectedEdgeId: id }),
     
-    updateNodeData: (nodeId: string, newData: any) => {
+    updateNodeData: (nodeId, newData) => {
         set((state) => ({
             nodes: state.nodes.map((node) => {
                 if (node.id === nodeId) {
@@ -312,8 +329,8 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
     },
 
     customLibraryNodes: [],
-    setCustomLibraryNodes: (nodes: any[]) => set({ customLibraryNodes: nodes }),
-    addCustomLibraryNode: (node: any) => set({ customLibraryNodes: [node, ...get().customLibraryNodes] }),
+    setCustomLibraryNodes: (nodes) => set({ customLibraryNodes: nodes }),
+    addCustomLibraryNode: (node) => set({ customLibraryNodes: [node, ...get().customLibraryNodes] }),
     deleteCustomLibraryNode: (nodeId: string) => set({ customLibraryNodes: get().customLibraryNodes.filter(n => n.id !== nodeId) }),
 }));
 

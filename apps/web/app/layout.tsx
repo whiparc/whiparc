@@ -5,7 +5,7 @@ const geistSans = { variable: "font-sans" };
 const geistMono = { variable: "font-mono" };
 
 export const metadata: Metadata = {
-  title: "InfraCanvas - Visual Infrastructure Provisioning",
+  title: "Whiparc - Visual Infrastructure Provisioning",
   description: "Design and provision infrastructure with a modern visual editor. Generate Ansible playbooks visually.",
 };
 
