@@ -423,13 +423,19 @@ export function generateAnsibleYAML(nodes: Node[], edges: Edge[]): string {
       ignore_errors: yes\n\n`;
     }
     else if (id.startsWith('shell_command')) {
-      const command = p.command || 'echo "hello"';
-      const chdir = p.chdir || '/tmp';
+      const command = (p.command || (data as Record<string, unknown>).command as string || 'echo "hello"').trim();
+      const chdir = p.chdir || (data as Record<string, unknown>).chdir as string || '/tmp';
+
+      const indentedCommand = command
+        .split('\n')
+        .map((l: string) => `        ${l}`)
+        .join('\n');
 
       tasksString += `    # Run shell command
     - name: Run arbitrary CLI shell command
-      ansible.builtin.shell:
-        cmd: "${command}"
+      ansible.builtin.shell: |
+${indentedCommand}
+      args:
         chdir: "${chdir}"\n\n`;
     }
     else if (id.startsWith('file_copy')) {
