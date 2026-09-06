@@ -26,7 +26,6 @@ import ProfileMenu from '../components/ProfileMenu';
 import Tooltip from '../components/Tooltip';
 import CustomNodeModal from '../components/CustomNodeModal';
 import { ProjectSettingsModal } from '../components/ProjectSettingsModal';
-import { CredentialManagerTab } from '../components/CredentialManagerModal';
 import { InputWithVariablePicker } from '../components/VariablePicker';
 import { generateAnsibleYAML } from '../lib/exportYaml';
 import { downloadZipBundle, downloadTerraformZip, generateBundleFiles, generateTerraformFiles } from '../lib/bundleGenerator';

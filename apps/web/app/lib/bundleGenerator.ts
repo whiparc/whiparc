@@ -1,6 +1,5 @@
 import { Node, Edge } from '@xyflow/react';
 import { generateAnsibleYAML } from './exportYaml';
-import { DEFAULT_INSTANCE_PARAMS, DEFAULT_SG_PARAMS } from './terraformDefaults';
 
 // Canvas node `data.parameters` is a loosely-shaped, user-editable JSON bag —
 // different node "tech" types (Terraform/Ansible/Kubernetes) populate different
