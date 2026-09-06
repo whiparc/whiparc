@@ -553,18 +553,18 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
 
             {/* Technology Quick Filters */}
             <div className="flex flex-wrap gap-1">
-              {['All', 'Source', 'Target', 'Terraform', 'Ansible', 'Kubernetes'].map((tech) => (
+              {['All', 'Target', 'Terraform', 'Ansible', 'Kubernetes'].map((tech) => (
                 <button
                   key={tech}
                   onClick={() => onTechFilterSelect(tech)}
                   className={clsx(
-                    "flex-1 min-w-[42px] py-1.5 px-1 border border-border rounded-md text-[10px] font-medium flex items-center justify-center gap-1 transition-all cursor-pointer",
+                    "flex-1 min-w-[48px] py-1.5 px-1 border border-border rounded-md text-[10px] font-medium flex items-center justify-center gap-1 transition-all cursor-pointer",
                     techFilter === tech
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-muted hover:bg-muted/80 text-foreground"
                   )}
                 >
-                  {tech === 'All' ? 'All' : tech === 'Terraform' ? 'TF' : tech === 'Ansible' ? 'Ans' : tech === 'Kubernetes' ? 'K8s' : tech === 'Target' ? 'Cloud' : 'Repo'}
+                  {tech === 'All' ? 'All' : tech === 'Terraform' ? 'TF' : tech === 'Ansible' ? 'Ans' : tech === 'Kubernetes' ? 'K8s' : 'Cloud'}
                 </button>
               ))}
             </div>
@@ -1103,7 +1103,6 @@ const CanvasSummary: React.FC<{
   nodes: Node[];
   onSelectNode: (id: string) => void;
 }> = ({ nodes, onSelectNode }) => {
-  const srcNodes = nodes.filter((n) => n.data?.tech === 'Source');
   const targetNodes = nodes.filter((n) => n.data?.tech === 'Target');
   const tfNodes = nodes.filter((n) => n.data?.tech === 'Terraform');
   const ansNodes = nodes.filter((n) => n.data?.tech === 'Ansible');
@@ -1119,29 +1118,6 @@ const CanvasSummary: React.FC<{
       </div>
 
       <div className="space-y-4">
-        {srcNodes.length > 0 && (
-          <div className="space-y-2">
-            <h5 className="text-[10px] font-bold text-[#F59E0B] uppercase tracking-wider flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#F59E0B] animate-pulse"></span>
-              Source ({srcNodes.length})
-            </h5>
-            <div className="grid gap-1.5">
-              {srcNodes.map((node) => (
-                <button
-                  key={node.id}
-                  onClick={() => onSelectNode(node.id)}
-                  className="w-full text-left bg-muted/30 hover:bg-muted/70 border border-border/60 hover:border-[#F59E0B]/40 rounded-lg p-2.5 flex items-center justify-between text-xs text-foreground transition-all duration-200 group cursor-pointer"
-                >
-                  <span className="font-semibold truncate max-w-[200px] flex items-center gap-2">
-                    <Icon icon={node.data.icon as string} className="text-[#F59E0B] text-sm flex-shrink-0" />
-                    {node.data.label as string}
-                  </span>
-                  <Icon icon="lucide:chevron-right" className="text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all text-xs" />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {targetNodes.length > 0 && (
           <div className="space-y-2">
@@ -2706,142 +2682,7 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     </div>
                   )}
 
-                  {/* 2b. SOURCE / CODE REPOSITORY NODE PARAMETERS */}
-                  {selectedNode.data.tech === 'Source' && (
-                    <div className="space-y-4">
-                      <p className="text-[11px] text-muted-foreground">
-                        The pipeline clones this repository onto the target server and deploys the application using the configuration below.
-                      </p>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Repository URL</label>
-                        <input
-                          type="text"
-                          value={repoUrlVal}
-                          onChange={(e) => updateNodeData(selectedNode.id, { repoUrl: e.target.value })}
-                          placeholder="https://github.com/your-org/your-app.git"
-                          className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Branch</label>
-                        <input
-                          type="text"
-                          value={branchVal}
-                          onChange={(e) => updateNodeData(selectedNode.id, { branch: e.target.value })}
-                          placeholder="main"
-                          className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">GitHub Credential (for Private Repos)</label>
-                        <div className="relative">
-                          <select
-                            value={credentialIdVal}
-                            onChange={(e) => updateNodeData(selectedNode.id, { credentialId: e.target.value })}
-                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground appearance-none focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all cursor-pointer"
-                          >
-                            <option value="">-- Public Repository (No Auth) --</option>
-                            {availableCredentials.filter(c => c.provider === 'GITHUB').map(c => (
-                              <option key={c.id} value={c.id}>{c.name} ({c.key_fingerprint})</option>
-                            ))}
-                          </select>
-                          <Icon icon="lucide:chevron-down" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">App Stack / Preset</label>
-                        <div className="relative">
-                          <select
-                            value={appTypeVal}
-                            onChange={(e) => {
-                              const type = e.target.value;
-                              let buildCmd = '';
-                              let startCmd = '';
-                              let port = '';
-                              if (type === 'Node.js') {
-                                buildCmd = 'npm install';
-                                startCmd = 'pm2 start "npm start" --name app';
-                                port = '3000';
-                              } else if (type === 'Python') {
-                                buildCmd = 'pip install -r requirements.txt';
-                                startCmd = 'pm2 start "gunicorn app:app" --name app';
-                                port = '8000';
-                              } else if (type === 'Go') {
-                                buildCmd = 'go build -o app_binary';
-                                startCmd = 'pm2 start "./app_binary" --name app';
-                                port = '8080';
-                              } else if (type === 'Static Site') {
-                                buildCmd = 'npm install && npm run build';
-                                startCmd = 'cp -r dist/* /var/www/html/';
-                                port = '80';
-                              } else if (type === 'Java') {
-                                buildCmd = 'mvn clean package';
-                                startCmd = 'pm2 start "java -jar target/app.jar" --name app';
-                                port = '8080';
-                              }
-                              updateNodeData(selectedNode.id, {
-                                appType: type,
-                                buildCommand: buildCmd,
-                                startCommand: startCmd,
-                                appPort: port
-                              });
-                            }}
-                            className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground appearance-none focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all cursor-pointer"
-                          >
-                            <option value="">-- Custom / Manual Setup --</option>
-                            <option value="Node.js">Node.js (Express/Next)</option>
-                            <option value="Python">Python (Django/Flask/FastAPI)</option>
-                            <option value="Go">Go Binary</option>
-                            <option value="Static Site">Static HTML (Nginx)</option>
-                            <option value="Java">Java (Spring Boot)</option>
-                          </select>
-                          <Icon icon="lucide:chevron-down" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Destination Directory</label>
-                        <input
-                          type="text"
-                          value={destPathVal}
-                          onChange={(e) => updateNodeData(selectedNode.id, { destPath: e.target.value })}
-                          placeholder="/home/ubuntu/app"
-                          className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Build Command</label>
-                        <input
-                          type="text"
-                          value={buildCommandVal}
-                          onChange={(e) => updateNodeData(selectedNode.id, { buildCommand: e.target.value })}
-                          placeholder="npm install"
-                          className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Start Command</label>
-                        <input
-                          type="text"
-                          value={startCommandVal}
-                          onChange={(e) => updateNodeData(selectedNode.id, { startCommand: e.target.value })}
-                          placeholder="pm2 start 'npm start' --name app"
-                          className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">App Port (Optional)</label>
-                        <input
-                          type="text"
-                          value={appPortVal}
-                          onChange={(e) => updateNodeData(selectedNode.id, { appPort: e.target.value })}
-                          placeholder="3000"
-                          className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 2c. TARGET NODE PARAMETERS */}
+                   {/* 2c. TARGET NODE PARAMETERS */}
                   {selectedNode.data.tech === 'Target' && (
                     <div className="space-y-4">
                       {selectedNode.id.startsWith('aws_target') ? (
