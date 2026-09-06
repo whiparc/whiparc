@@ -1,4 +1,11 @@
-FROM ghcr.io/whiparc/whiparc-sandbox-base:latest
+# Tracks the dev-branch build of whiparc-sandbox-base by default, so local
+# sandbox builds pick up base-image changes as soon as they land on dev.
+# Requires publish-base-image.yml to have actually published a `:dev` tag —
+# until then this fails to resolve. Override with
+# `--build-arg BASE_IMAGE_TAG=latest` (or `=main`) for a production-style
+# build.
+ARG BASE_IMAGE_TAG=dev
+FROM ghcr.io/whiparc/whiparc-sandbox-base:${BASE_IMAGE_TAG}
 
 # Copy the public key for passwordless authentication
 COPY id_rsa.pub /home/ubuntu/.ssh/authorized_keys

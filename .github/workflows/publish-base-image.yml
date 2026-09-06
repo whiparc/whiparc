@@ -4,15 +4,46 @@ on:
   push:
     branches:
       - main
+      - dev
     paths:
       - 'apps/api/Dockerfile.base'
       - 'sandbox/Dockerfile.ssh.base'
       - '.github/workflows/publish-base-image.yml'
   workflow_dispatch:
 
+# Avoid two pushes to the same branch racing to publish/tag the same image.
+concurrency:
+  group: publish-base-image-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
+  # Each base image is only rebuilt when its own Dockerfile actually changed
+  # (or on a manual dispatch, where we rebuild both regardless).
+  changes:
+    name: Detect changed base images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      runner: ${{ steps.filter.outputs.runner }}
+      sandbox: ${{ steps.filter.outputs.sandbox }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Filter changed paths
+        uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            runner:
+              - 'apps/api/Dockerfile.base'
+            sandbox:
+              - 'sandbox/Dockerfile.ssh.base'
+
   publish:
     name: Build & Publish Base Images
+    needs: changes
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -32,22 +63,60 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # Tagging policy:
+      #  - main is the production branch: pushes there move `latest` and `main`.
+      #  - dev is the default branch contributors fork/build against: pushes
+      #    there only move `dev`, never `latest`/`main`.
+      #  - every build also gets an immutable `sha-<short-sha>` tag (for
+      #    rollback/traceability) and a tag matching its own branch name, so
+      #    a workflow_dispatch off some other branch still produces a
+      #    findable, non-colliding image instead of silently touching `dev`.
+      - name: Docker meta (runner base)
+        id: meta-runner
+        if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.runner == 'true' }}
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/whiparc-runner-base
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=main,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=dev,enable=${{ github.ref_name == 'dev' }}
+            type=ref,event=branch
+            type=sha,prefix=sha-,format=short
+
       - name: Build and Push Runner Base Image
+        if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.runner == 'true' }}
         uses: docker/build-push-action@v7
         with:
           context: ./apps/api
           file: ./apps/api/Dockerfile.base
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/whiparc-runner-base:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ${{ steps.meta-runner.outputs.tags }}
+          labels: ${{ steps.meta-runner.outputs.labels }}
+          cache-from: type=gha,scope=runner-base
+          cache-to: type=gha,mode=max,scope=runner-base
+
+      - name: Docker meta (sandbox base)
+        id: meta-sandbox
+        if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.sandbox == 'true' }}
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/whiparc-sandbox-base
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=main,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=dev,enable=${{ github.ref_name == 'dev' }}
+            type=ref,event=branch
+            type=sha,prefix=sha-,format=short
 
       - name: Build and Push Sandbox Base Image
+        if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.sandbox == 'true' }}
         uses: docker/build-push-action@v7
         with:
           context: ./sandbox
           file: ./sandbox/Dockerfile.ssh.base
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/whiparc-sandbox-base:latest
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          tags: ${{ steps.meta-sandbox.outputs.tags }}
+          labels: ${{ steps.meta-sandbox.outputs.labels }}
+          cache-from: type=gha,scope=sandbox-base
+          cache-to: type=gha,mode=max,scope=sandbox-base

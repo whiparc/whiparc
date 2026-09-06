@@ -6,6 +6,10 @@ services:
       # SSH ProxyCommand bridge (see obsidian_memory/08.4's Phase 1).
       context: .
       dockerfile: apps/api/Dockerfile
+    # Explicit (rather than Compose's default per-project name) so this
+    # matches docker-compose.hosted.yml's api image — building one stack
+    # then the other reuses the same image/cache instead of rebuilding it.
+    image: whiparc/api:dev
     container_name: whiparc-api
     ports:
       - "8080:8080"
@@ -38,8 +42,12 @@ services:
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
 
+  # ubuntu_ssh_1 and ubuntu_ssh_2 build the identical Dockerfile/context, so
+  # they share one `image:` name — Compose builds it once and reuses it for
+  # both containers instead of building the same image twice.
   ubuntu_ssh_1:
     container_name: whiparc-ubuntu_ssh_1
+    image: whiparc/sandbox-ssh:dev
     build:
       context: ./sandbox
       dockerfile: Dockerfile.ssh
@@ -48,6 +56,7 @@ services:
 
   ubuntu_ssh_2:
     container_name: whiparc-ubuntu_ssh_2
+    image: whiparc/sandbox-ssh:dev
     build:
       context: ./sandbox
       dockerfile: Dockerfile.ssh
