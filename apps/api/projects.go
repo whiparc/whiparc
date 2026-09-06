@@ -1014,8 +1014,8 @@ func handleCreateProjectCredential(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if payload.Provider != "AWS" && payload.Provider != "GCP" && payload.Provider != "SSH" {
-		http.Error(w, "Invalid provider: must be AWS, GCP, or SSH", http.StatusBadRequest)
+	if payload.Provider != "AWS" && payload.Provider != "GCP" && payload.Provider != "SSH" && payload.Provider != "GITHUB" {
+		http.Error(w, "Invalid provider: must be AWS, GCP, SSH, or GITHUB", http.StatusBadRequest)
 		return
 	}
 

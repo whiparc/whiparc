@@ -109,6 +109,13 @@ func Fingerprint(provider string, rawData []byte) string {
 		if len(keyStr) > 20 {
 			return fmt.Sprintf("ssh-key: %s...", keyStr[:15])
 		}
+	} else if provider == "GITHUB" {
+		var creds struct {
+			Token string `json:"token"`
+		}
+		if err := json.Unmarshal(rawData, &creds); err == nil && len(creds.Token) > 8 {
+			return fmt.Sprintf("ghp_****%s", creds.Token[len(creds.Token)-4:])
+		}
 	}
 	return "Masked Key"
 }

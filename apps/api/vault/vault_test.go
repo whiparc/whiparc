@@ -57,4 +57,10 @@ func TestFingerprint(t *testing.T) {
 	if fingerprintSSHJson != "-----BEGIN OPENSSH PRIVATE KEY----- (RSA/PEM Key)" {
 		t.Errorf("Expected JSON parsed prefix matching, got %q", fingerprintSSHJson)
 	}
+
+	githubRaw := []byte(`{"token":"ghp_1234567890abcdefghijklmnopqrstuvwxyz"}`)
+	fingerprintGithub := Fingerprint("GITHUB", githubRaw)
+	if fingerprintGithub != "ghp_****wxyz" {
+		t.Errorf("Expected ghp_****wxyz, got %q", fingerprintGithub)
+	}
 }

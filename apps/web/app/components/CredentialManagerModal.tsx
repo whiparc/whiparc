@@ -25,7 +25,8 @@ export default function CredentialManagerModal({ isOpen, onClose, projectId, tok
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [name, setName] = useState<string>('');
-  const [provider, setProvider] = useState<'AWS' | 'GCP' | 'SSH'>('AWS');
+  const [provider, setProvider] = useState<'AWS' | 'GCP' | 'SSH' | 'GITHUB'>('AWS');
+  const [githubToken, setGithubToken] = useState<string>('');
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
 
   // AWS Input Parameters
@@ -93,6 +94,14 @@ export default function CredentialManagerModal({ isOpen, onClose, projectId, tok
         private_key: rawTextData.trim(),
         ssh_user: sshUser.trim() || 'ubuntu'
       });
+    } else if (provider === 'GITHUB') {
+      if (!githubToken.trim()) {
+        setFeedbackMsg({ type: 'error', text: 'GitHub Personal Access Token is required.' });
+        return;
+      }
+      payloadData = JSON.stringify({
+        token: githubToken.trim()
+      });
     } else {
       if (!rawTextData.trim()) {
         setFeedbackMsg({ type: 'error', text: `${provider} key content is required.` });
@@ -122,6 +131,7 @@ export default function CredentialManagerModal({ isOpen, onClose, projectId, tok
         setAwsAccessKey('');
         setAwsSecretKey('');
         setRawTextData('');
+        setGithubToken('');
         fetchCredentials();
       } else {
         const errText = await res.text();
@@ -215,9 +225,11 @@ export default function CredentialManagerModal({ isOpen, onClose, projectId, tok
                     {provider === 'AWS' && <Icon icon="logos:aws" className="text-base" />}
                     {provider === 'GCP' && <Icon icon="logos:google-cloud" className="text-base" />}
                     {provider === 'SSH' && <Icon icon="lucide:key" className="text-primary text-base" />}
+                    {provider === 'GITHUB' && <Icon icon="logos:github-icon" className="text-base filter invert dark:invert-0" />}
                     {provider === 'AWS' && 'Amazon Web Services (AWS)'}
                     {provider === 'GCP' && 'Google Cloud Platform (GCP)'}
                     {provider === 'SSH' && 'SSH Private Key (.pem)'}
+                    {provider === 'GITHUB' && 'GitHub Personal Access Token'}
                   </span>
                   <Icon icon="lucide:chevron-down" className={`text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
                 </button>
@@ -244,6 +256,13 @@ export default function CredentialManagerModal({ isOpen, onClose, projectId, tok
                       className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-card text-left"
                     >
                       <Icon icon="lucide:key" className="text-primary" /> SSH PEM Private Key
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setProvider('GITHUB'); setIsDropdownOpen(false); }}
+                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-card text-left"
+                    >
+                      <Icon icon="logos:github-icon" className="filter invert dark:invert-0" /> GitHub PAT
                     </button>
                   </div>
                 )}
@@ -322,6 +341,22 @@ export default function CredentialManagerModal({ isOpen, onClose, projectId, tok
                 </div>
               )}
 
+              {provider === 'GITHUB' && (
+                <div className="space-y-3 p-3 rounded-lg bg-background/50 border border-border">
+                  <div>
+                    <label className="block text-xs text-slate-400 mb-1">GitHub Personal Access Token (PAT)</label>
+                    <input
+                      type="password"
+                      required
+                      value={githubToken}
+                      onChange={(e) => setGithubToken(e.target.value)}
+                      placeholder="ghp_..."
+                      className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-slate-100 outline-none focus:border-primary/50"
+                    />
+                  </div>
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={isSaving}
@@ -360,6 +395,7 @@ export default function CredentialManagerModal({ isOpen, onClose, projectId, tok
                         {cred.provider === 'AWS' && <Icon icon="logos:aws" className="text-lg" />}
                         {cred.provider === 'GCP' && <Icon icon="logos:google-cloud" className="text-lg" />}
                         {cred.provider === 'SSH' && <Icon icon="lucide:key" className="text-primary text-lg" />}
+                        {cred.provider === 'GITHUB' && <Icon icon="logos:github-icon" className="text-lg filter invert dark:invert-0" />}
                       </div>
                       <div>
                         <h4 className="text-sm font-semibold text-white">{cred.name}</h4>
@@ -395,7 +431,8 @@ export function CredentialManagerTab({ projectId, token, onCredentialsChange }: 
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [name, setName] = useState<string>('');
-  const [provider, setProvider] = useState<'AWS' | 'GCP' | 'SSH'>('AWS');
+  const [provider, setProvider] = useState<'AWS' | 'GCP' | 'SSH' | 'GITHUB'>('AWS');
+  const [githubToken, setGithubToken] = useState<string>('');
   const [isDropdownOpen, setIsDropdownOpen] = useState<boolean>(false);
 
   // AWS Input Parameters
@@ -462,6 +499,14 @@ export function CredentialManagerTab({ projectId, token, onCredentialsChange }: 
         private_key: rawTextData.trim(),
         ssh_user: sshUser.trim() || 'ubuntu'
       });
+    } else if (provider === 'GITHUB') {
+      if (!githubToken.trim()) {
+        setFeedbackMsg({ type: 'error', text: 'GitHub Personal Access Token is required.' });
+        return;
+      }
+      payloadData = JSON.stringify({
+        token: githubToken.trim()
+      });
     } else {
       if (!rawTextData.trim()) {
         setFeedbackMsg({ type: 'error', text: `${provider} key content is required.` });
@@ -491,6 +536,7 @@ export function CredentialManagerTab({ projectId, token, onCredentialsChange }: 
         setAwsAccessKey('');
         setAwsSecretKey('');
         setRawTextData('');
+        setGithubToken('');
         fetchCredentials();
       } else {
         const errText = await res.text();
@@ -561,9 +607,11 @@ export function CredentialManagerTab({ projectId, token, onCredentialsChange }: 
                   {provider === 'AWS' && <Icon icon="logos:aws" className="text-base" />}
                   {provider === 'GCP' && <Icon icon="logos:google-cloud" className="text-base" />}
                   {provider === 'SSH' && <Icon icon="lucide:key" className="text-primary text-base" />}
+                  {provider === 'GITHUB' && <Icon icon="logos:github-icon" className="text-base filter invert dark:invert-0" />}
                   {provider === 'AWS' && 'Amazon Web Services (AWS)'}
                   {provider === 'GCP' && 'Google Cloud Platform (GCP)'}
                   {provider === 'SSH' && 'SSH Private Key (.pem)'}
+                  {provider === 'GITHUB' && 'GitHub Personal Access Token'}
                 </span>
                 <Icon icon="lucide:chevron-down" className={`text-slate-400 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
@@ -590,6 +638,13 @@ export function CredentialManagerTab({ projectId, token, onCredentialsChange }: 
                     className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-card text-left"
                   >
                     <Icon icon="lucide:key" className="text-primary" /> SSH PEM Private Key
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setProvider('GITHUB'); setIsDropdownOpen(false); }}
+                    className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm hover:bg-card text-left"
+                  >
+                    <Icon icon="logos:github-icon" className="filter invert dark:invert-0" /> GitHub PAT
                   </button>
                 </div>
               )}
@@ -668,6 +723,22 @@ export function CredentialManagerTab({ projectId, token, onCredentialsChange }: 
               </div>
             )}
 
+            {provider === 'GITHUB' && (
+              <div className="space-y-3 p-3 rounded-lg bg-background/50 border border-border">
+                <div>
+                  <label className="block text-xs text-slate-400 mb-1">GitHub Personal Access Token (PAT)</label>
+                  <input
+                    type="password"
+                    required
+                    value={githubToken}
+                    onChange={(e) => setGithubToken(e.target.value)}
+                    placeholder="ghp_..."
+                    className="w-full rounded-lg border border-border bg-background px-3 py-2 text-xs text-slate-100 outline-none focus:border-primary/50"
+                  />
+                </div>
+              </div>
+            )}
+
             <button
               type="submit"
               disabled={isSaving}
@@ -706,6 +777,7 @@ export function CredentialManagerTab({ projectId, token, onCredentialsChange }: 
                       {cred.provider === 'AWS' && <Icon icon="logos:aws" className="text-lg" />}
                       {cred.provider === 'GCP' && <Icon icon="logos:google-cloud" className="text-lg" />}
                       {cred.provider === 'SSH' && <Icon icon="lucide:key" className="text-primary text-lg" />}
+                      {cred.provider === 'GITHUB' && <Icon icon="logos:github-icon" className="text-lg filter invert dark:invert-0" />}
                     </div>
                     <div>
                       <h4 className="text-sm font-semibold text-white">{cred.name}</h4>

@@ -21,6 +21,9 @@ interface AnsibleNodeParams {
   repoUrl?: string;
   destPath?: string;
   branch?: string;
+  buildCommand?: string;
+  credentialId?: string;
+  appType?: string;
   command?: string;
   chdir?: string;
   srcPath?: string;
@@ -43,6 +46,12 @@ interface AnsibleNodeData {
   port?: string | number;
   startCommand?: string;
   appPort?: string | number;
+  repoUrl?: string;
+  branch?: string;
+  destPath?: string;
+  buildCommand?: string;
+  credentialId?: string;
+  appType?: string;
   [key: string]: unknown;
 }
 
@@ -384,18 +393,42 @@ export function generateAnsibleYAML(nodes: Node[], edges: Edge[]): string {
         enabled: ${enabled}\n\n`;
     }
     else if (id.startsWith('git_clone')) {
-      const repoUrl = p.repoUrl || '';
-      const destPath = p.destPath || '/var/www/app';
-      const branch = p.branch || 'main';
+      const repoUrl = p.repoUrl || data.repoUrl || '';
+      const destPath = p.destPath || data.destPath || '/var/www/app';
+      const branch = p.branch || data.branch || 'main';
+      const credentialId = p.credentialId || data.credentialId || '';
+
+      let gitRepoUrl = repoUrl;
+      if (credentialId && repoUrl.startsWith('https://')) {
+        const cleanUrl = repoUrl.substring(8);
+        gitRepoUrl = `https://{{ lookup('env', 'GITHUB_PAT') | default('') }}@${cleanUrl}`;
+      }
 
       tasksString += `    # Git Clone Repository
+    - name: Ensure git is installed on target host
+      ansible.builtin.apt:
+        name: git
+        state: present
+        update_cache: yes
+      become: yes
+      ignore_errors: yes
+
+    - name: Ensure destination directory exists
+      ansible.builtin.file:
+        path: "${destPath}"
+        state: directory
+        owner: ubuntu
+        mode: '0755'
+
     - name: Clone codebase from git repository
       ansible.builtin.git:
-        repo: "${repoUrl}"
+        repo: "${gitRepoUrl}"
         dest: "${destPath}"
         version: "${branch}"
         clone: yes
-        update: yes\n\n`;
+        update: yes
+        force: yes
+      ignore_errors: yes\n\n`;
     }
     else if (id.startsWith('shell_command')) {
       const command = p.command || 'echo "hello"';
@@ -427,7 +460,7 @@ export function generateAnsibleYAML(nodes: Node[], edges: Edge[]): string {
         if (line.trim() === '') return '';
         return '    ' + line;
       }).join('\n');
-
+      
       tasksString += `    # Custom block: ${data.label}\n${lines}\n\n`;
     }
   });

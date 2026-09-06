@@ -1,6 +1,5 @@
 import { Node, Edge } from '@xyflow/react';
 import { generateAnsibleYAML } from './exportYaml';
-import { DEFAULT_INSTANCE_PARAMS, DEFAULT_SG_PARAMS } from './terraformDefaults';
 
 // Canvas node `data.parameters` is a loosely-shaped, user-editable JSON bag —
 // different node "tech" types (Terraform/Ansible/Kubernetes) populate different
@@ -951,7 +950,7 @@ export async function downloadTerraformZip(nodes: Node[], edges: Edge[] = []): P
 
 export function generateBundleFiles(nodes: Node[], edges: Edge[]): FileItem[] {
   const hasTerraform = nodes.some(n => (n.data as unknown as CanvasNodeData)?.tech === 'Terraform');
-  const hasAnsible = nodes.some(n => (n.data as unknown as CanvasNodeData)?.tech === 'Ansible');
+  const hasAnsible = nodes.some(n => (n.data as unknown as CanvasNodeData)?.tech === 'Ansible' || (n.data as unknown as CanvasNodeData)?.tech === 'Source');
   const hasKubernetes = nodes.some(n => (n.data as unknown as CanvasNodeData)?.tech === 'Kubernetes');
 
   const countLines = (str: string) => str.split('\n').length;
@@ -975,7 +974,7 @@ export function generateBundleFiles(nodes: Node[], edges: Edge[]): FileItem[] {
     const colon = ':';
 
     // Find starting Ansible node
-    const ansibleNodes = nodes.filter(n => (n.data as unknown as CanvasNodeData)?.tech === 'Ansible');
+    const ansibleNodes = nodes.filter(n => (n.data as unknown as CanvasNodeData)?.tech === 'Ansible' || (n.data as unknown as CanvasNodeData)?.tech === 'Source');
     const ansibleNodeIds = new Set(ansibleNodes.map(n => n.id));
     const nonStartAnsibleIds = new Set(
       edges.filter(e => ansibleNodeIds.has(e.target) && ansibleNodeIds.has(e.source)).map(e => e.target)
