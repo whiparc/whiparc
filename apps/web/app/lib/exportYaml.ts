@@ -405,6 +405,14 @@ export function generateAnsibleYAML(nodes: Node[], edges: Edge[]): string {
       }
 
       tasksString += `    # Git Clone Repository
+    - name: Ensure git is installed on target host
+      ansible.builtin.apt:
+        name: git
+        state: present
+        update_cache: yes
+      become: yes
+      ignore_errors: yes
+
     - name: Ensure destination directory exists
       ansible.builtin.file:
         path: "${destPath}"
