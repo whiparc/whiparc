@@ -32,7 +32,7 @@ jobs:
             goarch: arm64 # Can include if ARM64 Linux servers are targeted, but keep it standard
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v7
