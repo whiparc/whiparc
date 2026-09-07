@@ -55,7 +55,7 @@ func main() {
 	fmt.Printf("   fake sshd listening on %s\n", sshd.Addr())
 
 	step("Starting the Agent Gateway")
-	gw := gateway.New("https://www.infracanvas.dev/pair")
+	gw := gateway.New("https://www.whiparc.dev/pair")
 	httpSrv := httptest.NewServer(gw.Mux())
 	defer httpSrv.Close()
 	wsURL := "ws" + strings.TrimPrefix(httpSrv.URL, "http")

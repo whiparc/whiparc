@@ -1,6 +1,6 @@
 package main
 
-// `infracanvas sandbox up/status/down` — Phase 1 opt-in beta CLI commands for
+// `whiparc sandbox up/status/down` — Phase 1 opt-in beta CLI commands for
 // the local Sandbox Agent (see obsidian_memory/08.4 and 06.3). Additive only:
 // the existing in-container sandbox stays the default, this is a separate
 // opt-in path gated by Config.SandboxAgentBeta.
@@ -67,8 +67,8 @@ func requireSandboxBeta(cfg *Config) bool {
 	if cfg.SandboxAgentBeta {
 		return true
 	}
-	fmt.Println("Sandbox Agent is an opt-in beta. Enable it with:")
-	fmt.Println("  infracanvas config set sandbox-agent-beta true")
+	printWarn("Sandbox Agent is an opt-in beta. Enable it with:")
+	fmt.Println(styleMuted.Render("  whiparc config set sandbox-agent-beta true"))
 	return false
 }
 
@@ -77,7 +77,7 @@ func sandboxStateDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(home, ".infracanvas", "sandbox")
+	dir := filepath.Join(home, ".whiparc", "sandbox")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", err
 	}
@@ -100,7 +100,7 @@ func loadSandboxState() (*sandboxState, error) {
 	}
 	data, err := os.ReadFile(filepath.Join(dir, "state.json"))
 	if err != nil {
-		return nil, fmt.Errorf("no local sandbox state found — run `infracanvas sandbox up` first")
+		return nil, fmt.Errorf("no local sandbox state found — run `whiparc sandbox up` first")
 	}
 	var st sandboxState
 	if err := json.Unmarshal(data, &st); err != nil {
@@ -114,7 +114,7 @@ func loadSandboxState() (*sandboxState, error) {
 func runSandboxUp(cmd *cobra.Command, args []string) {
 	cfg, err := getClientConfig()
 	if err != nil {
-		fmt.Printf("Config error: %v\n", err)
+		printError("Config error: %v", err)
 		return
 	}
 	if !requireSandboxBeta(cfg) {
@@ -123,7 +123,7 @@ func runSandboxUp(cmd *cobra.Command, args []string) {
 
 	projectID, _ := cmd.Flags().GetString("project")
 	if projectID == "" {
-		fmt.Println("Error: --project flag is required.")
+		printError("--project flag is required.")
 		return
 	}
 
@@ -242,11 +242,11 @@ func runSandboxUp(cmd *cobra.Command, args []string) {
 	fmt.Println("Waiting for the Agent to connect...")
 	status, err := pollAgentStatus(cfg, projectID, agentID, 30*time.Second)
 	if err != nil {
-		fmt.Printf("Agent did not report a status in time: %v\n", err)
-		fmt.Println("Check `infracanvas sandbox status` and the local Agent log for details.")
+		printError("Agent did not report a status in time: %v", err)
+		fmt.Println("Check `whiparc sandbox status` and the local Agent log for details.")
 		return
 	}
-	fmt.Printf("Agent %s is now %s. Sandbox is ready.\n", agentID, status)
+	printSuccess("Agent %s is now %s. Sandbox is ready.", agentID, status)
 }
 
 // tryReuseExistingAgent looks for a locally-tracked agent from a previous
@@ -305,7 +305,7 @@ func tryReuseExistingAgent(cfg *Config, projectID string) (agentID, publicKeyLin
 func runSandboxStatus(cmd *cobra.Command, args []string) {
 	cfg, err := getClientConfig()
 	if err != nil {
-		fmt.Printf("Config error: %v\n", err)
+		printError("Config error: %v", err)
 		return
 	}
 	if !requireSandboxBeta(cfg) {
@@ -314,7 +314,7 @@ func runSandboxStatus(cmd *cobra.Command, args []string) {
 
 	st, err := loadSandboxState()
 	if err != nil {
-		fmt.Println(err)
+		printError("%v", err)
 		return
 	}
 
@@ -325,11 +325,11 @@ func runSandboxStatus(cmd *cobra.Command, args []string) {
 
 	resp, err := getAgentStatus(cfg, projectID, st.AgentID)
 	if err != nil {
-		fmt.Printf("Failed to fetch agent status: %v\n", err)
+		printError("Failed to fetch agent status: %v", err)
 		return
 	}
 	fmt.Printf("Agent ID:        %s\n", st.AgentID)
-	fmt.Printf("Status:          %v\n", resp["status"])
+	fmt.Printf("Status:          %s\n", styleAgentStatus(fmt.Sprintf("%v", resp["status"])))
 	fmt.Printf("Key fingerprint: %v\n", resp["key_fingerprint"])
 	if lastSeen, ok := resp["last_seen_at"]; ok {
 		fmt.Printf("Last seen:       %v\n", lastSeen)
@@ -341,7 +341,7 @@ func runSandboxStatus(cmd *cobra.Command, args []string) {
 func runSandboxDown(cmd *cobra.Command, args []string) {
 	cfg, err := getClientConfig()
 	if err != nil {
-		fmt.Printf("Config error: %v\n", err)
+		printError("Config error: %v", err)
 		return
 	}
 	if !requireSandboxBeta(cfg) {
@@ -351,17 +351,17 @@ func runSandboxDown(cmd *cobra.Command, args []string) {
 	fmt.Println("Stopping local sandbox containers...")
 	composeDir, err := extractEmbeddedSandboxFiles()
 	if err != nil {
-		fmt.Printf("Failed to prepare sandbox compose files: %v\n", err)
+		printError("Failed to prepare sandbox compose files: %v", err)
 	} else {
 		composeFile := filepath.Join(composeDir, "docker-compose.sandbox.yml")
 		if err := runDockerCompose(composeFile, "down"); err != nil {
-			fmt.Printf("docker compose down failed: %v\n", err)
+			printError("docker compose down failed: %v", err)
 		}
 	}
 
 	st, err := loadSandboxState()
 	if err != nil {
-		fmt.Println("No running Agent process found.")
+		printInfo("No running Agent process found.")
 		return
 	}
 	if st.PID > 0 {
@@ -373,7 +373,7 @@ func runSandboxDown(cmd *cobra.Command, args []string) {
 
 	revoke, _ := cmd.Flags().GetBool("revoke")
 	if !revoke {
-		fmt.Println("Sandbox paused. Run `infracanvas sandbox up` again to resume with the same paired agent.")
+		printSuccess("Sandbox paused. Run `whiparc sandbox up` again to resume with the same paired agent.")
 		return
 	}
 
@@ -386,11 +386,11 @@ func runSandboxDown(cmd *cobra.Command, args []string) {
 	// (see tryReuseExistingAgent above).
 	fmt.Printf("Revoking agent %s...\n", st.AgentID)
 	if err := revokeAgent(cfg, st.ProjectID, st.AgentID); err != nil {
-		fmt.Printf("Failed to revoke agent: %v\n", err)
-		fmt.Println("Local pairing state was left in place — retry `infracanvas sandbox down --revoke`, or revoke it from the project's Settings > Sandbox Agents page instead.")
+		printError("Failed to revoke agent: %v", err)
+		fmt.Println("Local pairing state was left in place — retry `whiparc sandbox down --revoke`, or revoke it from the project's Settings > Sandbox Agents page instead.")
 		return
 	}
-	fmt.Printf("Agent %s revoked.\n", st.AgentID)
+	printSuccess("Agent %s revoked.", st.AgentID)
 	clearSandboxState(st.AgentID)
 }
 
@@ -411,7 +411,7 @@ func revokeAgent(cfg *Config, projectID, agentID string) error {
 // `sandbox up` can't attempt to reuse a now-revoked identity.
 // tryReuseExistingAgent would also catch this server-side via getAgentStatus
 // even without this cleanup, but doing it here avoids a wasted round-trip
-// and stale per-agent files accumulating in ~/.infracanvas/sandbox/.
+// and stale per-agent files accumulating in ~/.whiparc/sandbox/.
 func clearSandboxState(agentID string) {
 	dir, err := sandboxStateDir()
 	if err != nil {
@@ -430,7 +430,7 @@ func clearSandboxState(agentID string) {
 // Compose project a user happens to have running from the same or a sibling
 // directory — exactly the class of bug hit while building
 // docker-compose.hosted.yml (see obsidian_memory/08.4's Phase 1 notes).
-const dockerComposeProjectName = "infracanvas-sandbox"
+const dockerComposeProjectName = "whiparc-sandbox"
 
 func runDockerCompose(composeFile string, args ...string) error {
 	fullArgs := append([]string{"compose", "-p", dockerComposeProjectName, "-f", composeFile}, args...)
@@ -572,7 +572,7 @@ func gatewayPostJSON(cfg *Config, path string, payload interface{}, out interfac
 	return nil
 }
 
-// startAgentProcess launches `infracanvas sandbox agent-run` as a detached
+// startAgentProcess launches `whiparc sandbox agent-run` as a detached
 // background process, handing it the agent token via an environment variable
 // (not argv) so it never shows up in `ps`/process logs.
 func startAgentProcess(cfg *Config, agentID, agentToken string) (int, error) {
@@ -592,7 +592,7 @@ func startAgentProcess(cfg *Config, agentID, agentToken string) (int, error) {
 
 	cmd := exec.Command(exePath, "sandbox", "agent-run",
 		"--agent-id="+agentID, "--gateway="+cfg.GatewayURL)
-	cmd.Env = append(os.Environ(), "INFRACANVAS_AGENT_TOKEN="+agentToken)
+	cmd.Env = append(os.Environ(), "WHIPARC_AGENT_TOKEN="+agentToken)
 	cmd.Stdout = logFile
 	cmd.Stderr = logFile
 	cmd.Stdin = nil

@@ -41,7 +41,7 @@ built to satisfy exactly the Phase 0 scope in
 ## What this is not
 
 - Not the Agent Gateway, Agent, or CLI that ship in Phase 1. Those are real
-  services/binaries wired into the existing Runner, `infracanvas` CLI, and
+  services/binaries wired into the existing Runner, `whiparc` CLI, and
   DevOps Sandbox containers.
 - No heartbeat/reconnect UX, destination-allowlist hardening beyond the basic
   check, rate limiting, or daemon install path — all explicitly Phase 2+ per

@@ -242,7 +242,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   };
 
   const handleRevokeAgent = async (agentId: string) => {
-    if (!activeToken || !confirm("Revoke this agent? It will be disconnected immediately and its pairing token invalidated — the machine will need to re-run `infracanvas sandbox up` to pair again.")) return;
+    if (!activeToken || !confirm("Revoke this agent? It will be disconnected immediately and its pairing token invalidated — the machine will need to re-run `whiparc sandbox up` to pair again.")) return;
 
     setRevokingAgentId(agentId);
     try {
@@ -452,7 +452,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
                       value={inviteEmail}
                       onChange={(e) => setInviteEmail(e.target.value)}
                       required
-                      placeholder="user@infracanvas.com"
+                      placeholder="user@whiparc.com"
                       className="flex-1 px-3 py-1.5 bg-background/50 border border-border rounded-lg text-white focus:outline-none focus:border-primary transition-all text-sm"
                     />
                     <select
@@ -544,7 +544,7 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
             <div className="space-y-3">
               <div>
                 <h4 className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Paired Sandbox Agents</h4>
-                <p className="text-xs text-slate-500 mt-1">Machines paired via `infracanvas sandbox up` that can run this project&apos;s deploys locally. Revoking disconnects an agent immediately and invalidates its pairing token.</p>
+                <p className="text-xs text-slate-500 mt-1">Machines paired via `whiparc sandbox up` that can run this project&apos;s deploys locally. Revoking disconnects an agent immediately and invalidates its pairing token.</p>
               </div>
               {agentsLoading ? (
                 <div className="py-6 flex justify-center text-slate-400">

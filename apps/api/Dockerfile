@@ -9,7 +9,7 @@
 ARG BASE_IMAGE_TAG=dev
 
 # Build context is the repo root (see docker-compose.yml) so this stage can
-# also reach apps/cli — the final image needs the infracanvas CLI binary on
+# also reach apps/cli — the final image needs the whiparc CLI binary on
 # PATH for the local_agent SSH ProxyCommand bridge (see runner.go's
 # cliHelperPath(), and obsidian_memory/08.4's Phase 1).
 #
@@ -45,7 +45,7 @@ RUN --mount=type=cache,target=/go/pkg/mod,id=gomod-cli \
 COPY apps/cli ./apps/cli
 RUN --mount=type=cache,target=/go/pkg/mod,id=gomod-cli \
     --mount=type=cache,target=/root/.cache/go-build,id=gobuild-cli \
-    cd apps/cli && GOTOOLCHAIN=auto CGO_ENABLED=0 GOOS=linux go build -o /out/infracanvas .
+    cd apps/cli && GOTOOLCHAIN=auto CGO_ENABLED=0 GOOS=linux go build -o /out/whiparc .
 
 # Pull prebuilt tools baseline from GHCR (installs nothing locally)
 FROM ghcr.io/whiparc/whiparc-runner-base:${BASE_IMAGE_TAG}
@@ -54,8 +54,8 @@ ENV PORT=8080
 
 WORKDIR /app
 COPY --link --from=builder-api /out/api-server .
-COPY --link --from=builder-cli /out/infracanvas /usr/local/bin/infracanvas
-RUN chmod +x /usr/local/bin/infracanvas
+COPY --link --from=builder-cli /out/whiparc /usr/local/bin/whiparc
+RUN chmod +x /usr/local/bin/whiparc
 
 EXPOSE 8080
 CMD ["./api-server"]

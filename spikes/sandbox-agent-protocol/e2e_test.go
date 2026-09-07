@@ -33,7 +33,7 @@ const (
 )
 
 // pairAgent runs the full device-authorization flow over HTTP against a live
-// Gateway, exactly as `infracanvas sandbox up` and the browser approval page
+// Gateway, exactly as `whiparc sandbox up` and the browser approval page
 // would (see obsidian_memory/06.3), and returns the scoped agent token.
 func pairAgent(t *testing.T, gatewayURL string) string {
 	t.Helper()
@@ -130,7 +130,7 @@ func TestEndToEndTunnelSSHExecAndLogStreaming(t *testing.T) {
 	}
 	defer sshd.Close()
 
-	gw := gateway.New("https://www.infracanvas.dev/pair")
+	gw := gateway.New("https://www.whiparc.dev/pair")
 	httpSrv := httptest.NewServer(gw.Mux())
 	defer httpSrv.Close()
 	wsURL := "ws" + strings.TrimPrefix(httpSrv.URL, "http")
@@ -240,7 +240,7 @@ func TestGatewayRejectsDisallowedService(t *testing.T) {
 	}
 	defer sshd.Close()
 
-	gw := gateway.New("https://www.infracanvas.dev/pair")
+	gw := gateway.New("https://www.whiparc.dev/pair")
 	httpSrv := httptest.NewServer(gw.Mux())
 	defer httpSrv.Close()
 	wsURL := "ws" + strings.TrimPrefix(httpSrv.URL, "http")
@@ -287,7 +287,7 @@ func TestGatewayRejectsCrossTenantDial(t *testing.T) {
 	}
 	defer sshd.Close()
 
-	gw := gateway.New("https://www.infracanvas.dev/pair")
+	gw := gateway.New("https://www.whiparc.dev/pair")
 	httpSrv := httptest.NewServer(gw.Mux())
 	defer httpSrv.Close()
 	wsURL := "ws" + strings.TrimPrefix(httpSrv.URL, "http")

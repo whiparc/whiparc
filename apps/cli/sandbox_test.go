@@ -32,7 +32,7 @@ func setSandboxTestHome(t *testing.T) string {
 // asserted on without touching a real apps/api.
 func writeTestClientConfig(t *testing.T, home, apiURL string) {
 	t.Helper()
-	dir := filepath.Join(home, ".infracanvas")
+	dir := filepath.Join(home, ".whiparc")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		t.Fatalf("mkdir config dir: %v", err)
 	}

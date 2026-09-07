@@ -192,17 +192,17 @@ const Header: React.FC<HeaderProps> = ({
             </span>
           )}
           {agentStatus === 'DISCONNECTED' && (
-            <span className="ml-2 px-2 py-0.5 bg-rose-500/10 text-rose-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-rose-500/20 flex items-center gap-1" title="Local Sandbox Agent is disconnected. Deploys targeting it will be rejected until it reconnects — run `infracanvas sandbox status` to check, or `infracanvas sandbox up` to re-pair.">
+            <span className="ml-2 px-2 py-0.5 bg-rose-500/10 text-rose-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-rose-500/20 flex items-center gap-1" title="Local Sandbox Agent is disconnected. Deploys targeting it will be rejected until it reconnects — run `whiparc sandbox status` to check, or `whiparc sandbox up` to re-pair.">
               <Icon icon="lucide:server-off" className="text-[10px]" /> Agent Disconnected
             </span>
           )}
           {migrationStatus && !migrationStatus.has_active_agent && migrationStatus.gated && (
-            <span className="ml-2 px-2 py-0.5 bg-rose-500/10 text-rose-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-rose-500/20 flex items-center gap-1" title="Free-tier sandbox deploys now require a local Sandbox Agent. Run `infracanvas sandbox up` to pair one, or upgrade to Pro for a hosted sandbox.">
+            <span className="ml-2 px-2 py-0.5 bg-rose-500/10 text-rose-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-rose-500/20 flex items-center gap-1" title="Free-tier sandbox deploys now require a local Sandbox Agent. Run `whiparc sandbox up` to pair one, or upgrade to Pro for a hosted sandbox.">
               <Icon icon="lucide:server-off" className="text-[10px]" /> Sandbox Requires Agent
             </span>
           )}
           {migrationStatus && !migrationStatus.has_active_agent && !migrationStatus.gated && (
-            <span className="ml-2 px-2 py-0.5 bg-amber-500/10 text-amber-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-amber-500/20 flex items-center gap-1" title={`Free-tier sandbox deploys will require a local Sandbox Agent starting ${migrationStatus.grace_period_end}. Run \`infracanvas sandbox up\` to pair one now, or upgrade to Pro for a hosted sandbox.`}>
+            <span className="ml-2 px-2 py-0.5 bg-amber-500/10 text-amber-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-amber-500/20 flex items-center gap-1" title={`Free-tier sandbox deploys will require a local Sandbox Agent starting ${migrationStatus.grace_period_end}. Run \`whiparc sandbox up\` to pair one now, or upgrade to Pro for a hosted sandbox.`}>
               <Icon icon="lucide:clock" className="text-[10px]" /> Sandbox Migration: Pair by {migrationStatus.grace_period_end}
             </span>
           )}
@@ -2776,7 +2776,7 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                               type="text"
                               value={projectIDVal}
                               onChange={(e) => updateNodeData(selectedNode.id, { projectId: e.target.value })}
-                              placeholder="infracanvas-prod-12345"
+                              placeholder="whiparc-prod-12345"
                               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
                             />
                           </div>
@@ -3153,7 +3153,7 @@ function getDefaultParametersForNode(nodeId: string): Record<string, unknown> {
   }
   if (nodeId.startsWith('aws_s3_bucket')) {
     return {
-      bucketName: 'infracanvas-user-bucket',
+      bucketName: 'whiparc-user-bucket',
       forceDestroy: true,
       versioningEnabled: true
     };
@@ -3215,7 +3215,7 @@ function getDefaultParametersForNode(nodeId: string): Record<string, unknown> {
   }
   if (nodeId.startsWith('git_clone')) {
     return {
-      repoUrl: 'https://github.com/infracanvas/sample-app.git',
+      repoUrl: 'https://github.com/whiparc/sample-app.git',
       destPath: '/var/www/app',
       branch: 'main',
       ansibleHost: '',

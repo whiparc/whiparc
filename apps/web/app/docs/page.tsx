@@ -102,10 +102,13 @@ export default function DocsPage() {
   const downloadBaseUrl = `${API_URL}/downloads`;
 
   const downloadLinks = {
-    windows: `${downloadBaseUrl}/infracanvas-windows-amd64.exe`,
-    macosSilicon: `${downloadBaseUrl}/infracanvas-darwin-arm64`,
-    macosIntel: `${downloadBaseUrl}/infracanvas-darwin-amd64`,
-    linux: `${downloadBaseUrl}/infracanvas-linux-amd64`,
+    windowsInstaller: `${downloadBaseUrl}/whiparc-setup-windows-amd64.exe`,
+    macosInstaller: `${downloadBaseUrl}/whiparc-macos.pkg`,
+    linuxInstallScript: `${downloadBaseUrl}/install.sh`,
+    windows: `${downloadBaseUrl}/whiparc-windows-amd64.exe`,
+    macosSilicon: `${downloadBaseUrl}/whiparc-darwin-arm64`,
+    macosIntel: `${downloadBaseUrl}/whiparc-darwin-amd64`,
+    linux: `${downloadBaseUrl}/whiparc-linux-amd64`,
   };
 
   return (
@@ -230,7 +233,7 @@ export default function DocsPage() {
             <section className="space-y-6">
               <h1 className="text-3xl font-bold tracking-tight text-white lg:text-4xl">Whiparc CLI</h1>
               <p className="text-lg text-slate-400 leading-relaxed">
-                The Whiparc Command-Line Interface (`infracanvas`) is a powerful tool designed to integrate visual configuration layouts directly with native infrastructure-as-code manifests. With the CLI, platform teams can synchronize local directories, query workspace settings, and stream deployment pipelines from their local terminals or CI/CD pipelines.
+                The Whiparc Command-Line Interface (`whiparc`) is a powerful tool designed to integrate visual configuration layouts directly with native infrastructure-as-code manifests. With the CLI, platform teams can synchronize local directories, query workspace settings, and stream deployment pipelines from their local terminals or CI/CD pipelines.
               </p>
 
               <div className="rounded-2xl border border-border bg-card/60 p-6 backdrop-blur-md">
@@ -268,7 +271,7 @@ export default function DocsPage() {
             <section className="space-y-6">
               <h1 className="text-3xl font-bold tracking-tight text-white lg:text-4xl">Installation Guide</h1>
               <p className="text-slate-400">
-                Choose your platform below to download and configure the standalone `infracanvas` CLI tool.
+                Download the one-click installer for your platform — it places the `whiparc` binary and adds it to your PATH automatically, so `whiparc` works from any new terminal with no manual setup.
               </p>
 
               {/* DOWNLOAD GATE */}
@@ -278,54 +281,43 @@ export default function DocsPage() {
                     <Icon icon="lucide:download-cloud" className="text-2xl" />
                   </div>
                   <div>
-                    <h3 className="text-base font-semibold text-white">Download Executables</h3>
-                    <p className="text-xs text-slate-400">Always compiled with the latest stable CLI changes.</p>
+                    <h3 className="text-base font-semibold text-white">Download the Installer</h3>
+                    <p className="text-xs text-slate-400">Always built from the latest stable CLI changes. Unsigned — see the platform notes below.</p>
                   </div>
                 </div>
 
                 {isLoggedIn ? (
-                  <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <a
-                      href={downloadLinks.windows}
+                      href={downloadLinks.windowsInstaller}
                       download
                       className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3.5 text-sm font-medium hover:bg-secondary hover:border-border transition"
                     >
                       <span className="flex items-center gap-2">
                         <Icon icon="logos:microsoft-windows" className="text-base" />
-                        Windows 64-bit
+                        Windows
                       </span>
                       <Icon icon="lucide:arrow-down-to-line" className="text-slate-500" />
                     </a>
                     <a
-                      href={downloadLinks.macosSilicon}
+                      href={downloadLinks.macosInstaller}
                       download
                       className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3.5 text-sm font-medium hover:bg-secondary hover:border-border transition"
                     >
                       <span className="flex items-center gap-2">
                         <Icon icon="logos:apple" className="text-base text-white" />
-                        macOS (Apple M1/M2/M3)
+                        macOS (Universal)
                       </span>
                       <Icon icon="lucide:arrow-down-to-line" className="text-slate-500" />
                     </a>
                     <a
-                      href={downloadLinks.macosIntel}
-                      download
-                      className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3.5 text-sm font-medium hover:bg-secondary hover:border-border transition"
-                    >
-                      <span className="flex items-center gap-2">
-                        <Icon icon="logos:apple" className="text-base" />
-                        macOS (Intel Core)
-                      </span>
-                      <Icon icon="lucide:arrow-down-to-line" className="text-slate-500" />
-                    </a>
-                    <a
-                      href={downloadLinks.linux}
+                      href={downloadLinks.linuxInstallScript}
                       download
                       className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3.5 text-sm font-medium hover:bg-secondary hover:border-border transition"
                     >
                       <span className="flex items-center gap-2">
                         <Icon icon="logos:linux-tux" className="text-base" />
-                        Linux 64-bit
+                        Linux (install.sh)
                       </span>
                       <Icon icon="lucide:arrow-down-to-line" className="text-slate-500" />
                     </a>
@@ -371,59 +363,81 @@ export default function DocsPage() {
                   {activeTab === 'windows' && (
                     <div className="space-y-4">
                       <p className="text-sm text-slate-400">
-                        1. Download `infracanvas-windows-amd64.exe` using the link above.
+                        1. Download and run `whiparc-setup-windows-amd64.exe` using the link above.
                       </p>
                       <p className="text-sm text-slate-400">
-                        2. Create a folder (e.g. `C:\tools\infracanvas`) and move the downloaded binary into it, renaming it to `infracanvas.exe`.
+                        2. Click through the installer. It installs to your user profile (no admin rights needed), adds itself to your <strong>User PATH</strong>, and sets up the uninstaller — nothing to configure by hand.
                       </p>
                       <p className="text-sm text-slate-400">
-                        3. Add `C:\tools\infracanvas` to your User **Environment Variables PATH**:
+                        3. Windows SmartScreen may flag the installer since it isn&apos;t code-signed yet — choose <strong>More info → Run anyway</strong>.
                       </p>
-                      <CodeBlock code={'[System.Environment]::SetEnvironmentVariable("PATH", $env:Path + ";C:\\tools\\infracanvas", "User")'} />
                       <p className="text-sm text-slate-400">
-                        4. Restart your terminal and verify the installation:
+                        4. Open a new terminal and verify:
                       </p>
-                      <CodeBlock code="infracanvas --help" />
+                      <CodeBlock code="whiparc --version" />
+                      <details className="group rounded-xl border border-border bg-card/40 p-4">
+                        <summary className="cursor-pointer text-sm font-medium text-slate-300 group-open:text-white">Manual install (advanced)</summary>
+                        <div className="mt-4 space-y-4">
+                          <p className="text-sm text-slate-400">
+                            Prefer to place the binary yourself? Download `whiparc-windows-amd64.exe`, move it into a folder such as `C:\tools\whiparc` and rename it to `whiparc.exe`, then add that folder to your PATH:
+                          </p>
+                          <CodeBlock code={'[System.Environment]::SetEnvironmentVariable("PATH", $env:Path + ";C:\\tools\\whiparc", "User")'} />
+                        </div>
+                      </details>
                     </div>
                   )}
 
                   {activeTab === 'macos' && (
                     <div className="space-y-4">
                       <p className="text-sm text-slate-400">
-                        1. Download the macOS binary matching your system architecture (Apple Silicon M1/M2/M3 vs Intel Core).
+                        1. Download and open `whiparc-macos.pkg` using the link above — one universal installer covers both Apple Silicon and Intel.
                       </p>
                       <p className="text-sm text-slate-400">
-                        2. Move the binary into your local executable search PATH:
+                        2. Follow the installer. It places `whiparc` in `/usr/local/bin`, which is already on macOS&apos;s default PATH — no shell profile edits needed.
                       </p>
-                      <CodeBlock code="sudo mv ~/Downloads/infracanvas-darwin-arm64 /usr/local/bin/infracanvas" />
                       <p className="text-sm text-slate-400">
-                        3. Give the binary execute permissions:
+                        3. Gatekeeper may warn that the package is from an unidentified developer since it isn&apos;t notarized yet — right-click the `.pkg` and choose <strong>Open</strong> to bypass it once.
                       </p>
-                      <CodeBlock code="chmod +x /usr/local/bin/infracanvas" />
                       <p className="text-sm text-slate-400">
-                        4. Run command check to verify:
+                        4. Open a new terminal and verify:
                       </p>
-                      <CodeBlock code="infracanvas --help" />
+                      <CodeBlock code="whiparc --version" />
+                      <details className="group rounded-xl border border-border bg-card/40 p-4">
+                        <summary className="cursor-pointer text-sm font-medium text-slate-300 group-open:text-white">Manual install (advanced)</summary>
+                        <div className="mt-4 space-y-4">
+                          <p className="text-sm text-slate-400">
+                            Prefer to place the binary yourself? Download the binary matching your architecture (Apple Silicon or Intel), then:
+                          </p>
+                          <CodeBlock code="sudo mv ~/Downloads/whiparc-darwin-arm64 /usr/local/bin/whiparc" />
+                          <CodeBlock code="chmod +x /usr/local/bin/whiparc" />
+                        </div>
+                      </details>
                     </div>
                   )}
 
                   {activeTab === 'linux' && (
                     <div className="space-y-4">
                       <p className="text-sm text-slate-400">
-                        1. Download `infracanvas-linux-amd64`.
+                        1. Debian/Ubuntu or Fedora/RHEL — download the matching `.deb`/`.rpm` from the <a href="https://github.com/whiparc/whiparc/releases" target="_blank" rel="noreferrer" className="text-primary hover:underline">latest GitHub Release</a> and install it with your package manager (`sudo dpkg -i whiparc_*.deb` or `sudo rpm -i whiparc-*.rpm`).
                       </p>
                       <p className="text-sm text-slate-400">
-                        2. Move the binary into `/usr/local/bin`:
+                        2. Any other distro — run the install script (download it above first, or pipe it directly). It detects your architecture, installs to `~/.local/bin`, and adds that to your PATH only if it isn&apos;t already there:
                       </p>
-                      <CodeBlock code="sudo mv ~/Downloads/infracanvas-linux-amd64 /usr/local/bin/infracanvas" />
+                      <CodeBlock code={`curl -fsSL ${downloadBaseUrl}/install.sh | sh`} />
                       <p className="text-sm text-slate-400">
-                        3. Grant execution rights:
+                        3. Open a new terminal (or `source` your shell rc) and verify:
                       </p>
-                      <CodeBlock code="chmod +x /usr/local/bin/infracanvas" />
-                      <p className="text-sm text-slate-400">
-                        4. Verify installation:
-                      </p>
-                      <CodeBlock code="infracanvas --help" />
+                      <CodeBlock code="whiparc --version" />
+                      <details className="group rounded-xl border border-border bg-card/40 p-4">
+                        <summary className="cursor-pointer text-sm font-medium text-slate-300 group-open:text-white">Manual install (advanced)</summary>
+                        <div className="mt-4 space-y-4">
+                          <p className="text-sm text-slate-400">
+                            Prefer to place the binary yourself? Download `whiparc-linux-amd64`, then:
+                          </p>
+                          <CodeBlock code="sudo mv ~/Downloads/whiparc-linux-amd64 /usr/local/bin/whiparc" />
+                          <CodeBlock code="chmod +x /usr/local/bin/whiparc" />
+                        </div>
+                      </details>
                     </div>
                   )}
                 </div>
@@ -446,7 +460,7 @@ export default function DocsPage() {
             <section className="space-y-6">
               <h1 className="text-3xl font-bold tracking-tight text-white lg:text-4xl">Why a Local Sandbox?</h1>
               <p className="text-lg text-slate-400 leading-relaxed">
-                Every deploy that targets the built-in sandbox (LocalStack + simulated SSH targets, no real cloud account needed) has to run *somewhere*. Historically that meant Whiparc’s own servers — free for you, but a real, unbounded compute cost on our side for every user who never upgrades. The <strong>Sandbox Agent</strong> moves that compute onto your own machine instead: a small `infracanvas` process opens an outbound connection to Whiparc, and your deploys run against Docker containers on your own laptop or workstation, driven the exact same way from the visual canvas.
+                Every deploy that targets the built-in sandbox (LocalStack + simulated SSH targets, no real cloud account needed) has to run *somewhere*. Historically that meant Whiparc’s own servers — free for you, but a real, unbounded compute cost on our side for every user who never upgrades. The <strong>Sandbox Agent</strong> moves that compute onto your own machine instead: a small `whiparc` process opens an outbound connection to Whiparc, and your deploys run against Docker containers on your own laptop or workstation, driven the exact same way from the visual canvas.
               </p>
 
               <div className="rounded-2xl border border-border bg-card/60 p-6 backdrop-blur-md space-y-3">
@@ -501,13 +515,13 @@ export default function DocsPage() {
 
               <div className="space-y-3">
                 <h3 className="text-base font-semibold text-white">1. Log in</h3>
-                <CodeBlock code="infracanvas login" />
+                <CodeBlock code="whiparc login" />
               </div>
 
               <div className="space-y-3 pt-4">
                 <h3 className="text-base font-semibold text-white">2. Enable the Sandbox Agent</h3>
                 <p className="text-sm text-slate-400">This is an opt-in beta feature — enable it once per machine:</p>
-                <CodeBlock code="infracanvas config set sandbox-agent-beta true" />
+                <CodeBlock code="whiparc config set sandbox-agent-beta true" />
               </div>
 
               <div className="space-y-3 pt-4">
@@ -515,7 +529,7 @@ export default function DocsPage() {
                 <p className="text-sm text-slate-400">
                   Find your project ID from its URL in the dashboard (<code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">/workspace/&lt;project-id&gt;</code>), then run:
                 </p>
-                <CodeBlock code="infracanvas sandbox up --project <project-id>" />
+                <CodeBlock code="whiparc sandbox up --project <project-id>" />
                 <p className="text-sm text-slate-400">
                   This generates a fresh SSH keypair for this installation, builds and starts the local sandbox containers via Docker, registers the key with Whiparc, and pairs an Agent — all in one step, no browser approval needed. You’ll see output like:
                 </p>
@@ -543,7 +557,7 @@ Agent agent-a1b2c3d4 is now ACTIVE. Sandbox is ready.`} />
                 <p className="text-sm text-slate-400 mt-2">
                   The CLI defaults to a local Gateway at <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">http://localhost:9090</code> (for testing against a locally-run stack). Against a real deployment, set the actual Gateway URL first:
                 </p>
-                <CodeBlock code="infracanvas config set gateway-url https://gateway.<your-domain>" />
+                <CodeBlock code="whiparc config set gateway-url https://gateway.<your-domain>" />
               </div>
 
               <div className="pt-4">
@@ -563,19 +577,19 @@ Agent agent-a1b2c3d4 is now ACTIVE. Sandbox is ready.`} />
             <section className="space-y-6">
               <h1 className="text-3xl font-bold tracking-tight text-white lg:text-4xl">Sandbox Command Reference</h1>
               <p className="text-slate-400">
-                The full `infracanvas sandbox` subcommand group, once paired via the Setup & Pairing steps above.
+                The full `whiparc sandbox` subcommand group, once paired via the Setup & Pairing steps above.
               </p>
 
               <div className="space-y-3">
                 <h3 className="text-base font-semibold text-white">Check connection status</h3>
                 <p className="text-sm text-slate-400">Shows the paired Agent’s ID, connection status (<code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">PENDING</code> / <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">ACTIVE</code> / <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">DISCONNECTED</code>), and last-seen time — the first thing to check when a deploy isn’t reaching your sandbox:</p>
-                <CodeBlock code="infracanvas sandbox status" />
+                <CodeBlock code="whiparc sandbox status" />
               </div>
 
               <div className="space-y-3 pt-4">
                 <h3 className="text-base font-semibold text-white">Pause the sandbox</h3>
                 <p className="text-sm text-slate-400">Stops the local sandbox containers and the Agent process, but keeps your pairing — running `sandbox up` again later reconnects the <em>same</em> agent instead of registering a new one. Downloaded container images stay cached too, so the next `up` is fast:</p>
-                <CodeBlock code="infracanvas sandbox down" />
+                <CodeBlock code="whiparc sandbox down" />
               </div>
 
               <div className="space-y-3 pt-4">
@@ -583,7 +597,7 @@ Agent agent-a1b2c3d4 is now ACTIVE. Sandbox is ready.`} />
                 <p className="text-sm text-slate-400">
                   Add <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">--revoke</code> to also revoke the agent server-side and clear its local pairing state — use this when you’re done with a machine for good, not just stepping away. A future `sandbox up` will pair a brand-new agent instead of trying to reconnect this one:
                 </p>
-                <CodeBlock code="infracanvas sandbox down --revoke" />
+                <CodeBlock code="whiparc sandbox down --revoke" />
               </div>
 
               <div className="space-y-3 pt-4">
@@ -591,17 +605,17 @@ Agent agent-a1b2c3d4 is now ACTIVE. Sandbox is ready.`} />
                 <p className="text-sm text-slate-400">
                   By default the Agent process from `sandbox up` runs only as long as your session does. Install it as a persistent OS service (a systemd user unit on Linux, a launchd agent on macOS, or a Windows Service) so it survives reboots without needing to re-run `sandbox up`:
                 </p>
-                <CodeBlock code="infracanvas sandbox agent install" />
+                <CodeBlock code="whiparc sandbox agent install" />
                 <p className="text-sm text-slate-400">
                   Windows requires an elevated (Administrator) shell to install/uninstall the service; Linux and macOS don’t. Re-running <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">install</code> replaces any prior registration in place — safe to re-run after re-pairing to a different project.
                 </p>
-                <CodeBlock code="infracanvas sandbox agent uninstall" />
+                <CodeBlock code="whiparc sandbox agent uninstall" />
               </div>
 
               <div className="rounded-2xl border border-border bg-card/60 p-6 backdrop-blur-md">
                 <h3 className="text-base font-semibold text-white">Managing paired Agents</h3>
                 <p className="text-sm text-slate-400 mt-2">
-                  A project’s <strong>Settings → Sandbox Agents</strong> tab lists every Agent ever paired to it and lets a project Editor or Admin revoke one — the paired machine is disconnected immediately and its pairing token is invalidated. Useful when replacing a machine or removing access from someone who no longer needs it. A developer can also revoke their own agent directly from the machine it’s paired to with <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">infracanvas sandbox down --revoke</code>, without needing project-owner access.
+                  A project’s <strong>Settings → Sandbox Agents</strong> tab lists every Agent ever paired to it and lets a project Editor or Admin revoke one — the paired machine is disconnected immediately and its pairing token is invalidated. Useful when replacing a machine or removing access from someone who no longer needs it. A developer can also revoke their own agent directly from the machine it’s paired to with <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">whiparc sandbox down --revoke</code>, without needing project-owner access.
                 </p>
               </div>
             </section>
@@ -615,20 +629,20 @@ Agent agent-a1b2c3d4 is now ACTIVE. Sandbox is ready.`} />
               <div className="space-y-3">
                 <h3 className="text-base font-semibold text-white">“Sandbox Agent is an opt-in beta”</h3>
                 <p className="text-sm text-slate-400">Every `sandbox` subcommand needs the beta flag enabled once per machine:</p>
-                <CodeBlock code="infracanvas config set sandbox-agent-beta true" />
+                <CodeBlock code="whiparc config set sandbox-agent-beta true" />
               </div>
 
               <div className="space-y-3 pt-4">
                 <h3 className="text-base font-semibold text-white">Agent status stuck on PENDING</h3>
                 <p className="text-sm text-slate-400">
-                  Pairing was registered but the Agent process hasn’t connected yet — usually a Docker or network issue on your machine. Check <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">docker ps</code> for the sandbox containers and confirm your machine can reach the Gateway URL from `infracanvas config set gateway-url`.
+                  Pairing was registered but the Agent process hasn’t connected yet — usually a Docker or network issue on your machine. Check <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">docker ps</code> for the sandbox containers and confirm your machine can reach the Gateway URL from `whiparc config set gateway-url`.
                 </p>
               </div>
 
               <div className="space-y-3 pt-4">
                 <h3 className="text-base font-semibold text-white">Agent shows DISCONNECTED, deploys are rejected</h3>
                 <p className="text-sm text-slate-400">
-                  A connection that was working can drop from sleep, WiFi changes, or a VPN reconnecting — this is normal for a machine-hosted tunnel, not a sign something is broken. Deploys are rejected outright while disconnected rather than hanging against a dead connection. Reconnection is automatic (with backoff); re-run <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">infracanvas sandbox status</code> after a minute, or `infracanvas sandbox up` again if it doesn’t recover.
+                  A connection that was working can drop from sleep, WiFi changes, or a VPN reconnecting — this is normal for a machine-hosted tunnel, not a sign something is broken. Deploys are rejected outright while disconnected rather than hanging against a dead connection. Reconnection is automatic (with backoff); re-run <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">whiparc sandbox status</code> after a minute, or `whiparc sandbox up` again if it doesn’t recover.
                 </p>
               </div>
 
@@ -668,7 +682,7 @@ Agent agent-a1b2c3d4 is now ACTIVE. Sandbox is ready.`} />
                 <p className="text-sm text-slate-400">
                   Run the login sub-command. The program will prompt for your account email and password securely, then query and write your session token:
                 </p>
-                <CodeBlock code="infracanvas login" />
+                <CodeBlock code="whiparc login" />
               </div>
 
               <div className="space-y-3 pt-4">
@@ -676,7 +690,7 @@ Agent agent-a1b2c3d4 is now ACTIVE. Sandbox is ready.`} />
                 <p className="text-sm text-slate-400">
                   To clear your locally cached credentials and end the session:
                 </p>
-                <CodeBlock code="infracanvas logout" />
+                <CodeBlock code="whiparc logout" />
               </div>
             </section>
           )}
@@ -691,18 +705,18 @@ Agent agent-a1b2c3d4 is now ACTIVE. Sandbox is ready.`} />
 
               <div className="space-y-3">
                 <h3 className="text-base font-semibold text-white">List Projects</h3>
-                <CodeBlock code="infracanvas projects list" />
+                <CodeBlock code="whiparc projects list" />
               </div>
 
               <div className="space-y-3 pt-4">
                 <h3 className="text-base font-semibold text-white">Create a Project</h3>
                 <p className="text-sm text-slate-400">Initialize a new project workspace by name:</p>
-                <CodeBlock code='infracanvas projects create --name "My VPC Stack" --visibility PRIVATE' />
+                <CodeBlock code='whiparc projects create --name "My VPC Stack" --visibility PRIVATE' />
               </div>
 
               <div className="space-y-3 pt-4">
                 <h3 className="text-base font-semibold text-white">Delete a Project</h3>
-                <CodeBlock code='infracanvas projects delete --id "my-vpc-stack-id" --force' />
+                <CodeBlock code='whiparc projects delete --id "my-vpc-stack-id" --force' />
               </div>
             </section>
           )}
@@ -718,13 +732,13 @@ Agent agent-a1b2c3d4 is now ACTIVE. Sandbox is ready.`} />
               <div className="space-y-3">
                 <h3 className="text-base font-semibold text-white">Import a Single File</h3>
                 <p className="text-sm text-slate-400">Upload and parse a single Terraform or Kubernetes configuration:</p>
-                <CodeBlock code='infracanvas import --project "VPC-Stack" --file "./terraform/main.tf"' />
+                <CodeBlock code='whiparc import --project "VPC-Stack" --file "./terraform/main.tf"' />
               </div>
 
               <div className="space-y-3 pt-4">
                 <h3 className="text-base font-semibold text-white">Import a Directory</h3>
                 <p className="text-sm text-slate-400">Recursively scan and import all configurations from a target directory:</p>
-                <CodeBlock code='infracanvas import --project "VPC-Stack" --dir "./deployments/"' />
+                <CodeBlock code='whiparc import --project "VPC-Stack" --dir "./deployments/"' />
               </div>
             </section>
           )}
@@ -739,7 +753,7 @@ Agent agent-a1b2c3d4 is now ACTIVE. Sandbox is ready.`} />
 
               <div className="space-y-3">
                 <h3 className="text-base font-semibold text-white">Execute Deployment Pipeline</h3>
-                <CodeBlock code='infracanvas deploy --project "VPC-Stack"' />
+                <CodeBlock code='whiparc deploy --project "VPC-Stack"' />
                 <p className="text-sm text-slate-400 mt-2">
                   This command connects to the deployment tracker socket, streaming all progress logs sequentially and printing them in real-time.
                 </p>
@@ -748,7 +762,7 @@ Agent agent-a1b2c3d4 is now ACTIVE. Sandbox is ready.`} />
               <div className="space-y-3 pt-4">
                 <h3 className="text-base font-semibold text-white">Deploy with Auto-Destroy</h3>
                 <p className="text-sm text-slate-400">To spin up testing systems and tear them down immediately upon execution completion:</p>
-                <CodeBlock code='infracanvas deploy --project "VPC-Stack" --auto-destroy' />
+                <CodeBlock code='whiparc deploy --project "VPC-Stack" --auto-destroy' />
               </div>
             </section>
           )}

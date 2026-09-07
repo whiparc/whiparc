@@ -58,7 +58,7 @@ that executes deployment bundles in a simulated sandbox environment.
 whiparc/
 ├── apps/
 │   ├── api/                 # Go runner API backend (BSL 1.1)
-│   ├── cli/                 # infracanvas CLI + local Sandbox Agent (MIT)
+│   ├── cli/                 # whiparc CLI + local Sandbox Agent (MIT)
 │   └── web/                 # Next.js web workspace frontend (BSL 1.1)
 ├── sandbox/                 # Mock DevOps cloud environment configuration (MIT)
 ├── docs/                    # Contributor-facing setup docs
@@ -92,7 +92,7 @@ directory.
    Viewer), and an AES-256-GCM vault for AWS/GCP/SSH credentials.
 5. **Real-time collaboration** — WebSocket-based room sync with live cursor
    tracking, node locks, and project workspace/access-request workflows.
-6. **CLI & reverse import** — A cross-platform `infracanvas` CLI for
+6. **CLI & reverse import** — A cross-platform `whiparc` CLI for
    login, project, and pipeline management, plus an HCL/YAML AST-based
    reverse importer that turns existing `.tf`/`.yml` files into canvas
    nodes.
