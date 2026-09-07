@@ -196,9 +196,28 @@ jobs:
         id: get_tag
         run: |
           if [[ "${{ github.ref }}" == refs/tags/cli-v* ]]; then
-            echo "TAG_NAME=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            TAG_NAME="${{ github.ref_name }}"
+            echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
+            # A '-' in the version part (after the "cli-v" prefix) marks a
+            # semver prerelease, e.g. cli-v0.2.0-beta.1 — surfaced on the
+            # docs site's version picker as a beta build, never reported as
+            # GitHub's "latest release" ahead of a real stable tag.
+            VERSION="${TAG_NAME#cli-v}"
+            if [[ "$VERSION" == *-* ]]; then
+              echo "PRERELEASE=true" >> $GITHUB_OUTPUT
+              echo "MAKE_LATEST=false" >> $GITHUB_OUTPUT
+            else
+              echo "PRERELEASE=false" >> $GITHUB_OUTPUT
+              echo "MAKE_LATEST=true" >> $GITHUB_OUTPUT
+            fi
           else
+            # The rolling dev-branch build — never a "release" in the
+            # versioned sense, so never prerelease-flagged (it isn't a beta
+            # either) and never reported as GitHub's latest release ahead of
+            # a real cli-v* tag.
             echo "TAG_NAME=cli-latest" >> $GITHUB_OUTPUT
+            echo "PRERELEASE=false" >> $GITHUB_OUTPUT
+            echo "MAKE_LATEST=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Create or Update GitHub Release
@@ -206,7 +225,8 @@ jobs:
         with:
           tag_name: ${{ steps.get_tag.outputs.TAG_NAME }}
           name: ${{ steps.get_tag.outputs.TAG_NAME }}
-          prerelease: false
+          prerelease: ${{ steps.get_tag.outputs.PRERELEASE }}
+          make_latest: ${{ steps.get_tag.outputs.MAKE_LATEST }}
           files: |
             artifacts/whiparc-windows-amd64.exe
             artifacts/whiparc-darwin-arm64

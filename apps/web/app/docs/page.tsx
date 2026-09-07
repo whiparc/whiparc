@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Icon } from '@iconify/react';
 import { useAuthStore } from '../store/useAuthStore';
@@ -62,6 +62,16 @@ function CodeBlock({ code }: { code: string }) {
   );
 }
 
+type CLIReleaseAsset = { name: string; url: string; size: number };
+type CLIRelease = {
+  version: string;
+  tag: string;
+  publishedAt: string;
+  prerelease: boolean;
+  htmlUrl: string;
+  assets: CLIReleaseAsset[];
+};
+
 const NAV_SECTIONS = [
   {
     group: 'Getting Started',
@@ -98,8 +108,29 @@ export default function DocsPage() {
   const [activeSection, setActiveSection] = useState<string>('intro');
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
+  // `releases` stays null while loading and becomes [] on a failed fetch or
+  // if nothing's been tagged yet — both cases fall back to the static
+  // "latest" links below rather than showing a picker with nothing to pick.
+  const [releases, setReleases] = useState<CLIRelease[] | null>(null);
+  const [selectedTag, setSelectedTag] = useState<string>('latest');
+
   const API_URL = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) || 'http://localhost:8080';
   const downloadBaseUrl = `${API_URL}/downloads`;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`${API_URL}/api/cli/releases`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(new Error(`status ${res.status}`))))
+      .then((data: CLIRelease[]) => {
+        if (!cancelled) setReleases(data);
+      })
+      .catch(() => {
+        if (!cancelled) setReleases([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [API_URL]);
 
   const downloadLinks = {
     windowsInstaller: `${downloadBaseUrl}/whiparc-setup-windows-amd64.exe`,
@@ -109,6 +140,30 @@ export default function DocsPage() {
     macosSilicon: `${downloadBaseUrl}/whiparc-darwin-arm64`,
     macosIntel: `${downloadBaseUrl}/whiparc-darwin-amd64`,
     linux: `${downloadBaseUrl}/whiparc-linux-amd64`,
+  };
+
+  // Latest always uses the local-serve-with-GitHub-fallback proxy above
+  // (downloadLinks) — that proxy only ever tracks the newest build, so a
+  // specific previous/beta version instead resolves straight to that
+  // release's own GitHub asset URL.
+  const stableReleases = (releases ?? []).filter((r) => !r.prerelease);
+  const betaReleases = (releases ?? []).filter((r) => r.prerelease);
+  const latestRelease = stableReleases[0];
+  const previousReleases = stableReleases.slice(1);
+  const selectedRelease = selectedTag === 'latest' ? undefined : (releases ?? []).find((r) => r.tag === selectedTag);
+  const selectedReleaseInfo = selectedTag === 'latest' ? latestRelease : selectedRelease;
+
+  const assetUrl = (filename: string, fallback: string) =>
+    selectedRelease?.assets.find((a) => a.name === filename)?.url ?? fallback;
+
+  const activeLinks = {
+    windowsInstaller: assetUrl('whiparc-setup-windows-amd64.exe', downloadLinks.windowsInstaller),
+    macosInstaller: assetUrl('whiparc-macos.pkg', downloadLinks.macosInstaller),
+    linuxInstallScript: assetUrl('install.sh', downloadLinks.linuxInstallScript),
+    windows: assetUrl('whiparc-windows-amd64.exe', downloadLinks.windows),
+    macosSilicon: assetUrl('whiparc-darwin-arm64', downloadLinks.macosSilicon),
+    macosIntel: assetUrl('whiparc-darwin-amd64', downloadLinks.macosIntel),
+    linux: assetUrl('whiparc-linux-amd64', downloadLinks.linux),
   };
 
   return (
@@ -286,10 +341,67 @@ export default function DocsPage() {
                   </div>
                 </div>
 
+                {releases !== null && releases.length > 0 && (
+                  <div className="mt-5">
+                    <label htmlFor="cli-version" className="mb-1.5 block text-xs font-medium text-slate-400">
+                      Version
+                    </label>
+                    <select
+                      id="cli-version"
+                      value={selectedTag}
+                      onChange={(e) => setSelectedTag(e.target.value)}
+                      className="w-full cursor-pointer rounded-lg border border-border bg-card px-3 py-2.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    >
+                      {latestRelease && (
+                        <optgroup label="Latest">
+                          <option value="latest">v{latestRelease.version} (latest)</option>
+                        </optgroup>
+                      )}
+                      {previousReleases.length > 0 && (
+                        <optgroup label="Previous Versions">
+                          {previousReleases.map((r) => (
+                            <option key={r.tag} value={r.tag}>
+                              v{r.version}
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {betaReleases.length > 0 && (
+                        <optgroup label="Beta">
+                          {betaReleases.map((r) => (
+                            <option key={r.tag} value={r.tag}>
+                              v{r.version} (beta)
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </select>
+                    {selectedReleaseInfo && (
+                      <p className="mt-2 text-xs text-slate-500">
+                        Published{' '}
+                        {new Date(selectedReleaseInfo.publishedAt).toLocaleDateString(undefined, {
+                          year: 'numeric',
+                          month: 'short',
+                          day: 'numeric',
+                        })}
+                        {' · '}
+                        <a
+                          href={selectedReleaseInfo.htmlUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-primary hover:underline"
+                        >
+                          Release notes
+                        </a>
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 {isLoggedIn ? (
                   <div className="mt-6 grid grid-cols-1 gap-3 sm:grid-cols-3">
                     <a
-                      href={downloadLinks.windowsInstaller}
+                      href={activeLinks.windowsInstaller}
                       download
                       className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3.5 text-sm font-medium hover:bg-secondary hover:border-border transition"
                     >
@@ -300,7 +412,7 @@ export default function DocsPage() {
                       <Icon icon="lucide:arrow-down-to-line" className="text-slate-500" />
                     </a>
                     <a
-                      href={downloadLinks.macosInstaller}
+                      href={activeLinks.macosInstaller}
                       download
                       className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3.5 text-sm font-medium hover:bg-secondary hover:border-border transition"
                     >
@@ -311,7 +423,7 @@ export default function DocsPage() {
                       <Icon icon="lucide:arrow-down-to-line" className="text-slate-500" />
                     </a>
                     <a
-                      href={downloadLinks.linuxInstallScript}
+                      href={activeLinks.linuxInstallScript}
                       download
                       className="flex items-center justify-between rounded-xl border border-border bg-card px-4 py-3.5 text-sm font-medium hover:bg-secondary hover:border-border transition"
                     >
@@ -423,7 +535,7 @@ export default function DocsPage() {
                       <p className="text-sm text-slate-400">
                         2. Any other distro — run the install script (download it above first, or pipe it directly). It detects your architecture, installs to `~/.local/bin`, and adds that to your PATH only if it isn&apos;t already there:
                       </p>
-                      <CodeBlock code={`curl -fsSL ${downloadBaseUrl}/install.sh | sh`} />
+                      <CodeBlock code={`curl -fsSL ${activeLinks.linuxInstallScript} | sh`} />
                       <p className="text-sm text-slate-400">
                         3. Open a new terminal (or `source` your shell rc) and verify:
                       </p>

@@ -348,6 +348,10 @@ func main() {
 		log.Println("[SANDBOX AGENT] Beta routes registered (SANDBOX_AGENT_BETA=true)")
 	}
 
+	// Version list for the docs site's install-guide picker (current
+	// latest, previous versions, beta builds) — see cli_releases.go.
+	mux.HandleFunc("GET /api/cli/releases", enableCORS(handleGetCLIReleases))
+
 	// Static downloads serving with fallback redirection to GitHub Releases
 	_ = os.MkdirAll("./static/downloads", 0755)
 	mux.Handle("GET /downloads/{filename...}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
