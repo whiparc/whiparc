@@ -158,7 +158,7 @@ jobs:
           VERSION="${{ needs.prepare.outputs.version }}" \
           AMD64_BINARY="$(pwd)/artifacts/whiparc-darwin-amd64" \
           ARM64_BINARY="$(pwd)/artifacts/whiparc-darwin-arm64" \
-            ./installers/macos/build-pkg.sh
+            bash ./installers/macos/build-pkg.sh
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4

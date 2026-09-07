@@ -24,8 +24,10 @@ Unicode true
 !define APP_EXE "whiparc.exe"
 !define INSTALL_DIR "$LOCALAPPDATA\Programs\Whiparc\bin"
 !define UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\Whiparc"
-!define HWND_BROADCAST 0xFFFF
-!define WM_SETTINGCHANGE 0x001A
+; HWND_BROADCAST/WM_SETTINGCHANGE come from NSIS's own Include/WinMessages.nsh,
+; pulled in transitively below by MUI2.nsh — do NOT !define them here too:
+; WinMessages.nsh defines them unconditionally (no !ifndef guard of its own),
+; so a duplicate !define here is a hard "already defined!" compile error.
 
 Name "${APP_NAME}"
 OutFile "whiparc-setup-windows-amd64.exe"
@@ -58,42 +60,18 @@ VIAddVersionKey "ProductName" "${APP_NAME} CLI"
 VIAddVersionKey "FileDescription" "${APP_NAME} CLI installer"
 VIAddVersionKey "ProductVersion" "${VERSION}"
 VIAddVersionKey "FileVersion" "${VERSION}"
+VIAddVersionKey "LegalCopyright" "Whiparc"
 
 ; ---------------------------------------------------------------------------
 ; StrStr: classic public-domain NSIS substring-search recipe. Used so the
 ; installer/uninstaller only ever add/remove our own directory in the User
 ; PATH, never touching anything else a user or another installer put there.
-; Input: top of stack = string, next = substring. Output: pointer into
-; string where substring starts, or "" if not found.
+; Input: top of stack = string, next = substring. Output: the tail of the
+; string starting at the match, or "" if not found. Instantiated as both
+; StrStr (installer) and un.StrStr (uninstaller) by the macro below — do not
+; also hand-write a standalone `Function StrStr`, the "" instantiation
+; already produces exactly that and NSIS errors on the duplicate definition.
 ; ---------------------------------------------------------------------------
-Function StrStr
-  Exch $R1 ; substring
-  Exch
-  Exch $R2 ; string
-  Push $R3
-  Push $R4
-  Push $R5
-  StrLen $R3 $R1
-  StrCpy $R4 0
-  loop:
-    StrCpy $R5 $R2 $R3 $R4
-    StrCmp $R5 $R1 done
-    StrCmp $R5 "" notfound
-    IntOp $R4 $R4 + 1
-    Goto loop
-  notfound:
-    StrCpy $R2 ""
-    Goto end
-  done:
-    StrCpy $R2 $R2 "" $R4
-  end:
-  Pop $R5
-  Pop $R4
-  Pop $R3
-  Pop $R1
-  Exch $R2
-FunctionEnd
-
 !macro StrStr un
 Function ${un}StrStr
   Exch $R1
