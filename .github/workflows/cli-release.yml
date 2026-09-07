@@ -101,11 +101,18 @@ jobs:
 
       - name: Build Windows installer
         run: |
+          mkdir -p dist
           chmod +x artifacts/whiparc-windows-amd64.exe
           makensis \
             "-DVERSION=${{ needs.prepare.outputs.version }}" \
             "-DSOURCE_BINARY=$(pwd)/artifacts/whiparc-windows-amd64.exe" \
             installers/windows/whiparc.nsi
+          # NSIS writes OutFile relative to the .nsi script's own directory,
+          # not this step's cwd — move it into dist/ alongside the Linux
+          # packages so every installer this job produces lives in one flat
+          # directory (see the nfpm step below and the upload step's single
+          # `dist/*` glob, which depends on all three files being siblings).
+          mv installers/windows/whiparc-setup-windows-amd64.exe dist/
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -117,7 +124,6 @@ jobs:
 
       - name: Build Linux packages (.deb + .rpm)
         run: |
-          mkdir -p dist
           VERSION="${{ needs.prepare.outputs.version }}" \
           ARCH="amd64" \
           BINARY_PATH="$(pwd)/artifacts/whiparc-linux-amd64" \
@@ -131,10 +137,12 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: whiparc-installers-windows-linux
-          path: |
-            whiparc-setup-windows-amd64.exe
-            dist/*.deb
-            dist/*.rpm
+          # A single glob over one flat directory — not separate lines for
+          # the .exe/.deb/.rpm — so upload-artifact has no "least common
+          # ancestor" to compute across divergent paths and can't silently
+          # nest everything under a preserved dist/ folder inside the
+          # artifact the way multiple differently-rooted path lines did.
+          path: dist/*
           if-no-files-found: error
           retention-days: 7
 
