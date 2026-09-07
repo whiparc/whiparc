@@ -213,7 +213,7 @@ ${requiredProviders}  }
     const awsRegion = (awsTarget?.data as unknown as CanvasNodeData)?.region || 'us-east-1';
     providerBlock += `
   backend "s3" {
-    bucket                      = "infracanvas-state-bucket"
+    bucket                      = "whiparc-state-bucket"
     key                         = "terraform.tfstate"
     region                      = "${awsRegion}"
     endpoints                   = { s3 = "http://localhost:4566" }
@@ -228,7 +228,7 @@ ${requiredProviders}  }
   providerBlock += `}`;
 
   const tfNodes = nodes.filter(n => (n.data as unknown as CanvasNodeData)?.tech === 'Terraform');
-  const dummySshKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQC2R1m2hJc6eC+7737t8t8O1/Y2N5hDkK1aP4+rD2mZ6bJ9mF7C8F9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2= dummy-infracanvas-key";
+  const dummySshKey = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQC2R1m2hJc6eC+7737t8t8O1/Y2N5hDkK1aP4+rD2mZ6bJ9mF7C8F9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2= dummy-whiparc-key";
   let tfResourcesBlock = '';
   let subnetBlock = '';
   let variablesTf = '# Input variables for Terraform deployment\n\n';
@@ -266,7 +266,7 @@ variable "aws_ssh_pub_key" {
     const gcpTarget = connectedTargets.find(t => t.id.startsWith('gcp_target'));
     const gcpRegion = (gcpTarget?.data as unknown as CanvasNodeData)?.region || 'us-central1';
     const gcpZone = (gcpTarget?.data as unknown as CanvasNodeData)?.gcpZone || 'us-central1-a';
-    const gcpProjectId = (gcpTarget?.data as unknown as CanvasNodeData)?.projectId || 'infracanvas-prod-12345';
+    const gcpProjectId = (gcpTarget?.data as unknown as CanvasNodeData)?.projectId || 'whiparc-prod-12345';
 
     variablesTf += `variable "gcp_project_id" {
   type    = string
@@ -337,7 +337,7 @@ variable "gcp_ssh_pub_key" {
               const firstVpc = tfNodes.find(n => n.id.startsWith('aws_vpc'));
               if (firstVpc) {
                 const vpcName = ((firstVpc.data as unknown as CanvasNodeData)?.parameters?.vpcName) || 'app_vpc';
-                subnetBlock = `resource "aws_subnet" "infracanvas_auto_subnet" {
+                subnetBlock = `resource "aws_subnet" "whiparc_auto_subnet" {
   vpc_id                  = aws_vpc.${vpcName}.id
   cidr_block              = "10.0.1.0/24"
   map_public_ip_on_launch = true
@@ -346,11 +346,11 @@ variable "gcp_ssh_pub_key" {
   }
 }
 
-resource "aws_route_table_association" "infracanvas_auto_subnet_assoc" {
-  subnet_id      = aws_subnet.infracanvas_auto_subnet.id
+resource "aws_route_table_association" "whiparc_auto_subnet_assoc" {
+  subnet_id      = aws_subnet.whiparc_auto_subnet.id
   route_table_id = aws_route_table.${vpcName}_rt.id
 }`;
-                subnetLine = `\n  subnet_id     = aws_subnet.infracanvas_auto_subnet.id`;
+                subnetLine = `\n  subnet_id     = aws_subnet.whiparc_auto_subnet.id`;
               } else {
                 // Default fallback (Default VPC)
                 subnetBlock = `data "aws_vpc" "default" {
@@ -395,15 +395,15 @@ data "aws_subnets" "default" {
           }
         }
 
-        tfResourcesBlock += `resource "aws_key_pair" "infracanvas_key" {
-  key_name   = "infracanvas-deploy-key"
+        tfResourcesBlock += `resource "aws_key_pair" "whiparc_key" {
+  key_name   = "whiparc-deploy-key"
   public_key = var.aws_ssh_pub_key
 }
 
 resource "aws_instance" "${name}" {
   ami           = "${ami}"
   instance_type = "${type}"${subnetLine}${sgLine}
-  key_name      = aws_key_pair.infracanvas_key.key_name
+  key_name      = aws_key_pair.whiparc_key.key_name
 
   root_block_device {
     volume_size = ${rootVolume}
@@ -428,12 +428,12 @@ resource "aws_instance" "${name}" {
         const gcpImage = p.gcpImage || 'ubuntu-os-cloud/ubuntu-2204-lts';
 
         tfResourcesBlock += `resource "google_compute_network" "vpc_network" {
-  name                    = "infracanvas-vpc"
+  name                    = "whiparc-vpc"
   auto_create_subnetworks = false
 }
 
 resource "google_compute_subnetwork" "subnet" {
-  name          = "infracanvas-subnet"
+  name          = "whiparc-subnet"
   ip_cidr_range = "10.10.1.0/24"
   region        = var.gcp_region
   network       = google_compute_network.vpc_network.id
@@ -478,19 +478,19 @@ resource "google_compute_instance" "vm_instance" {
         const sku = p.azureSku || '18.04-LTS';
 
         tfResourcesBlock += `resource "azurerm_resource_group" "rg" {
-  name     = "infracanvas-rg"
+  name     = "whiparc-rg"
   location = "East US"
 }
 
 resource "azurerm_virtual_network" "vnet" {
-  name                = "infracanvas-vnet"
+  name                = "whiparc-vnet"
   address_space       = ["10.0.0.0/16"]
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 }
 
 resource "azurerm_subnet" "subnet" {
-  name                 = "infracanvas-subnet"
+  name                 = "whiparc-subnet"
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefixes     = ["10.0.1.0/24"]
@@ -650,7 +650,7 @@ ${ingressRules}${sshRuleStr}
 }\n\n`;
     }
     else if (id.startsWith('aws_s3_bucket') && hasAws) {
-      const name = p.bucketName || 'infracanvas-user-bucket';
+      const name = p.bucketName || 'whiparc-user-bucket';
       const forceDestroy = p.forceDestroy !== false;
       const versioning = p.versioningEnabled !== false;
 
@@ -828,7 +828,7 @@ ${tfResourcesBlock}`;
     const id = node.id;
     const p: NodeParams = (node.data as unknown as CanvasNodeData)?.parameters || {};
     if (id.startsWith('aws_s3_bucket') && hasAws) {
-      const name = p.bucketName || 'infracanvas-user-bucket';
+      const name = p.bucketName || 'whiparc-user-bucket';
       outputsTfContent += `output "${name}_bucket_arn" {
   value       = aws_s3_bucket.${name}.arn
   description = "ARN of the S3 bucket"
@@ -871,7 +871,7 @@ ${tfResourcesBlock}`;
       if (outputKey === 'sg_name') return `aws_security_group.${name}.name`;
     }
     if (id.startsWith('aws_s3_bucket')) {
-      const name = p.bucketName || 'infracanvas-user-bucket';
+      const name = p.bucketName || 'whiparc-user-bucket';
       if (outputKey === 'bucket_name') return `aws_s3_bucket.${name}.id`;
       if (outputKey === 'bucket_arn') return `aws_s3_bucket.${name}.arn`;
     }

@@ -1,12 +1,10 @@
 package main
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 )
 
-// configCmd is a small `infracanvas config` group for persisted CLI settings
+// configCmd is a small `whiparc config` group for persisted CLI settings
 // that don't warrant their own flag — currently just the sandbox agent beta
 // opt-in and the Agent Gateway URL (see obsidian_memory/08.4's Phase 1).
 func configCmd() *cobra.Command {
@@ -28,7 +26,7 @@ func configSetCmd() *cobra.Command {
 
 			cfg, err := getClientConfig()
 			if err != nil {
-				fmt.Printf("Config error: %v\n", err)
+				printError("Config error: %v", err)
 				return
 			}
 
@@ -38,15 +36,15 @@ func configSetCmd() *cobra.Command {
 			case "gateway-url":
 				cfg.GatewayURL = value
 			default:
-				fmt.Printf("Unknown config key %q. Supported keys: sandbox-agent-beta, gateway-url\n", key)
+				printError("Unknown config key %q. Supported keys: sandbox-agent-beta, gateway-url", key)
 				return
 			}
 
 			if err := saveClientConfig(cfg); err != nil {
-				fmt.Printf("Failed to save config: %v\n", err)
+				printError("Failed to save config: %v", err)
 				return
 			}
-			fmt.Printf("Set %s = %s\n", key, value)
+			printSuccess("Set %s = %s", key, value)
 		},
 	}
 }

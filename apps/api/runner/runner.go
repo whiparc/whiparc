@@ -134,7 +134,7 @@ func isSandbox(canvasJSON string) bool {
 // unless we register one before running terraform apply.
 func registerLocalStackAMI(localstackHost string) (string, error) {
 	endpoint := fmt.Sprintf("http://%s:4566/", localstackHost)
-	body := "Action=RegisterImage&Name=infracanvas-ami&RootDeviceName=%2Fdev%2Fsda1&Version=2016-11-15"
+	body := "Action=RegisterImage&Name=whiparc-ami&RootDeviceName=%2Fdev%2Fsda1&Version=2016-11-15"
 	cmd := exec.Command("curl", "-s", "-X", "POST", endpoint,
 		"-H", "Content-Type: application/x-www-form-urlencoded",
 		"-d", body)
@@ -220,15 +220,15 @@ func localAgentHostSSHCommonArgs(agentCtx *AgentContext, service string) string 
 	return fmt.Sprintf("'-o StrictHostKeyChecking=no -o ProxyCommand=%q'", proxyCommand)
 }
 
-// cliHelperPath resolves the `infracanvas` CLI binary used as the SSH
+// cliHelperPath resolves the `whiparc` CLI binary used as the SSH
 // ProxyCommand target for local_agent runs (see the ansibleArgs branch in
 // RunPipeline). The hosted Runner's host/container must have this binary
 // available — it already does, via the existing CLI release pipeline.
 func cliHelperPath() string {
-	if p := os.Getenv("INFRACANVAS_CLI_PATH"); p != "" {
+	if p := os.Getenv("WHIPARC_CLI_PATH"); p != "" {
 		return p
 	}
-	return "infracanvas"
+	return "whiparc"
 }
 
 // SecretRedactor masks sensitive credentials values inside log lines
@@ -665,7 +665,7 @@ ansible_python_interpreter=/usr/bin/python3`, "__COLON__", ":")
 			mainTfPath := filepath.Join(tfDir, "main.tf")
 			isLocalStack := false
 			if content, err := os.ReadFile(mainTfPath); err == nil {
-				if strings.Contains(string(content), "infracanvas-state-bucket") {
+				if strings.Contains(string(content), "whiparc-state-bucket") {
 					isLocalStack = true
 				}
 			}
@@ -675,7 +675,7 @@ ansible_python_interpreter=/usr/bin/python3`, "__COLON__", ":")
 
 			if isLocalStack {
 				emit("[RUNNER] Ensuring LocalStack S3 state bucket exists...")
-				_ = spawnCommand("curl", []string{"-X", "PUT", fmt.Sprintf("http://%s:4566/infracanvas-state-bucket", localstackHost)}, runDir, nil, redactor, logChan)
+				_ = spawnCommand("curl", []string{"-X", "PUT", fmt.Sprintf("http://%s:4566/whiparc-state-bucket", localstackHost)}, runDir, nil, redactor, logChan)
 
 				emit("[RUNNER] Pre-registering dummy AMI in LocalStack...")
 				if amiID, err := registerLocalStackAMI(localstackHost); err != nil {

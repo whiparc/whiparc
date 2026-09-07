@@ -45,7 +45,7 @@ const (
 	statusDenied
 )
 
-// DeviceAuth is what `infracanvas sandbox up` receives from RequestDeviceCode:
+// DeviceAuth is what `whiparc sandbox up` receives from RequestDeviceCode:
 // a long opaque code it polls with, and a short human-typeable code it prints
 // alongside a verification URL for the user to open in their browser.
 type DeviceAuth struct {
@@ -91,7 +91,7 @@ type Server struct {
 }
 
 // NewServer creates a pairing server. baseVerificationURI is the browser-facing
-// pairing page (e.g. "https://www.infracanvas.dev/pair") that DeviceAuth.VerificationURI
+// pairing page (e.g. "https://www.whiparc.dev/pair") that DeviceAuth.VerificationURI
 // is built from.
 func NewServer(baseVerificationURI string) *Server {
 	return &Server{
@@ -103,7 +103,7 @@ func NewServer(baseVerificationURI string) *Server {
 }
 
 // RequestDeviceCode starts a new pairing request. Called by the Agent at
-// `infracanvas sandbox up` time.
+// `whiparc sandbox up` time.
 func (s *Server) RequestDeviceCode() (DeviceAuth, error) {
 	deviceCode, err := randomToken(32)
 	if err != nil {

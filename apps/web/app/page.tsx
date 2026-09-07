@@ -573,7 +573,7 @@ function CodePreviewSection() {
     terraform: `resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
-  tags = { Name = "infracanvas-vpc" }
+  tags = { Name = "whiparc-vpc" }
 }
 
 resource "aws_instance" "web" {
@@ -611,7 +611,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: infracanvas/web:latest
+          image: whiparc/web:latest
           ports:
             - containerPort: 3000`,
   };
@@ -682,7 +682,7 @@ spec:
                     <span className="h-3 w-3 rounded-full bg-yellow-500/70" />
                     <span className="h-3 w-3 rounded-full bg-green-500/70" />
                   </div>
-                  <span className="text-[10px] text-slate-500 font-mono">infracanvas output</span>
+                  <span className="text-[10px] text-slate-500 font-mono">whiparc output</span>
                 </div>
 
                 {/* Tab bar */}
@@ -942,13 +942,13 @@ function CliSection() {
             <motion.div variants={fadeUp} transition={{ duration: 0.5, ease: EASE }} className="mt-8 flex flex-wrap gap-3">
               {isLoggedIn ? (
                 <>
-                  <a href={`${downloadBaseUrl}/infracanvas-windows-amd64.exe`} download className="inline-flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.03] px-5 py-3 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/[0.06] cursor-pointer">
+                  <a href={`${downloadBaseUrl}/whiparc-setup-windows-amd64.exe`} download className="inline-flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.03] px-5 py-3 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/[0.06] cursor-pointer">
                     <Icon icon="logos:microsoft-windows-icon" /> Windows
                   </a>
-                  <a href={`${downloadBaseUrl}/infracanvas-darwin-arm64`} download className="inline-flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.03] px-5 py-3 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/[0.06] cursor-pointer">
+                  <a href={`${downloadBaseUrl}/whiparc-macos.pkg`} download className="inline-flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.03] px-5 py-3 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/[0.06] cursor-pointer">
                     <Icon icon="logos:apple" /> macOS
                   </a>
-                  <a href={`${downloadBaseUrl}/infracanvas-linux-amd64`} download className="inline-flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.03] px-5 py-3 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/[0.06] cursor-pointer">
+                  <a href={`${downloadBaseUrl}/install.sh`} download className="inline-flex items-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.03] px-5 py-3 text-sm font-medium text-white backdrop-blur-sm transition hover:bg-white/[0.06] cursor-pointer">
                     <Icon icon="logos:linux-tux" /> Linux
                   </a>
                 </>
@@ -982,12 +982,12 @@ function CliSection() {
                   <span className="text-[10px] text-slate-500 font-mono">terminal</span>
                 </div>
                 <div className="p-5 font-mono text-xs space-y-2 text-slate-300">
-                  <p><span className="text-slate-500">$</span> infracanvas login</p>
+                  <p><span className="text-slate-500">$</span> whiparc login</p>
                   <p className="text-indigo-400">Enter Email: user@company.com</p>
                   <p className="text-slate-500">Authenticated successfully.</p>
-                  <p className="mt-2"><span className="text-slate-500">$</span> infracanvas import --project &quot;Prod-Stack&quot; -f main.tf</p>
+                  <p className="mt-2"><span className="text-slate-500">$</span> whiparc import --project &quot;Prod-Stack&quot; -f main.tf</p>
                   <p className="text-emerald-400">Success: 12 nodes imported. Layout computed.</p>
-                  <p className="mt-2"><span className="text-slate-500">$</span> infracanvas deploy --project &quot;Prod-Stack&quot;</p>
+                  <p className="mt-2"><span className="text-slate-500">$</span> whiparc deploy --project &quot;Prod-Stack&quot;</p>
                   <p className="text-indigo-500">[SYSTEM] Pipeline: RUNNING</p>
                   <p className="text-slate-400">aws_instance.web: Creating...</p>
                   <p className="text-emerald-500">[SYSTEM] Pipeline: SUCCESS</p>

@@ -192,20 +192,20 @@ func TestLocalAgentHostSSHCommonArgs(t *testing.T) {
 	agentCtx := &AgentContext{AgentID: "agent-abc123", ProjectID: "proj_xyz789", GatewayURL: "https://gateway.example.com"}
 	got := localAgentHostSSHCommonArgs(agentCtx, "ssh:2223")
 
-	want := `'-o StrictHostKeyChecking=no -o ProxyCommand="infracanvas sandbox proxy --agent-id=agent-abc123 --service=ssh:2223 --gateway=https://gateway.example.com --project=proj_xyz789"'`
+	want := `'-o StrictHostKeyChecking=no -o ProxyCommand="whiparc sandbox proxy --agent-id=agent-abc123 --service=ssh:2223 --gateway=https://gateway.example.com --project=proj_xyz789"'`
 	if got != want {
 		t.Errorf("localAgentHostSSHCommonArgs() = %q, want %q", got, want)
 	}
 }
 
 func TestCLIHelperPathRespectsOverrideEnvVar(t *testing.T) {
-	t.Setenv("INFRACANVAS_CLI_PATH", "")
-	if got := cliHelperPath(); got != "infracanvas" {
-		t.Errorf("cliHelperPath() with no override = %q, want %q", got, "infracanvas")
+	t.Setenv("WHIPARC_CLI_PATH", "")
+	if got := cliHelperPath(); got != "whiparc" {
+		t.Errorf("cliHelperPath() with no override = %q, want %q", got, "whiparc")
 	}
 
-	t.Setenv("INFRACANVAS_CLI_PATH", "/opt/infracanvas/bin/infracanvas")
-	if got := cliHelperPath(); got != "/opt/infracanvas/bin/infracanvas" {
-		t.Errorf("cliHelperPath() with override = %q, want %q", got, "/opt/infracanvas/bin/infracanvas")
+	t.Setenv("WHIPARC_CLI_PATH", "/opt/whiparc/bin/whiparc")
+	if got := cliHelperPath(); got != "/opt/whiparc/bin/whiparc" {
+		t.Errorf("cliHelperPath() with override = %q, want %q", got, "/opt/whiparc/bin/whiparc")
 	}
 }

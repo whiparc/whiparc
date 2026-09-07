@@ -8,8 +8,8 @@ import (
 )
 
 // GenerateKeyPair returns a fresh ed25519 SSH keypair, standing in for the
-// per-installation key `infracanvas sandbox up` generates under
-// ~/.infracanvas/sandbox/ (see obsidian_memory/06.3) rather than the legacy
+// per-installation key `whiparc sandbox up` generates under
+// ~/.whiparc/sandbox/ (see obsidian_memory/06.3) rather than the legacy
 // committed sandbox/id_rsa this whole design intentionally avoids reusing.
 func GenerateKeyPair() (ssh.Signer, ssh.PublicKey, error) {
 	pub, priv, err := ed25519.GenerateKey(rand.Reader)

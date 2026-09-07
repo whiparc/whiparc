@@ -40,10 +40,10 @@ func TestFingerprint(t *testing.T) {
 		t.Errorf("Expected AKIA****9012, got %q", fingerprintAWS)
 	}
 
-	gcpRaw := []byte(`{"project_id":"infracanvas-prod","client_email":"sa@infracanvas-prod.iam.gserviceaccount.com"}`)
+	gcpRaw := []byte(`{"project_id":"whiparc-prod","client_email":"sa@whiparc-prod.iam.gserviceaccount.com"}`)
 	fingerprintGCP := Fingerprint("GCP", gcpRaw)
-	if fingerprintGCP != "gcp-sa:infracanvas-prod (sa@infracanvas-prod.iam.gserviceaccount.com)" {
-		t.Errorf("Expected gcp-sa:infracanvas-prod (sa@infracanvas-prod.iam.gserviceaccount.com), got %q", fingerprintGCP)
+	if fingerprintGCP != "gcp-sa:whiparc-prod (sa@whiparc-prod.iam.gserviceaccount.com)" {
+		t.Errorf("Expected gcp-sa:whiparc-prod (sa@whiparc-prod.iam.gserviceaccount.com), got %q", fingerprintGCP)
 	}
 
 	sshRaw := []byte("-----BEGIN RSA PRIVATE KEY-----\nMOCKKEYCONTENT\n-----END RSA PRIVATE KEY-----")

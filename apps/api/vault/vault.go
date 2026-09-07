@@ -15,9 +15,9 @@ import (
 var masterKey []byte
 
 func init() {
-	keyStr := os.Getenv("INFRACANVAS_MASTER_KEY")
+	keyStr := os.Getenv("WHIPARC_MASTER_KEY")
 	if keyStr == "" {
-		keyStr = "infracanvas-fallback-secret-key-32bytes"
+		keyStr = "whiparc-fallback-secret-key-32bytes"
 	}
 	hash := sha256.Sum256([]byte(keyStr))
 	masterKey = hash[:]

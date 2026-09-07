@@ -28,7 +28,7 @@ import (
 // stays the single source of truth for pairing state.
 
 // gatewayRunnerSecret authenticates the Gateway's server-to-server callback
-// and, indirectly, the "infracanvas sandbox proxy" ProxyCommand helper the
+// and, indirectly, the "whiparc sandbox proxy" ProxyCommand helper the
 // Runner spawns — both present it as X-Gateway-Runner-Secret.
 func gatewayRunnerSecret() string {
 	return os.Getenv("GATEWAY_RUNNER_SECRET")
@@ -45,7 +45,7 @@ func gatewayBaseURL() string {
 }
 
 // POST /api/projects/{id}/agents/register
-// Called by `infracanvas sandbox up` once the CLI has generated a
+// Called by `whiparc sandbox up` once the CLI has generated a
 // per-installation keypair and baked the public half into the local sandbox
 // SSH containers. The private half is uploaded once, over this already
 // project-authenticated channel, and stored encrypted — never as a bare file
@@ -109,7 +109,7 @@ func handleRegisterAgent(w http.ResponseWriter, r *http.Request) {
 
 // POST /api/projects/{id}/agents/pair
 // Approves a pending device-authorization pairing request on the Gateway.
-// `infracanvas sandbox up` calls this with the user_code it printed from the
+// `whiparc sandbox up` calls this with the user_code it printed from the
 // Gateway's /device/code response, immediately after requesting it — this API
 // call is the RBAC check (RequireProjectRole("EDITOR") below) that stands in
 // for the browser approval step described in obsidian_memory/06.3, so pairing
@@ -174,8 +174,8 @@ func approveAgentPairing(userCode, projectID, agentID string) error {
 }
 
 // GET /api/projects/{id}/agents/{agentId}
-// Polled by `infracanvas sandbox up` (waiting for PENDING -> ACTIVE) and
-// `infracanvas sandbox status`.
+// Polled by `whiparc sandbox up` (waiting for PENDING -> ACTIVE) and
+// `whiparc sandbox status`.
 func handleGetAgentStatus(w http.ResponseWriter, r *http.Request) {
 	projectID := r.PathValue("id")
 	agentID := r.PathValue("agentId")

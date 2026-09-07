@@ -348,6 +348,10 @@ func main() {
 		log.Println("[SANDBOX AGENT] Beta routes registered (SANDBOX_AGENT_BETA=true)")
 	}
 
+	// Version list for the docs site's install-guide picker (current
+	// latest, previous versions, beta builds) — see cli_releases.go.
+	mux.HandleFunc("GET /api/cli/releases", enableCORS(handleGetCLIReleases))
+
 	// Static downloads serving with fallback redirection to GitHub Releases
 	_ = os.MkdirAll("./static/downloads", 0755)
 	mux.Handle("GET /downloads/{filename...}", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -361,7 +365,7 @@ func main() {
 			http.ServeFile(w, r, localPath)
 			return
 		}
-		githubURL := "https://github.com/bishalprasad321/infra-canvas/releases/latest/download/" + filename
+		githubURL := "https://github.com/whiparc/whiparc/releases/latest/download/" + filename
 		http.Redirect(w, r, githubURL, http.StatusTemporaryRedirect)
 	}))
 
@@ -576,7 +580,7 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 	// integration for this project, so it correctly falls back to normal
 	// sandbox/live behavior exactly like "never paired."
 	if latestStatus, ok := latestPairedAgentStatus(projectID); ok && (latestStatus == "PENDING" || latestStatus == "DISCONNECTED") {
-		http.Error(w, "This project's local Sandbox Agent is not connected (status: "+latestStatus+"). Run `infracanvas sandbox up` (or check `infracanvas sandbox status`) before deploying, or revoke the paired agent under Project Credentials to deploy without it.", http.StatusBadRequest)
+		http.Error(w, "This project's local Sandbox Agent is not connected (status: "+latestStatus+"). Run `whiparc sandbox up` (or check `whiparc sandbox status`) before deploying, or revoke the paired agent under Project Credentials to deploy without it.", http.StatusBadRequest)
 		return
 	}
 	agentCtx := resolvePairedAgent(projectID)
@@ -589,7 +593,7 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 	// already has hosted-sandbox resources up must always be able to tear
 	// them down, cutoff or not.
 	if runner.IsSandbox(canvasStr) && agentCtx == nil && sandboxDeployGatedForFreeTier(user.ID, user.Plan) {
-		http.Error(w, "Free-tier sandbox deploys now run through your own machine via the local Sandbox Agent. Run `infracanvas sandbox up` to pair one for this project, or upgrade to Pro for a hosted sandbox. See /docs for setup.", http.StatusBadRequest)
+		http.Error(w, "Free-tier sandbox deploys now run through your own machine via the local Sandbox Agent. Run `whiparc sandbox up` to pair one for this project, or upgrade to Pro for a hosted sandbox. See /docs for setup.", http.StatusBadRequest)
 		return
 	}
 
@@ -865,7 +869,7 @@ func handleDestroy(w http.ResponseWriter, r *http.Request) {
 	// not be allowed to silently fall through to the Docker-sandbox/live path
 	// here either — see obsidian_memory/08.4's Phase 2 heartbeat item.
 	if latestStatus, ok := latestPairedAgentStatus(projectID); ok && (latestStatus == "PENDING" || latestStatus == "DISCONNECTED") {
-		http.Error(w, "This project's local Sandbox Agent is not connected (status: "+latestStatus+"). Run `infracanvas sandbox up` (or check `infracanvas sandbox status`) before destroying, or revoke the paired agent under Project Credentials to proceed without it.", http.StatusBadRequest)
+		http.Error(w, "This project's local Sandbox Agent is not connected (status: "+latestStatus+"). Run `whiparc sandbox up` (or check `whiparc sandbox status`) before destroying, or revoke the paired agent under Project Credentials to proceed without it.", http.StatusBadRequest)
 		return
 	}
 
@@ -955,7 +959,7 @@ func handleDestroy(w http.ResponseWriter, r *http.Request) {
 
 // --- AUTHENTICATION & COLLABORATION STACK IMPLEMENTATION ---
 
-var jwtSecret = []byte("infracanvas_workspace_orchestration_secret_key_98765!")
+var jwtSecret = []byte("whiparc_workspace_orchestration_secret_key_98765!")
 
 type TokenHeader struct {
 	Alg string `json:"alg"`

@@ -1,6 +1,6 @@
 # The "local machine" half of the sandbox agent split (see
 # docker-compose.hosted.yml and obsidian_memory/08.4's Phase 1) — driven by
-# `infracanvas sandbox up/down`. Only the SSH targets the Agent bridges to
+# `whiparc sandbox up/down`. Only the SSH targets the Agent bridges to
 # live here; LocalStack deliberately does not. LocalStack mocks cloud APIs
 # the Runner calls directly over the network (same as it would call real
 # AWS) — it has nothing to do with the Agent/tunnel bridging, which is

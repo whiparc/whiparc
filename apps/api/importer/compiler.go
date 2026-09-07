@@ -112,7 +112,7 @@ func CompileCanvas(nodes []CanvasNode, edges []CanvasEdge) ([]FileItem, error) {
 		}
 
 		if hasGcp {
-			gcpProjectID := "infracanvas-prod-12345"
+			gcpProjectID := "whiparc-prod-12345"
 			gcpRegion := "us-central1"
 			gcpZone := "us-central1-a"
 			for _, t := range connectedTargets {
@@ -175,7 +175,7 @@ func CompileCanvas(nodes []CanvasNode, edges []CanvasEdge) ([]FileItem, error) {
 		if awsTargetLocal {
 			mainTf += `
   backend "s3" {
-    bucket                      = "infracanvas-state-bucket"
+    bucket                      = "whiparc-state-bucket"
     key                         = "terraform.tfstate"
     region                      = "us-east-1"
     endpoints                   = { s3 = "http://localhost:4566" }
@@ -244,7 +244,7 @@ data "aws_subnets" "default" {
 					break
 				}
 			}
-			gcpProjectID := "infracanvas-prod-12345"
+			gcpProjectID := "whiparc-prod-12345"
 			gcpRegion := "us-central1"
 			gcpZone := "us-central1-a"
 			if gcpTarget.Data.ProjectId != "" {
@@ -274,7 +274,7 @@ variable "gcp_zone" {
 
 variable "gcp_ssh_pub_key" {
   type    = string
-  default = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQC2R1m2hJc6eC+7737t8t8O1/Y2N5hDkK1aP4+rD2mZ6bJ9mF7C8F9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2= dummy-infracanvas-key"
+  default = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQC2R1m2hJc6eC+7737t8t8O1/Y2N5hDkK1aP4+rD2mZ6bJ9mF7C8F9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2= dummy-whiparc-key"
 }
 
 `, gcpProjectID, gcpRegion, gcpZone))
@@ -283,7 +283,7 @@ variable "gcp_ssh_pub_key" {
 		if hasAzure {
 			variablesTf.WriteString(`variable "azure_ssh_pub_key" {
   type    = string
-  default = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQC2R1m2hJc6eC+7737t8t8O1/Y2N5hDkK1aP4+rD2mZ6bJ9mF7C8F9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2= dummy-infracanvas-key"
+  default = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAAgQC2R1m2hJc6eC+7737t8t8O1/Y2N5hDkK1aP4+rD2mZ6bJ9mF7C8F9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2m8B9eD0rC2= dummy-whiparc-key"
 }
 
 `)
@@ -358,7 +358,7 @@ variable "gcp_ssh_pub_key" {
 							if firstVpc != nil {
 								vpcName := getStringParam(firstVpc.Data.Parameters, "vpcName", firstVpc.Data.Label)
 								autoSubnetBlock = fmt.Sprintf(`
-resource "aws_subnet" "infracanvas_auto_subnet" {
+resource "aws_subnet" "whiparc_auto_subnet" {
   vpc_id                  = aws_vpc.%s.id
   cidr_block              = "10.0.1.0/24"
   map_public_ip_on_launch = true
@@ -367,12 +367,12 @@ resource "aws_subnet" "infracanvas_auto_subnet" {
   }
 }
 
-resource "aws_route_table_association" "infracanvas_auto_subnet_assoc" {
-  subnet_id      = aws_subnet.infracanvas_auto_subnet.id
+resource "aws_route_table_association" "whiparc_auto_subnet_assoc" {
+  subnet_id      = aws_subnet.whiparc_auto_subnet.id
   route_table_id = aws_route_table.%s_rt.id
 }
 `, vpcName, vpcName, vpcName)
-								subnetLine = "\n  subnet_id     = aws_subnet.infracanvas_auto_subnet.id"
+								subnetLine = "\n  subnet_id     = aws_subnet.whiparc_auto_subnet.id"
 							} else if awsEnv == "localstack" {
 								subnetLine = "\n  subnet_id     = tolist(data.aws_subnets.default.ids)[0]"
 							}
@@ -426,12 +426,12 @@ resource "aws_instance" "%s" {
 
 					resources.WriteString(fmt.Sprintf(`
 resource "google_compute_network" "vpc_network" {
-  name                    = "infracanvas-vpc"
+  name                    = "whiparc-vpc"
   auto_create_subnetworks = false
 }
 
 resource "google_compute_subnetwork" "subnet" {
-  name          = "infracanvas-subnet"
+  name          = "whiparc-subnet"
   ip_cidr_range = "10.10.1.0/24"
   region        = var.gcp_region
   network       = google_compute_network.vpc_network.id
@@ -480,19 +480,19 @@ resource "google_compute_instance" "vm_instance" {
 
 					resources.WriteString(fmt.Sprintf(`
 resource "azurerm_resource_group" "rg" {
-  name     = "infracanvas-rg"
+  name     = "whiparc-rg"
   location = "East US"
 }
 
 resource "azurerm_virtual_network" "vnet" {
-  name                = "infracanvas-vnet"
+  name                = "whiparc-vnet"
   address_space       = ["10.0.0.0/16"]
   location            = azurerm_resource_group.rg.location
   resource_group_name = azurerm_resource_group.rg.name
 }
 
 resource "azurerm_subnet" "subnet" {
-  name                 = "infracanvas-subnet"
+  name                 = "whiparc-subnet"
   resource_group_name  = azurerm_resource_group.rg.name
   virtual_network_name = azurerm_virtual_network.vnet.name
   address_prefixes     = ["10.0.1.0/24"]
