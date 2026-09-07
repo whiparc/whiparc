@@ -23,21 +23,24 @@ ARG BASE_IMAGE_TAG=dev
 FROM golang:1.23 AS gobase
 WORKDIR /src
 
+# Both apps/api and apps/cli are independent Go modules that may require a
+# newer toolchain than this pinned `golang:1.23` base image ships (each
+# module's own go.mod `go` directive can be bumped independently, e.g. by a
+# Dependabot PR touching only one module). The golang base image ships with
+# GOTOOLCHAIN=local (no auto download), so it's explicitly overridden to
+# `auto` on every `go mod download`/`go build` below, on the default GOPROXY
+# (not GOPROXY=direct, which doesn't serve toolchain downloads), so `go`
+# fetches whatever toolchain each module's go.mod declares. That downloaded
+# toolchain lands in the module cache mount, so it's fetched once per module.
 FROM gobase AS builder-api
 COPY apps/api/go.mod apps/api/go.sum ./apps/api/
 RUN --mount=type=cache,target=/go/pkg/mod,id=gomod-api \
-    cd apps/api && GOPROXY=direct go mod download
+    cd apps/api && GOTOOLCHAIN=auto go mod download
 COPY apps/api ./apps/api
 RUN --mount=type=cache,target=/go/pkg/mod,id=gomod-api \
     --mount=type=cache,target=/root/.cache/go-build,id=gobuild-api \
-    cd apps/api && CGO_ENABLED=0 GOOS=linux go build -o /out/api-server .
+    cd apps/api && GOTOOLCHAIN=auto CGO_ENABLED=0 GOOS=linux go build -o /out/api-server .
 
-# apps/cli — a separate Go module that may require a newer toolchain than
-# apps/api. The golang base image ships with GOTOOLCHAIN=local (no auto
-# download), so it's explicitly overridden to `auto` here, on the default
-# GOPROXY (not GOPROXY=direct, which doesn't serve toolchain downloads), so
-# `go` fetches whatever toolchain apps/cli/go.mod declares. That downloaded
-# toolchain lands in the module cache mount below, so it's fetched once.
 FROM gobase AS builder-cli
 COPY apps/cli/go.mod apps/cli/go.sum ./apps/cli/
 RUN --mount=type=cache,target=/go/pkg/mod,id=gomod-cli \
