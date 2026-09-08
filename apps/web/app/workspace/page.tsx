@@ -26,7 +26,6 @@ import ProfileMenu from '../components/ProfileMenu';
 import Tooltip from '../components/Tooltip';
 import CustomNodeModal from '../components/CustomNodeModal';
 import { ProjectSettingsModal } from '../components/ProjectSettingsModal';
-import { CredentialManagerTab } from '../components/CredentialManagerModal';
 import { InputWithVariablePicker } from '../components/VariablePicker';
 import { generateAnsibleYAML } from '../lib/exportYaml';
 import { downloadZipBundle, downloadTerraformZip, generateBundleFiles, generateTerraformFiles } from '../lib/bundleGenerator';
@@ -193,17 +192,17 @@ const Header: React.FC<HeaderProps> = ({
             </span>
           )}
           {agentStatus === 'DISCONNECTED' && (
-            <span className="ml-2 px-2 py-0.5 bg-rose-500/10 text-rose-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-rose-500/20 flex items-center gap-1" title="Local Sandbox Agent is disconnected. Deploys targeting it will be rejected until it reconnects — run `infracanvas sandbox status` to check, or `infracanvas sandbox up` to re-pair.">
+            <span className="ml-2 px-2 py-0.5 bg-rose-500/10 text-rose-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-rose-500/20 flex items-center gap-1" title="Local Sandbox Agent is disconnected. Deploys targeting it will be rejected until it reconnects — run `whiparc sandbox status` to check, or `whiparc sandbox up` to re-pair.">
               <Icon icon="lucide:server-off" className="text-[10px]" /> Agent Disconnected
             </span>
           )}
           {migrationStatus && !migrationStatus.has_active_agent && migrationStatus.gated && (
-            <span className="ml-2 px-2 py-0.5 bg-rose-500/10 text-rose-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-rose-500/20 flex items-center gap-1" title="Free-tier sandbox deploys now require a local Sandbox Agent. Run `infracanvas sandbox up` to pair one, or upgrade to Pro for a hosted sandbox.">
+            <span className="ml-2 px-2 py-0.5 bg-rose-500/10 text-rose-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-rose-500/20 flex items-center gap-1" title="Free-tier sandbox deploys now require a local Sandbox Agent. Run `whiparc sandbox up` to pair one, or upgrade to Pro for a hosted sandbox.">
               <Icon icon="lucide:server-off" className="text-[10px]" /> Sandbox Requires Agent
             </span>
           )}
           {migrationStatus && !migrationStatus.has_active_agent && !migrationStatus.gated && (
-            <span className="ml-2 px-2 py-0.5 bg-amber-500/10 text-amber-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-amber-500/20 flex items-center gap-1" title={`Free-tier sandbox deploys will require a local Sandbox Agent starting ${migrationStatus.grace_period_end}. Run \`infracanvas sandbox up\` to pair one now, or upgrade to Pro for a hosted sandbox.`}>
+            <span className="ml-2 px-2 py-0.5 bg-amber-500/10 text-amber-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-amber-500/20 flex items-center gap-1" title={`Free-tier sandbox deploys will require a local Sandbox Agent starting ${migrationStatus.grace_period_end}. Run \`whiparc sandbox up\` to pair one now, or upgrade to Pro for a hosted sandbox.`}>
               <Icon icon="lucide:clock" className="text-[10px]" /> Sandbox Migration: Pair by {migrationStatus.grace_period_end}
             </span>
           )}
@@ -553,18 +552,18 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
 
             {/* Technology Quick Filters */}
             <div className="flex flex-wrap gap-1">
-              {['All', 'Source', 'Target', 'Terraform', 'Ansible', 'Kubernetes'].map((tech) => (
+              {['All', 'Target', 'Terraform', 'Ansible', 'Kubernetes'].map((tech) => (
                 <button
                   key={tech}
                   onClick={() => onTechFilterSelect(tech)}
                   className={clsx(
-                    "flex-1 min-w-[42px] py-1.5 px-1 border border-border rounded-md text-[10px] font-medium flex items-center justify-center gap-1 transition-all cursor-pointer",
+                    "flex-1 min-w-[48px] py-1.5 px-1 border border-border rounded-md text-[10px] font-medium flex items-center justify-center gap-1 transition-all cursor-pointer",
                     techFilter === tech
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-muted hover:bg-muted/80 text-foreground"
                   )}
                 >
-                  {tech === 'All' ? 'All' : tech === 'Terraform' ? 'TF' : tech === 'Ansible' ? 'Ans' : tech === 'Kubernetes' ? 'K8s' : tech === 'Target' ? 'Cloud' : 'Repo'}
+                  {tech === 'All' ? 'All' : tech === 'Terraform' ? 'TF' : tech === 'Ansible' ? 'Ans' : tech === 'Kubernetes' ? 'K8s' : 'Cloud'}
                 </button>
               ))}
             </div>
@@ -1103,7 +1102,6 @@ const CanvasSummary: React.FC<{
   nodes: Node[];
   onSelectNode: (id: string) => void;
 }> = ({ nodes, onSelectNode }) => {
-  const srcNodes = nodes.filter((n) => n.data?.tech === 'Source');
   const targetNodes = nodes.filter((n) => n.data?.tech === 'Target');
   const tfNodes = nodes.filter((n) => n.data?.tech === 'Terraform');
   const ansNodes = nodes.filter((n) => n.data?.tech === 'Ansible');
@@ -1119,29 +1117,6 @@ const CanvasSummary: React.FC<{
       </div>
 
       <div className="space-y-4">
-        {srcNodes.length > 0 && (
-          <div className="space-y-2">
-            <h5 className="text-[10px] font-bold text-[#F59E0B] uppercase tracking-wider flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#F59E0B] animate-pulse"></span>
-              Source ({srcNodes.length})
-            </h5>
-            <div className="grid gap-1.5">
-              {srcNodes.map((node) => (
-                <button
-                  key={node.id}
-                  onClick={() => onSelectNode(node.id)}
-                  className="w-full text-left bg-muted/30 hover:bg-muted/70 border border-border/60 hover:border-[#F59E0B]/40 rounded-lg p-2.5 flex items-center justify-between text-xs text-foreground transition-all duration-200 group cursor-pointer"
-                >
-                  <span className="font-semibold truncate max-w-[200px] flex items-center gap-2">
-                    <Icon icon={node.data.icon as string} className="text-[#F59E0B] text-sm flex-shrink-0" />
-                    {node.data.label as string}
-                  </span>
-                  <Icon icon="lucide:chevron-right" className="text-muted-foreground group-hover:text-foreground group-hover:translate-x-0.5 transition-all text-xs" />
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {targetNodes.length > 0 && (
           <div className="space-y-2">
@@ -1331,6 +1306,7 @@ interface InspectorNodeParameters {
   repoUrl?: string;
   destPath?: string;
   branch?: string;
+  credentialId?: string;
   command?: string;
   chdir?: string;
   srcPath?: string;
@@ -1443,6 +1419,9 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
   const gcpZoneVal = (selectedNode?.data?.gcpZone as string) || 'us-central1-a';
   const startCommandVal = (selectedNode?.data?.startCommand as string) || '';
   const appPortVal = (selectedNode?.data?.appPort as string) || '';
+  const appTypeVal = (selectedNode?.data?.appType as string) || '';
+  const buildCommandVal = (selectedNode?.data?.buildCommand as string) || '';
+  const destPathVal = (selectedNode?.data?.destPath as string) || '/home/ubuntu/app';
 
   return (
     <aside className={clsx(
@@ -2556,7 +2535,7 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                             <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Git Repository URL</label>
                             <input
                               type="text"
-                              value={p.repoUrl}
+                              value={p.repoUrl || ''}
                               onChange={(e) => {
                                 handleParameterChange('repoUrl', e.target.value);
                                 updateNodeData(selectedNode.id, { repoUrl: e.target.value });
@@ -2569,8 +2548,11 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                             <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Destination Path</label>
                             <input
                               type="text"
-                              value={p.destPath}
-                              onChange={(e) => handleParameterChange('destPath', e.target.value)}
+                              value={p.destPath || ''}
+                              onChange={(e) => {
+                                handleParameterChange('destPath', e.target.value);
+                                updateNodeData(selectedNode.id, { destPath: e.target.value });
+                              }}
                               placeholder="/var/www/app"
                               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all font-mono"
                             />
@@ -2579,7 +2561,7 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                             <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Version / Branch</label>
                             <input
                               type="text"
-                              value={p.branch}
+                              value={p.branch || ''}
                               onChange={(e) => {
                                 handleParameterChange('branch', e.target.value);
                                 updateNodeData(selectedNode.id, { branch: e.target.value });
@@ -2587,6 +2569,25 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                               placeholder="main"
                               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all font-mono"
                             />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">GitHub Credential (for Private Repos)</label>
+                            <div className="relative">
+                              <select
+                                value={p.credentialId || ''}
+                                onChange={(e) => {
+                                  handleParameterChange('credentialId', e.target.value);
+                                  updateNodeData(selectedNode.id, { credentialId: e.target.value });
+                                }}
+                                className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground appearance-none focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all cursor-pointer"
+                              >
+                                <option value="">-- Public Repository (No Auth) --</option>
+                                {availableCredentials.filter(c => c.provider === 'GITHUB').map(c => (
+                                  <option key={c.id} value={c.id}>{c.name} ({c.key_fingerprint})</option>
+                                ))}
+                              </select>
+                              <Icon icon="lucide:chevron-down" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none" />
+                            </div>
                           </div>
                         </div>
                       )}
@@ -2680,36 +2681,7 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     </div>
                   )}
 
-                  {/* 2b. SOURCE / CODE REPOSITORY NODE PARAMETERS */}
-                  {selectedNode.data.tech === 'Source' && (
-                    <div className="space-y-4">
-                      <p className="text-[11px] text-muted-foreground">
-                        The pipeline clones this repository onto the target server before the configuration steps run.
-                      </p>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Repository URL</label>
-                        <input
-                          type="text"
-                          value={repoUrlVal}
-                          onChange={(e) => updateNodeData(selectedNode.id, { repoUrl: e.target.value })}
-                          placeholder="https://github.com/your-org/your-app.git"
-                          className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-muted-foreground uppercase tracking-wider mb-1.5">Branch</label>
-                        <input
-                          type="text"
-                          value={branchVal}
-                          onChange={(e) => updateNodeData(selectedNode.id, { branch: e.target.value })}
-                          placeholder="main"
-                          className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
-                        />
-                      </div>
-                    </div>
-                  )}
-
-                  {/* 2c. TARGET NODE PARAMETERS */}
+                   {/* 2c. TARGET NODE PARAMETERS */}
                   {selectedNode.data.tech === 'Target' && (
                     <div className="space-y-4">
                       {selectedNode.id.startsWith('aws_target') ? (
@@ -2804,7 +2776,7 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                               type="text"
                               value={projectIDVal}
                               onChange={(e) => updateNodeData(selectedNode.id, { projectId: e.target.value })}
-                              placeholder="infracanvas-prod-12345"
+                              placeholder="whiparc-prod-12345"
                               className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
                             />
                           </div>
@@ -3181,7 +3153,7 @@ function getDefaultParametersForNode(nodeId: string): Record<string, unknown> {
   }
   if (nodeId.startsWith('aws_s3_bucket')) {
     return {
-      bucketName: 'infracanvas-user-bucket',
+      bucketName: 'whiparc-user-bucket',
       forceDestroy: true,
       versioningEnabled: true
     };
@@ -3243,7 +3215,7 @@ function getDefaultParametersForNode(nodeId: string): Record<string, unknown> {
   }
   if (nodeId.startsWith('git_clone')) {
     return {
-      repoUrl: 'https://github.com/infracanvas/sample-app.git',
+      repoUrl: 'https://github.com/whiparc/sample-app.git',
       destPath: '/var/www/app',
       branch: 'main',
       ansibleHost: '',
@@ -3369,14 +3341,6 @@ function getDefaultParametersForNode(nodeId: string): Record<string, unknown> {
 
 // --- MOCK LIBRARY DATA ---
 const LIBRARY_NODES: LibraryNode[] = [
-  {
-    id: 'code_repository',
-    tech: 'Source',
-    icon: 'lucide:git-branch',
-    title: 'Code Repository',
-    description: "Your app's source code. The pipeline clones this repo onto the target server before deployment.",
-    category: 'Source Code'
-  },
   {
     id: 'aws_target',
     tech: 'Target',

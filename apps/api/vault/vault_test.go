@@ -40,10 +40,10 @@ func TestFingerprint(t *testing.T) {
 		t.Errorf("Expected AKIA****9012, got %q", fingerprintAWS)
 	}
 
-	gcpRaw := []byte(`{"project_id":"infracanvas-prod","client_email":"sa@infracanvas-prod.iam.gserviceaccount.com"}`)
+	gcpRaw := []byte(`{"project_id":"whiparc-prod","client_email":"sa@whiparc-prod.iam.gserviceaccount.com"}`)
 	fingerprintGCP := Fingerprint("GCP", gcpRaw)
-	if fingerprintGCP != "gcp-sa:infracanvas-prod (sa@infracanvas-prod.iam.gserviceaccount.com)" {
-		t.Errorf("Expected gcp-sa:infracanvas-prod (sa@infracanvas-prod.iam.gserviceaccount.com), got %q", fingerprintGCP)
+	if fingerprintGCP != "gcp-sa:whiparc-prod (sa@whiparc-prod.iam.gserviceaccount.com)" {
+		t.Errorf("Expected gcp-sa:whiparc-prod (sa@whiparc-prod.iam.gserviceaccount.com), got %q", fingerprintGCP)
 	}
 
 	sshRaw := []byte("-----BEGIN RSA PRIVATE KEY-----\nMOCKKEYCONTENT\n-----END RSA PRIVATE KEY-----")
@@ -56,5 +56,11 @@ func TestFingerprint(t *testing.T) {
 	fingerprintSSHJson := Fingerprint("SSH", sshJsonRaw)
 	if fingerprintSSHJson != "-----BEGIN OPENSSH PRIVATE KEY----- (RSA/PEM Key)" {
 		t.Errorf("Expected JSON parsed prefix matching, got %q", fingerprintSSHJson)
+	}
+
+	githubRaw := []byte(`{"token":"ghp_1234567890abcdefghijklmnopqrstuvwxyz"}`)
+	fingerprintGithub := Fingerprint("GITHUB", githubRaw)
+	if fingerprintGithub != "ghp_****wxyz" {
+		t.Errorf("Expected ghp_****wxyz, got %q", fingerprintGithub)
 	}
 }

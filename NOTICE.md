@@ -9,7 +9,7 @@ to the code you're looking at) before reusing something.
 | :--- | :--- | :--- |
 | `apps/web/` | [Business Source License 1.1](LICENSE) | The visual canvas and Terraform/Ansible/Kubernetes compilers — the core product. |
 | `apps/api/` | [Business Source License 1.1](LICENSE) | The Go runner, orchestration engine, RBAC, realtime collaboration backend, and credential vault. |
-| `apps/cli/` | [MIT](apps/cli/LICENSE) | The `infracanvas` CLI and local Sandbox Agent client. Safe to audit and easy to contribute to. |
+| `apps/cli/` | [MIT](apps/cli/LICENSE) | The `whiparc` CLI and local Sandbox Agent client. Safe to audit and easy to contribute to. |
 | `sandbox/` | [MIT](sandbox/LICENSE) | Docker Compose / Dockerfile configs for the local DevOps sandbox (LocalStack + SSH targets). |
 | `spikes/` | [MIT](spikes/LICENSE) | Experimental / exploratory code, not part of the shipped product. |
 | Everything else (docs, root config, this file) | MIT | Documentation and repo tooling. |

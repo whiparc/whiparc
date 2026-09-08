@@ -1,10 +1,10 @@
 package main
 
-// The local Sandbox Agent (`infracanvas sandbox agent-run`) and the SSH
-// ProxyCommand bridge (`infracanvas sandbox proxy`) — both ported from the
+// The local Sandbox Agent (`whiparc sandbox agent-run`) and the SSH
+// ProxyCommand bridge (`whiparc sandbox proxy`) — both ported from the
 // Phase 0 spike (spikes/sandbox-agent-protocol/internal/agent) for the Phase 1
 // opt-in beta (see obsidian_memory/08.4 and 03.6). Both live in the same
-// `infracanvas` binary rather than a separate module so the CLI stays a single
+// `whiparc` binary rather than a separate module so the CLI stays a single
 // distributable artifact (see apps/cli's existing CI release pipeline).
 
 import (
@@ -135,18 +135,18 @@ func runSandboxAgentRun(cmd *cobra.Command, args []string) {
 	_ = runAgentReconnectLoop(context.Background(), agentID, gatewayURL, token)
 }
 
-// resolveAgentToken prefers INFRACANVAS_AGENT_TOKEN (the env var
+// resolveAgentToken prefers WHIPARC_AGENT_TOKEN (the env var
 // startAgentProcess sets for the plain background-process path — kept so the
 // secret never shows up in `ps`/process logs for that path) and falls back to
 // the token file `sandbox up` also writes at pairing time
-// (~/.infracanvas/sandbox/<agentID>_token, mode 0600 — see
+// (~/.whiparc/sandbox/<agentID>_token, mode 0600 — see
 // generateAgentKeyPair's private-key file for the same permission pattern).
 // The file exists specifically so an installed OS service can read the token
 // on every start, including after a reboot long after the `sandbox up`
 // process that received it has exited — see obsidian_memory/08.4's Phase 2
 // daemon-install entry.
 func resolveAgentToken(agentID string) (string, error) {
-	if tok := os.Getenv("INFRACANVAS_AGENT_TOKEN"); tok != "" {
+	if tok := os.Getenv("WHIPARC_AGENT_TOKEN"); tok != "" {
 		return tok, nil
 	}
 	path, err := agentTokenFilePath(agentID)
@@ -155,7 +155,7 @@ func resolveAgentToken(agentID string) (string, error) {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return "", fmt.Errorf("no INFRACANVAS_AGENT_TOKEN env var and no token file at %s (run `infracanvas sandbox up` first): %w", path, err)
+		return "", fmt.Errorf("no WHIPARC_AGENT_TOKEN env var and no token file at %s (run `whiparc sandbox up` first): %w", path, err)
 	}
 	return strings.TrimSpace(string(data)), nil
 }
@@ -389,7 +389,7 @@ func sandboxProxyCmd() *cobra.Command {
 	cmd.Flags().String("agent-id", "", "Target Agent ID")
 	cmd.Flags().String("service", "", "Logical service to reach, e.g. ssh:2222")
 	cmd.Flags().String("gateway", "", "Agent Gateway base URL")
-	cmd.Flags().String("project", "", "Project ID (defaults to INFRACANVAS_AGENT_PROJECT_ID env var)")
+	cmd.Flags().String("project", "", "Project ID (defaults to WHIPARC_AGENT_PROJECT_ID env var)")
 	return cmd
 }
 
@@ -399,15 +399,15 @@ func runSandboxProxy(cmd *cobra.Command, args []string) {
 	gatewayURL, _ := cmd.Flags().GetString("gateway")
 	projectID, _ := cmd.Flags().GetString("project")
 	if projectID == "" {
-		projectID = os.Getenv("INFRACANVAS_AGENT_PROJECT_ID")
+		projectID = os.Getenv("WHIPARC_AGENT_PROJECT_ID")
 	}
 	// Read from the environment, not a flag, so the secret never shows up in
 	// `ps`/process logs on the Runner's host — set on the Runner's process env
 	// alongside GATEWAY_URL (see apps/api/runner/runner.go's local_agent branch).
-	secret := os.Getenv("INFRACANVAS_GATEWAY_SECRET")
+	secret := os.Getenv("WHIPARC_GATEWAY_SECRET")
 
 	if agentID == "" || service == "" || gatewayURL == "" || projectID == "" || secret == "" {
-		log.Fatal("sandbox proxy: --agent-id, --service, --gateway, a project id, and INFRACANVAS_GATEWAY_SECRET are all required")
+		log.Fatal("sandbox proxy: --agent-id, --service, --gateway, a project id, and WHIPARC_GATEWAY_SECRET are all required")
 	}
 
 	u, err := url.Parse(gatewayURL)

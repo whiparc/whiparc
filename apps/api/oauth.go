@@ -494,7 +494,7 @@ func findOrCreateOAuthUser(provider, providerUserID, email string, emailVerified
 			// constraints on users.email still hold. This account can only
 			// ever sign in via this same OAuth identity, never via password
 			// or a different provider claiming to be this address.
-			resolvedEmail = fmt.Sprintf("%s_%s@users.noreply.infracanvas", provider, providerUserID)
+			resolvedEmail = fmt.Sprintf("%s_%s@users.noreply.whiparc", provider, providerUserID)
 		}
 
 		if _, err = tx.Exec(

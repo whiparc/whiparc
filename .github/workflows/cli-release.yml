@@ -18,8 +18,24 @@ on:
       - 'cli-v*'
 
 jobs:
+  prepare:
+    name: Determine version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - name: Determine version
+        id: version
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/cli-v* ]]; then
+            echo "version=${GITHUB_REF_NAME#cli-v}" >> "$GITHUB_OUTPUT"
+          else
+            echo "version=0.0.0-dev" >> "$GITHUB_OUTPUT"
+          fi
+
   build:
     name: Build CLI for ${{ matrix.goos }}/${{ matrix.goarch }}
+    needs: prepare
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -32,7 +48,7 @@ jobs:
             goarch: arm64 # Can include if ARM64 Linux servers are targeted, but keep it standard
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -47,34 +63,131 @@ jobs:
       - name: Build CLI Binary
         working-directory: apps/cli
         run: |
-          BINARY_NAME="infracanvas-${{ matrix.goos }}-${{ matrix.goarch }}"
+          BINARY_NAME="whiparc-${{ matrix.goos }}-${{ matrix.goarch }}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
             BINARY_NAME="${BINARY_NAME}.exe"
           fi
-          
-          echo "Building binary: ${BINARY_NAME}"
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 go build -ldflags="-s -w" -o "${BINARY_NAME}" .
-          
+
+          echo "Building binary: ${BINARY_NAME} (version ${{ needs.prepare.outputs.version }})"
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${{ needs.prepare.outputs.version }}" -o "${BINARY_NAME}" .
+
           # Move binary to root directory for artifact uploading
           mv "${BINARY_NAME}" ../../
 
       - name: Upload Build Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: infracanvas-${{ matrix.goos }}-${{ matrix.goarch }}
-          path: infracanvas-${{ matrix.goos }}-${{ matrix.goarch }}*
+          name: whiparc-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: whiparc-${{ matrix.goos }}-${{ matrix.goarch }}*
+          if-no-files-found: error
+          retention-days: 7
+
+  package-windows-linux:
+    name: Build Windows installer + Linux packages
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Install NSIS and gettext (envsubst)
+        run: sudo apt-get update && sudo apt-get install -y nsis gettext-base
+
+      - name: Build Windows installer
+        run: |
+          mkdir -p dist
+          chmod +x artifacts/whiparc-windows-amd64.exe
+          makensis \
+            "-DVERSION=${{ needs.prepare.outputs.version }}" \
+            "-DSOURCE_BINARY=$(pwd)/artifacts/whiparc-windows-amd64.exe" \
+            installers/windows/whiparc.nsi
+          # NSIS writes OutFile relative to the .nsi script's own directory,
+          # not this step's cwd — move it into dist/ alongside the Linux
+          # packages so every installer this job produces lives in one flat
+          # directory (see the nfpm step below and the upload step's single
+          # `dist/*` glob, which depends on all three files being siblings).
+          mv installers/windows/whiparc-setup-windows-amd64.exe dist/
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: 'apps/cli/go.mod'
+
+      - name: Install nfpm
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2
+
+      - name: Build Linux packages (.deb + .rpm)
+        run: |
+          VERSION="${{ needs.prepare.outputs.version }}" \
+          ARCH="amd64" \
+          BINARY_PATH="$(pwd)/artifacts/whiparc-linux-amd64" \
+            envsubst < installers/linux/nfpm.yaml > /tmp/nfpm-amd64.yaml
+          "$(go env GOPATH)/bin/nfpm" package --config /tmp/nfpm-amd64.yaml --packager deb --target dist/
+          "$(go env GOPATH)/bin/nfpm" package --config /tmp/nfpm-amd64.yaml --packager rpm --target dist/
+          # linux/arm64 isn't in the build matrix above (see its `exclude`),
+          # so there's no arm64 binary yet to package here either.
+
+      - name: Upload installer artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: whiparc-installers-windows-linux
+          # A single glob over one flat directory — not separate lines for
+          # the .exe/.deb/.rpm — so upload-artifact has no "least common
+          # ancestor" to compute across divergent paths and can't silently
+          # nest everything under a preserved dist/ folder inside the
+          # artifact the way multiple differently-rooted path lines did.
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  package-macos:
+    name: Build macOS installer
+    needs: [prepare, build]
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Build macOS installer
+        run: |
+          chmod +x artifacts/whiparc-darwin-amd64 artifacts/whiparc-darwin-arm64
+          VERSION="${{ needs.prepare.outputs.version }}" \
+          AMD64_BINARY="$(pwd)/artifacts/whiparc-darwin-amd64" \
+          ARM64_BINARY="$(pwd)/artifacts/whiparc-darwin-arm64" \
+            bash ./installers/macos/build-pkg.sh
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: whiparc-installer-macos
+          path: whiparc-macos.pkg
           if-no-files-found: error
           retention-days: 7
 
   release:
     name: Create GitHub Release
-    needs: build
+    needs: [build, package-windows-linux, package-macos]
     runs-on: ubuntu-latest
     permissions:
       contents: write
     steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v7
+
       - name: Download all build artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
@@ -83,21 +196,46 @@ jobs:
         id: get_tag
         run: |
           if [[ "${{ github.ref }}" == refs/tags/cli-v* ]]; then
-            echo "TAG_NAME=${{ github.ref_name }}" >> $GITHUB_OUTPUT
+            TAG_NAME="${{ github.ref_name }}"
+            echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
+            # A '-' in the version part (after the "cli-v" prefix) marks a
+            # semver prerelease, e.g. cli-v0.2.0-beta.1 — surfaced on the
+            # docs site's version picker as a beta build, never reported as
+            # GitHub's "latest release" ahead of a real stable tag.
+            VERSION="${TAG_NAME#cli-v}"
+            if [[ "$VERSION" == *-* ]]; then
+              echo "PRERELEASE=true" >> $GITHUB_OUTPUT
+              echo "MAKE_LATEST=false" >> $GITHUB_OUTPUT
+            else
+              echo "PRERELEASE=false" >> $GITHUB_OUTPUT
+              echo "MAKE_LATEST=true" >> $GITHUB_OUTPUT
+            fi
           else
+            # The rolling dev-branch build — never a "release" in the
+            # versioned sense, so never prerelease-flagged (it isn't a beta
+            # either) and never reported as GitHub's latest release ahead of
+            # a real cli-v* tag.
             echo "TAG_NAME=cli-latest" >> $GITHUB_OUTPUT
+            echo "PRERELEASE=false" >> $GITHUB_OUTPUT
+            echo "MAKE_LATEST=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Create or Update GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.get_tag.outputs.TAG_NAME }}
           name: ${{ steps.get_tag.outputs.TAG_NAME }}
-          prerelease: false
+          prerelease: ${{ steps.get_tag.outputs.PRERELEASE }}
+          make_latest: ${{ steps.get_tag.outputs.MAKE_LATEST }}
           files: |
-            artifacts/infracanvas-windows-amd64.exe
-            artifacts/infracanvas-darwin-arm64
-            artifacts/infracanvas-darwin-amd64
-            artifacts/infracanvas-linux-amd64
+            artifacts/whiparc-windows-amd64.exe
+            artifacts/whiparc-darwin-arm64
+            artifacts/whiparc-darwin-amd64
+            artifacts/whiparc-linux-amd64
+            artifacts/whiparc-setup-windows-amd64.exe
+            artifacts/whiparc-macos.pkg
+            artifacts/*.deb
+            artifacts/*.rpm
+            installers/linux/install.sh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

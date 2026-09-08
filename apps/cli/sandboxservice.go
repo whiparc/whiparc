@@ -28,13 +28,13 @@ import (
 // installed service follows the same single-instance model. Re-running
 // `agent install` after re-pairing with a different project replaces this
 // same service's registration rather than creating a second one.
-const agentServiceName = "infracanvas-sandbox-agent"
+const agentServiceName = "whiparc-sandbox-agent"
 
 func agentServiceConfig(agentID, gatewayURL string) *service.Config {
 	return &service.Config{
 		Name:        agentServiceName,
 		DisplayName: "Whiparc Sandbox Agent",
-		Description: "Bridges a local Whiparc DevOps Sandbox to the hosted Runner (see infracanvas sandbox up).",
+		Description: "Bridges a local Whiparc DevOps Sandbox to the hosted Runner (see whiparc sandbox up).",
 		Arguments:   []string{"sandbox", "agent-service-run", "--agent-id=" + agentID, "--gateway=" + gatewayURL},
 		Option: service.KeyValue{
 			// Installs as a per-user systemd unit / launchd agent on

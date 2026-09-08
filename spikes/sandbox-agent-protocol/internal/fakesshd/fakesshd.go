@@ -29,7 +29,7 @@ type Server struct {
 }
 
 // New starts listening. authorizedKey is the single public key allowed to
-// authenticate (the per-installation key `infracanvas sandbox up` would
+// authenticate (the per-installation key `whiparc sandbox up` would
 // generate in the real flow — see obsidian_memory/06.3).
 func New(authorizedKey ssh.PublicKey) (*Server, error) {
 	hostKey, err := generateSigner()

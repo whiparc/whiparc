@@ -15,9 +15,9 @@ import (
 var masterKey []byte
 
 func init() {
-	keyStr := os.Getenv("INFRACANVAS_MASTER_KEY")
+	keyStr := os.Getenv("WHIPARC_MASTER_KEY")
 	if keyStr == "" {
-		keyStr = "infracanvas-fallback-secret-key-32bytes"
+		keyStr = "whiparc-fallback-secret-key-32bytes"
 	}
 	hash := sha256.Sum256([]byte(keyStr))
 	masterKey = hash[:]
@@ -108,6 +108,13 @@ func Fingerprint(provider string, rawData []byte) string {
 		}
 		if len(keyStr) > 20 {
 			return fmt.Sprintf("ssh-key: %s...", keyStr[:15])
+		}
+	} else if provider == "GITHUB" {
+		var creds struct {
+			Token string `json:"token"`
+		}
+		if err := json.Unmarshal(rawData, &creds); err == nil && len(creds.Token) > 8 {
+			return fmt.Sprintf("ghp_****%s", creds.Token[len(creds.Token)-4:])
 		}
 	}
 	return "Masked Key"

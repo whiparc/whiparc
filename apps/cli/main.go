@@ -23,7 +23,7 @@ type Config struct {
 	Token  string `json:"token"`
 	// SandboxAgentBeta gates the `sandbox` command group (Phase 1 opt-in beta —
 	// see obsidian_memory/08.4). Off by default; enable via
-	// `infracanvas config set sandbox-agent-beta true`.
+	// `whiparc config set sandbox-agent-beta true`.
 	SandboxAgentBeta bool `json:"sandbox_agent_beta"`
 	// GatewayURL is the Agent Gateway (apps/agent-gateway) the sandbox commands
 	// talk to for pairing and tunneling. Defaults to http://localhost:9090.
@@ -47,16 +47,30 @@ type FileItem struct {
 var (
 	apiURLFlag string
 	tokenFlag  string
+
+	// version is injected at build time via -ldflags "-X main.version=...";
+	// left as "dev" for local `go build`/`go run`.
+	version = "dev"
 )
 
 func main() {
 	var rootCmd = &cobra.Command{
-		Use:   "infracanvas",
-		Short: "Whiparc CLI - provision, validate, and manage workspaces.",
+		Use:     "whiparc",
+		Short:   "Whiparc CLI - provision, validate, and manage workspaces.",
+		Version: version,
+		PersistentPreRun: func(cmd *cobra.Command, args []string) {
+			configureUI()
+		},
+		Run: func(cmd *cobra.Command, args []string) {
+			printBanner()
+			_ = cmd.Help()
+		},
 	}
+	rootCmd.SetVersionTemplate("whiparc version {{.Version}}\n")
 
 	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Override API backend URL (default is http://localhost:8080 or config value)")
 	rootCmd.PersistentFlags().StringVar(&tokenFlag, "token", "", "Manually specify JWT token override")
+	rootCmd.PersistentFlags().BoolVar(&noColorFlag, "no-color", false, "Disable colored output")
 
 	// login
 	var loginCmd = &cobra.Command{
@@ -136,7 +150,7 @@ func getClientConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	path := filepath.Join(home, ".infracanvas", "config.json")
+	path := filepath.Join(home, ".whiparc", "config.json")
 	file, err := os.ReadFile(path)
 	if err != nil {
 		url := "http://localhost:8080"
@@ -167,7 +181,7 @@ func saveClientConfig(cfg *Config) error {
 	if err != nil {
 		return err
 	}
-	dir := filepath.Join(home, ".infracanvas")
+	dir := filepath.Join(home, ".whiparc")
 	_ = os.MkdirAll(dir, 0755)
 	path := filepath.Join(dir, "config.json")
 	data, _ := json.MarshalIndent(cfg, "", "  ")
@@ -221,7 +235,7 @@ func makeRequest(method string, path string, payload interface{}, out interface{
 func runLogin(cmd *cobra.Command, args []string) {
 	cfg, err := getClientConfig()
 	if err != nil {
-		fmt.Printf("Config error: %v\n", err)
+		printError("Config error: %v", err)
 		return
 	}
 
@@ -234,7 +248,8 @@ func runLogin(cmd *cobra.Command, args []string) {
 	fmt.Print("Enter Password: ")
 	bytePassword, err := term.ReadPassword(int(syscall.Stdin))
 	if err != nil {
-		fmt.Printf("\nError reading password: %v\n", err)
+		fmt.Println()
+		printError("Error reading password: %v", err)
 		return
 	}
 	password := strings.TrimSpace(string(bytePassword))
@@ -249,48 +264,54 @@ func runLogin(cmd *cobra.Command, args []string) {
 		Token string `json:"token"`
 	}
 
-	err = makeRequest("POST", "/api/auth/login", payload, &result)
+	err = withSpinner("Authenticating...", func() error {
+		return makeRequest("POST", "/api/auth/login", payload, &result)
+	})
 	if err != nil {
-		fmt.Printf("Login failed: %v\n", err)
+		printError("Login failed: %v", err)
 		return
 	}
 
 	cfg.Token = result.Token
 	err = saveClientConfig(cfg)
 	if err != nil {
-		fmt.Printf("Failed to save credentials: %v\n", err)
+		printError("Failed to save credentials: %v", err)
 		return
 	}
 
-	fmt.Println("Successfully authenticated and logged in!")
+	printSuccess("Successfully authenticated and logged in!")
 }
 
 func runLogout(cmd *cobra.Command, args []string) {
 	cfg, err := getClientConfig()
 	if err != nil {
-		fmt.Printf("Config error: %v\n", err)
+		printError("Config error: %v", err)
 		return
 	}
 
 	cfg.Token = ""
 	_ = saveClientConfig(cfg)
-	fmt.Println("Credentials cleared. Logged out successfully.")
+	printSuccess("Credentials cleared. Logged out successfully.")
 }
 
 func runProjectsList(cmd *cobra.Command, args []string) {
 	var projects []Project
 	err := makeRequest("GET", "/api/projects", nil, &projects)
 	if err != nil {
-		fmt.Printf("Failed to retrieve projects: %v\n", err)
+		printError("Failed to retrieve projects: %v", err)
 		return
 	}
 
-	fmt.Printf("\n%-30s | %-25s | %-10s | %-12s\n", "PROJECT ID", "NAME", "VISIBILITY", "TEAM ID")
-	fmt.Println(strings.Repeat("-", 85))
-	for _, p := range projects {
-		fmt.Printf("%-30s | %-25s | %-10s | %-12s\n", p.ID, p.Name, p.Visibility, p.TeamID)
+	if len(projects) == 0 {
+		printInfo("No projects found.")
+		return
 	}
-	fmt.Println()
+
+	rows := make([][]string, len(projects))
+	for i, p := range projects {
+		rows[i] = []string{p.ID, p.Name, p.Visibility, p.TeamID}
+	}
+	printTable([]string{"PROJECT ID", "NAME", "VISIBILITY", "TEAM ID"}, rows)
 }
 
 func runProjectsCreate(cmd *cobra.Command, args []string) {
@@ -312,7 +333,7 @@ func runProjectsCreate(cmd *cobra.Command, args []string) {
 	}
 	err := makeRequest("GET", "/api/teams", nil, &teams)
 	if err != nil || len(teams) == 0 {
-		fmt.Printf("Failed to load teams. Ensure you are logged in: %v\n", err)
+		printError("Failed to load teams. Ensure you are logged in: %v", err)
 		return
 	}
 
@@ -326,11 +347,11 @@ func runProjectsCreate(cmd *cobra.Command, args []string) {
 	var newProj Project
 	err = makeRequest("POST", "/api/projects", payload, &newProj)
 	if err != nil {
-		fmt.Printf("Failed to create project: %v\n", err)
+		printError("Failed to create project: %v", err)
 		return
 	}
 
-	fmt.Printf("Successfully created project %s (ID: %s)\n", newProj.Name, newProj.ID)
+	printSuccess("Successfully created project %s (ID: %s)", newProj.Name, newProj.ID)
 }
 
 func runProjectsDelete(cmd *cobra.Command, args []string) {
@@ -346,22 +367,22 @@ func runProjectsDelete(cmd *cobra.Command, args []string) {
 
 	if !force {
 		reader := bufio.NewReader(os.Stdin)
-		fmt.Printf("Are you sure you want to delete project %s? [y/N]: ", projID)
+		fmt.Printf("%s Are you sure you want to delete project %s? [y/N]: ", styleWarn.Render("!"), projID)
 		confirm, _ := reader.ReadString('\n')
 		confirm = strings.TrimSpace(strings.ToLower(confirm))
 		if confirm != "y" && confirm != "yes" {
-			fmt.Println("Aborted deletion.")
+			printInfo("Aborted deletion.")
 			return
 		}
 	}
 
 	err := makeRequest("DELETE", "/api/projects/"+projID, nil, nil)
 	if err != nil {
-		fmt.Printf("Failed to delete project: %v\n", err)
+		printError("Failed to delete project: %v", err)
 		return
 	}
 
-	fmt.Println("Project deleted successfully.")
+	printSuccess("Project deleted successfully.")
 }
 
 func runImport(cmd *cobra.Command, args []string) {
@@ -370,12 +391,12 @@ func runImport(cmd *cobra.Command, args []string) {
 	dirPath, _ := cmd.Flags().GetString("dir")
 
 	if projectID == "" {
-		fmt.Println("Error: --project flag is required.")
+		printError("--project flag is required.")
 		return
 	}
 
 	if filePath == "" && dirPath == "" {
-		fmt.Println("Error: Either --file (-f) or --dir (-d) flag must be specified.")
+		printError("Either --file (-f) or --dir (-d) flag must be specified.")
 		return
 	}
 
@@ -384,7 +405,7 @@ func runImport(cmd *cobra.Command, args []string) {
 	if filePath != "" {
 		data, err := os.ReadFile(filePath)
 		if err != nil {
-			fmt.Printf("Failed to read file %s: %v\n", filePath, err)
+			printError("Failed to read file %s: %v", filePath, err)
 			return
 		}
 		files = append(files, FileItem{
@@ -411,13 +432,13 @@ func runImport(cmd *cobra.Command, args []string) {
 			return nil
 		})
 		if err != nil {
-			fmt.Printf("Failed to walk directory: %v\n", err)
+			printError("Failed to walk directory: %v", err)
 			return
 		}
 	}
 
 	if len(files) == 0 {
-		fmt.Println("No supported config files (.tf, .yml, .yaml) found to import.")
+		printWarn("No supported config files (.tf, .yml, .yaml) found to import.")
 		return
 	}
 
@@ -426,13 +447,15 @@ func runImport(cmd *cobra.Command, args []string) {
 	}
 
 	var result map[string]interface{}
-	err := makeRequest("POST", fmt.Sprintf("/api/projects/%s/import", projectID), payload, &result)
+	err := withSpinner(fmt.Sprintf("Importing %d file(s)...", len(files)), func() error {
+		return makeRequest("POST", fmt.Sprintf("/api/projects/%s/import", projectID), payload, &result)
+	})
 	if err != nil {
-		fmt.Printf("Import failed: %v\n", err)
+		printError("Import failed: %v", err)
 		return
 	}
 
-	fmt.Printf("Success: %s\n", result["message"])
+	printSuccess("%s", result["message"])
 }
 
 func runDeploy(cmd *cobra.Command, args []string) {
@@ -440,7 +463,7 @@ func runDeploy(cmd *cobra.Command, args []string) {
 	autoDestroy, _ := cmd.Flags().GetBool("auto-destroy")
 
 	if projectID == "" {
-		fmt.Println("Error: --project flag is required.")
+		printError("--project flag is required.")
 		return
 	}
 
@@ -453,16 +476,17 @@ func runDeploy(cmd *cobra.Command, args []string) {
 		Status string `json:"status"`
 	}
 
-	fmt.Println("Triggering deploy pipeline...")
-	err := makeRequest("POST", fmt.Sprintf("/api/projects/%s/deploy", projectID), payload, &runResult)
+	err := withSpinner("Triggering deploy pipeline...", func() error {
+		return makeRequest("POST", fmt.Sprintf("/api/projects/%s/deploy", projectID), payload, &runResult)
+	})
 	if err != nil {
-		fmt.Printf("Deploy failed: %v\n", err)
+		printError("Deploy failed: %v", err)
 		return
 	}
 
-	fmt.Printf("Pipeline execution started. Run ID: %s. Status: %s\n", runResult.RunID, runResult.Status)
-	fmt.Println("Streaming execution logs in real-time:")
-	fmt.Println(strings.Repeat("=", 60))
+	printInfo("Pipeline execution started. Run ID: %s. Status: %s", runResult.RunID, runResult.Status)
+	fmt.Println(styleMuted.Render("Streaming execution logs in real-time:"))
+	fmt.Println(styleMuted.Render(strings.Repeat("─", 60)))
 
 	cfg, err := getClientConfig()
 	if err != nil {
@@ -482,7 +506,7 @@ func runDeploy(cmd *cobra.Command, args []string) {
 
 	ws, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
 	if err != nil {
-		fmt.Printf("WebSocket connection failed: %v\n", err)
+		printError("WebSocket connection failed: %v", err)
 		return
 	}
 	defer ws.Close()
@@ -503,7 +527,8 @@ func runDeploy(cmd *cobra.Command, args []string) {
 			if logMsg.Type == "log" {
 				fmt.Print(logMsg.Message)
 			} else if logMsg.Type == "status_change" {
-				fmt.Printf("\n[SYSTEM] Pipeline status changed to: %s\n", logMsg.Status)
+				fmt.Println()
+				fmt.Println(styleSystemLine(fmt.Sprintf("[SYSTEM] Pipeline status changed to: %s", logMsg.Status)))
 				if logMsg.Status == "SUCCESS" || logMsg.Status == "FAILED" {
 					break
 				}
@@ -511,6 +536,6 @@ func runDeploy(cmd *cobra.Command, args []string) {
 		}
 	}
 	fmt.Println()
-	fmt.Println(strings.Repeat("=", 60))
-	fmt.Println("Deploy pipeline execution complete.")
+	fmt.Println(styleMuted.Render(strings.Repeat("─", 60)))
+	printSuccess("Deploy pipeline execution complete.")
 }

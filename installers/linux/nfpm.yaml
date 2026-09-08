@@ -1,0 +1,31 @@
+# nfpm config for the whiparc CLI — one spec produces both .deb and .rpm.
+# nfpm itself doesn't expand ${VAR} placeholders in the config file, so CI
+# resolves this template with `envsubst` before handing it to nfpm, once per
+# arch/format combination:
+#
+#   VERSION=1.2.3 ARCH=amd64 BINARY_PATH=./whiparc-linux-amd64 \
+#     envsubst < installers/linux/nfpm.yaml > /tmp/nfpm-amd64.yaml
+#   nfpm package --config /tmp/nfpm-amd64.yaml --packager deb --target dist/
+#   nfpm package --config /tmp/nfpm-amd64.yaml --packager rpm --target dist/
+#
+# (repeated for ARCH=arm64 with the matching binary). nfpm maps the Go-style
+# arch name to each packager's own convention (e.g. amd64 -> x86_64 for rpm)
+# automatically.
+name: whiparc
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+section: utils
+priority: optional
+maintainer: "Whiparc <support@whiparc.dev>"
+homepage: "https://whiparc.dev"
+license: MIT
+description: |
+  Whiparc CLI — provision, validate, and manage Whiparc workspaces from
+  your terminal.
+
+contents:
+  - src: ${BINARY_PATH}
+    dst: /usr/bin/whiparc
+    file_info:
+      mode: 0755

@@ -154,7 +154,7 @@ export const useAuthStore = create<AuthState>()(
       },
     }),
     {
-      name: 'infracanvas-auth',
+      name: 'whiparc-auth',
       partialize: (state) => ({ token: state.token, user: state.user }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);

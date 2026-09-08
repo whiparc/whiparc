@@ -7,9 +7,20 @@ node_modules
 .turbo
 apps/web/.next
 apps/api/data
+apps/api/*.exe
+apps/api/static
 apps/cli/*.exe
 spikes
 apps/agent-gateway
 obsidian_memory
 .claude
+
+# Not referenced by any Dockerfile built from the repo root (apps/api/Dockerfile
+# only COPYs apps/api and apps/cli) — excluding them keeps the build context
+# small on every `docker compose up --build`.
+apps/web
+docs
+.agents
+.github
+
 *.md

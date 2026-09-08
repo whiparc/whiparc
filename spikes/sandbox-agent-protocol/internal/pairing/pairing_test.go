@@ -6,7 +6,7 @@ import "testing"
 // no Gateway, WebSocket, or yamux involved — exactly the "get device-authorization
 // pairing working standalone" goal in obsidian_memory/08.4's Phase 0 scope.
 func TestPairingFlow(t *testing.T) {
-	s := NewServer("https://www.infracanvas.dev/pair")
+	s := NewServer("https://www.whiparc.dev/pair")
 
 	auth, err := s.RequestDeviceCode()
 	if err != nil {
@@ -45,7 +45,7 @@ func TestPairingFlow(t *testing.T) {
 }
 
 func TestPairingDenied(t *testing.T) {
-	s := NewServer("https://www.infracanvas.dev/pair")
+	s := NewServer("https://www.whiparc.dev/pair")
 
 	auth, err := s.RequestDeviceCode()
 	if err != nil {
@@ -60,7 +60,7 @@ func TestPairingDenied(t *testing.T) {
 }
 
 func TestPairingUnknownCode(t *testing.T) {
-	s := NewServer("https://www.infracanvas.dev/pair")
+	s := NewServer("https://www.whiparc.dev/pair")
 	if _, err := s.PollToken("does-not-exist"); err != ErrNotFound {
 		t.Fatalf("expected ErrNotFound, got %v", err)
 	}

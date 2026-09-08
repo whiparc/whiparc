@@ -1,7 +1,7 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -56,6 +56,12 @@ next-env.d.ts
 /apps/cli/cli
 /apps/cli/cli.exe
 /apps/cli/dist/
+
+# CLI binaries/installers build_cli_local.ps1 or CI drop here for local
+# `/downloads` serving — build outputs, not source; CI attaches the real
+# release copies to GitHub Releases instead of committing them here.
+/apps/api/static/downloads/*
+!/apps/api/static/downloads/.gitkeep
 
 # internal Obsidian knowledge base: contains business-strategy and
 # security-implementation notes not meant to ship in a public repo

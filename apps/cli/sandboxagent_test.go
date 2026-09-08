@@ -43,7 +43,7 @@ func TestReconnectBackoff(t *testing.T) {
 // TestResolveAgentTokenPrefersEnvOverFile proves the two-source precedence
 // resolveAgentToken depends on: the env var (the plain background-process
 // path, kept so the secret never shows up in `ps`) wins when set, and the
-// token file (~/.infracanvas/sandbox/<agentID>_token — what the installed
+// token file (~/.whiparc/sandbox/<agentID>_token — what the installed
 // service reads across reboots, since it has no parent process to hand it an
 // env var) is the fallback.
 func TestResolveAgentTokenPrefersEnvOverFile(t *testing.T) {
@@ -60,12 +60,12 @@ func TestResolveAgentTokenPrefersEnvOverFile(t *testing.T) {
 		t.Fatalf("write token file: %v", err)
 	}
 
-	t.Setenv("INFRACANVAS_AGENT_TOKEN", "env-token")
+	t.Setenv("WHIPARC_AGENT_TOKEN", "env-token")
 	if got, err := resolveAgentToken(agentID); err != nil || got != "env-token" {
 		t.Fatalf("expected the env var to take precedence: got %q, err %v", got, err)
 	}
 
-	t.Setenv("INFRACANVAS_AGENT_TOKEN", "")
+	t.Setenv("WHIPARC_AGENT_TOKEN", "")
 	if got, err := resolveAgentToken(agentID); err != nil || got != "file-token" {
 		t.Fatalf("expected fallback to the token file: got %q, err %v", got, err)
 	}
@@ -75,7 +75,7 @@ func TestResolveAgentTokenErrorsWhenNeitherAvailable(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("HOME", dir)
 	t.Setenv("USERPROFILE", dir)
-	t.Setenv("INFRACANVAS_AGENT_TOKEN", "")
+	t.Setenv("WHIPARC_AGENT_TOKEN", "")
 
 	if _, err := resolveAgentToken("agent-does-not-exist"); err == nil {
 		t.Fatal("expected an error when neither the env var nor a token file is available")
