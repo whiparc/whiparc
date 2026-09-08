@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { Icon } from '@iconify/react';
 import { useAuthStore } from '../store/useAuthStore';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -16,6 +18,16 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+
+  // The sign-in/sign-up mode toggle below navigates via a plain router.push
+  // of a hardcoded '/login' or '/login?mode=signup' — without this, that
+  // silently drops a `redirect` param (e.g. from the /templates "Get
+  // Started" flow) the moment someone switches modes on this page.
+  const withRedirect = (path: string) => {
+    const redirect = searchParams.get('redirect');
+    if (!redirect) return path;
+    return `${path}${path.includes('?') ? '&' : '?'}redirect=${encodeURIComponent(redirect)}`;
+  };
 
   // Sync mode with query parameter
   useEffect(() => {
@@ -55,8 +67,40 @@ function LoginForm() {
     }
 
     if (success) {
-      router.push('/dashboard');
+      await continueAfterAuth();
     }
+  };
+
+  // Resumes whatever the user was trying to do before being sent here.
+  // `redirect=/templates/{id}` is the one continuation that needs real work
+  // (forking the template can't happen until we have a token, which we only
+  // get here) — anything else is just a plain post-login destination.
+  const continueAfterAuth = async () => {
+    const redirect = searchParams.get('redirect');
+    const templateMatch = redirect?.match(/^\/templates\/([\w-]+)$/);
+
+    if (templateMatch) {
+      const templateId = templateMatch[1];
+      try {
+        const token = useAuthStore.getState().token;
+        const res = await fetch(`${API_URL}/api/templates/${templateId}/use`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data: { project_id: string } = await res.json();
+          router.push(`/workspace?project=${data.project_id}`);
+          return;
+        }
+      } catch {
+        // fall through — land back on the template page rather than lose
+        // the user's place if the fork call itself failed
+      }
+      router.push(redirect!);
+      return;
+    }
+
+    router.push(redirect || '/dashboard');
   };
 
   return (
@@ -214,14 +258,14 @@ function LoginForm() {
         {/* Social Sign-In (GitHub & Google) */}
         <div className="grid grid-cols-2 gap-3">
           <a
-            href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/auth/github/login`}
+            href={`${API_URL}/api/auth/github/login`}
             className="flex items-center justify-center gap-2.5 rounded-xl border border-border bg-card py-3 text-sm font-medium text-slate-300 hover:bg-secondary hover:text-white transition duration-200 cursor-pointer"
           >
             <Icon icon="mdi:github" className="text-xl" />
             <span>GitHub</span>
           </a>
           <a
-            href={`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080'}/api/auth/google/login`}
+            href={`${API_URL}/api/auth/google/login`}
             className="flex items-center justify-center gap-2.5 rounded-xl border border-border bg-card py-3 text-sm font-medium text-slate-300 hover:bg-secondary hover:text-white transition duration-200 cursor-pointer"
           >
             <Icon icon="flat-color-icons:google" className="text-xl" />
@@ -234,9 +278,9 @@ function LoginForm() {
           {isSignUp ? (
             <p>
               Already have an account?{' '}
-              <button 
-                type="button" 
-                onClick={() => router.push('/login')}
+              <button
+                type="button"
+                onClick={() => router.push(withRedirect('/login'))}
                 className="text-primary hover:underline font-semibold cursor-pointer"
               >
                 Sign In
@@ -245,9 +289,9 @@ function LoginForm() {
           ) : (
             <p>
               New to Whiparc?{' '}
-              <button 
-                type="button" 
-                onClick={() => router.push('/login?mode=signup')}
+              <button
+                type="button"
+                onClick={() => router.push(withRedirect('/login?mode=signup'))}
                 className="text-primary hover:underline font-semibold cursor-pointer"
               >
                 Create Account

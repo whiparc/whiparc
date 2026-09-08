@@ -11,8 +11,15 @@ export const metadata: Metadata = {
 
 export default function RootLayout({
   children,
+  modal,
 }: Readonly<{
   children: React.ReactNode;
+  // Parallel route slot for app/@modal — populated by the intercepting route
+  // at app/@modal/(.)templates/[id]/page.tsx when a template card is opened
+  // via client-side navigation from /templates, empty (app/@modal/default.tsx)
+  // otherwise. See product-memory 10.1 for the full "Canva-style popup with a
+  // shareable URL" rationale.
+  modal: React.ReactNode;
 }>) {
   return (
     <html
@@ -21,6 +28,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col">
         {children}
+        {modal}
       </body>
     </html>
   );

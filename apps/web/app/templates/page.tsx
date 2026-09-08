@@ -1,10 +1,9 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { Icon } from '@iconify/react';
 import { Navbar } from '../components/Navbar';
-import { TiltCard } from '../components/landing/TiltCard';
+import { TemplateCard } from '../components/TemplateCard';
 import { heroDisplayFont } from '../fonts';
 import type { Template, TemplateListResponse } from '../lib/types';
 
@@ -164,61 +163,7 @@ export default function TemplatesPage() {
         ) : (
           <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
             {visibleTemplates.map((template) => (
-              <Link key={template.id} href={`/templates/${template.id}`} className="block">
-                <TiltCard
-                  tiltLimit={0}
-                  scale={1}
-                  spotlight
-                  className="h-full rounded-[24px] border border-border bg-secondary/30 hover:bg-secondary/50 hover:border-primary/30 hover:shadow-2xl transition-colors duration-300 p-6 flex flex-col justify-between shadow-xl group"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">
-                        {template.category}
-                      </span>
-                      <div className="flex items-center gap-1 text-slate-500">
-                        <Icon icon="lucide:download" className="text-xs" />
-                        <span className="text-[10px] font-medium">{template.install_count}</span>
-                      </div>
-                    </div>
-
-                    <h3 className="text-lg font-bold text-white group-hover:text-primary transition duration-200">
-                      {template.title}
-                    </h3>
-
-                    <p className="text-sm text-slate-400 mt-2.5 leading-relaxed line-clamp-3">
-                      {template.description || 'No description provided.'}
-                    </p>
-                  </div>
-
-                  <div className="mt-6 flex flex-col gap-4 border-t border-border/40 pt-4">
-                    {template.tags.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {template.tags.slice(0, 3).map((tag) => (
-                          <span
-                            key={tag}
-                            className="text-[10px] font-medium text-slate-400 bg-card border border-border/80 rounded-md px-2 py-0.5"
-                          >
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-1.5 text-slate-500">
-                        <Icon icon="lucide:user" className="text-sm" />
-                        <span className="text-[10px] font-medium truncate max-w-[140px]">
-                          {template.author_name || 'Whiparc Official'}
-                        </span>
-                      </div>
-                      <span className="rounded-xl bg-secondary group-hover:bg-primary group-hover:text-white px-4 py-2 text-xs font-bold text-slate-300 transition duration-200 flex items-center gap-1">
-                        <span>View Template</span>
-                        <Icon icon="lucide:chevron-right" className="text-sm" />
-                      </span>
-                    </div>
-                  </div>
-                </TiltCard>
-              </Link>
+              <TemplateCard key={template.id} template={template} />
             ))}
           </div>
         )}

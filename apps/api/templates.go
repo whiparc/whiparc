@@ -29,10 +29,10 @@ type Template struct {
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 
-	// Canvas payload — only populated on the single-template detail
-	// response, omitted from list responses to keep the catalog page's
-	// payload light (list can return 100 templates; nobody needs their
-	// full node graphs just to render a card grid).
+	// Canvas payload — populated on both the list and detail responses.
+	// The catalog grid renders a mini preview of each card's own graph
+	// (see product-memory 10.1), so every listed template needs it, not
+	// just the one a visitor eventually opens.
 	NodesJSON    string `json:"nodes_json,omitempty"`
 	EdgesJSON    string `json:"edges_json,omitempty"`
 	ViewportJSON string `json:"viewport_json,omitempty"`
@@ -106,9 +106,18 @@ func handleListTemplates(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// nodes_json/edges_json/viewport_json are included here (unlike the
+	// original Phase 1 design, which omitted them from the list response
+	// to keep the payload light) because the catalog grid now renders a
+	// mini canvas preview as each card's body — every card needs its own
+	// graph, not just the one a visitor eventually opens. At seed/MVP scale
+	// (a handful to a few dozen templates) the added payload is trivial
+	// (a few hundred bytes each); revisit with pagination or a lazy
+	// per-card fetch if the catalog grows large enough for this to matter.
 	listQuery := fmt.Sprintf(`
 		SELECT t.id, t.source_project_id, t.author_user_id, COALESCE(u.name, ''), t.title, t.description,
-		       t.category, t.tags, t.install_count, t.created_at, t.updated_at
+		       t.category, t.tags, t.install_count, t.created_at, t.updated_at,
+		       t.nodes_json, t.edges_json, t.viewport_json
 		FROM templates t
 		LEFT JOIN users u ON u.id = t.author_user_id
 		WHERE %s
@@ -128,7 +137,8 @@ func handleListTemplates(w http.ResponseWriter, r *http.Request) {
 		var sourceProjectID sql.NullString
 		var tagsJSON, createdAtStr, updatedAtStr string
 		err := rows.Scan(&t.ID, &sourceProjectID, &t.AuthorUserID, &t.AuthorName, &t.Title, &t.Description,
-			&t.Category, &tagsJSON, &t.InstallCount, &createdAtStr, &updatedAtStr)
+			&t.Category, &tagsJSON, &t.InstallCount, &createdAtStr, &updatedAtStr,
+			&t.NodesJSON, &t.EdgesJSON, &t.ViewportJSON)
 		if err != nil {
 			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -192,6 +202,90 @@ func handleGetTemplateByID(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(t)
 }
 
+// POST /api/templates/{id}/use — auth required. Forks a template's frozen
+// canvas snapshot into a brand-new PRIVATE project inside the caller's own
+// personal team, with no team picker needed for a zero-friction "Get
+// Started" click. Every user gets exactly one personal team at signup
+// (createPersonalTeam in auth.go), always at the deterministic slug
+// "personal-<userID>", which is how it's resolved here. Never mutates the
+// template's source project (if any) or the template itself beyond bumping
+// install_count — templates are frozen snapshots, not live references.
+func handleUseTemplate(w http.ResponseWriter, r *http.Request) {
+	user, ok := GetUserFromContext(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	templateID := r.PathValue("id")
+
+	var title, nodesJSON, edgesJSON, viewportJSON string
+	err := db.QueryRow(`SELECT title, nodes_json, edges_json, viewport_json FROM templates WHERE id = ? AND status = 'PUBLISHED'`, templateID).
+		Scan(&title, &nodesJSON, &edgesJSON, &viewportJSON)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Template not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	var teamID string
+	err = db.QueryRow("SELECT id FROM teams WHERE slug = ?", "personal-"+user.ID).Scan(&teamID)
+	if err != nil {
+		http.Error(w, "Could not resolve your personal workspace: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	projectID := fmt.Sprintf("proj_%d", time.Now().UnixNano())
+
+	tx, err := db.Begin()
+	if err != nil {
+		http.Error(w, "Failed to start transaction: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	_, err = tx.Exec("INSERT INTO projects (id, team_id, name, description, visibility, created_by) VALUES (?, ?, ?, ?, 'PRIVATE', ?)",
+		projectID, teamID, title, "Forked from the \""+title+"\" template.", user.ID)
+	if err != nil {
+		http.Error(w, "Failed to create project: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// Mirrors handleCreateProject: an explicit project_members ADMIN row
+	// alongside created_by, since other endpoints (e.g. handleGetProjectMembers)
+	// read membership from project_members directly rather than inferring it.
+	pmID := fmt.Sprintf("pmem_%d", time.Now().UnixNano())
+	_, err = tx.Exec("INSERT INTO project_members (id, project_id, user_id, role, added_by) VALUES (?, ?, ?, 'ADMIN', ?)",
+		pmID, projectID, user.ID, user.ID)
+	if err != nil {
+		http.Error(w, "Failed to assign project access: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	_, err = tx.Exec("INSERT INTO canvas_states (project_id, nodes_json, edges_json, viewport_json, updated_by) VALUES (?, ?, ?, ?, ?)",
+		projectID, nodesJSON, edgesJSON, viewportJSON, user.ID)
+	if err != nil {
+		http.Error(w, "Failed to initialize canvas state: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if _, err = tx.Exec("UPDATE templates SET install_count = install_count + 1 WHERE id = ?", templateID); err != nil {
+		http.Error(w, "Failed to update template install count: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, "Failed to commit transaction: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"project_id": projectID})
+}
+
 // seedOfficialTemplates seeds a handful of curated, official templates on
 // first boot so /templates has content before the publish flow (Phase 5)
 // ships. Officially-authored templates have source_project_id = NULL and
@@ -229,9 +323,9 @@ func seedOfficialTemplates() error {
 			tags:        []string{"aws", "ec2", "beginner"},
 			nodes: []map[string]any{
 				{"id": "sg_1", "type": "customNode", "position": map[string]int{"x": 100, "y": 100},
-					"data": map[string]any{"label": "Security Group", "tech": "Terraform", "categoryLabel": "AWS Resource", "description": "Allows HTTP/HTTPS/SSH", "status": "Validated"}},
+					"data": map[string]any{"label": "Security Group", "tech": "Terraform", "icon": "lucide:shield", "categoryLabel": "AWS Resource", "description": "Allows HTTP/HTTPS/SSH", "status": "Validated"}},
 				{"id": "web_1", "type": "customNode", "position": map[string]int{"x": 400, "y": 100},
-					"data": map[string]any{"label": "Web Server", "tech": "Terraform", "categoryLabel": "AWS Resource", "description": "EC2 instance", "status": "Validated"}},
+					"data": map[string]any{"label": "Web Server", "tech": "Terraform", "icon": "lucide:server", "categoryLabel": "AWS Resource", "description": "EC2 instance", "status": "Validated"}},
 			},
 			edges: []map[string]any{
 				{"id": "e_sg_web", "source": "sg_1", "target": "web_1"},
@@ -244,11 +338,11 @@ func seedOfficialTemplates() error {
 			tags:        []string{"aws", "ec2", "rds", "postgres"},
 			nodes: []map[string]any{
 				{"id": "web_1", "type": "customNode", "position": map[string]int{"x": 100, "y": 100},
-					"data": map[string]any{"label": "Web Server", "tech": "Terraform", "categoryLabel": "AWS Resource", "status": "Validated"}},
+					"data": map[string]any{"label": "Web Server", "tech": "Terraform", "icon": "lucide:server", "categoryLabel": "AWS Resource", "status": "Validated"}},
 				{"id": "app_1", "type": "customNode", "position": map[string]int{"x": 400, "y": 100},
-					"data": map[string]any{"label": "App Server", "tech": "Terraform", "categoryLabel": "AWS Resource", "status": "Validated"}},
+					"data": map[string]any{"label": "App Server", "tech": "Terraform", "icon": "lucide:server", "categoryLabel": "AWS Resource", "status": "Validated"}},
 				{"id": "db_1", "type": "customNode", "position": map[string]int{"x": 700, "y": 100},
-					"data": map[string]any{"label": "Postgres (RDS)", "tech": "Terraform", "categoryLabel": "AWS Resource", "status": "Validated"}},
+					"data": map[string]any{"label": "Postgres (RDS)", "tech": "Terraform", "icon": "lucide:database", "categoryLabel": "AWS Resource", "status": "Validated"}},
 			},
 			edges: []map[string]any{
 				{"id": "e_web_app", "source": "web_1", "target": "app_1"},
@@ -262,9 +356,9 @@ func seedOfficialTemplates() error {
 			tags:        []string{"kubernetes", "k8s", "beginner"},
 			nodes: []map[string]any{
 				{"id": "deploy_1", "type": "customNode", "position": map[string]int{"x": 100, "y": 100},
-					"data": map[string]any{"label": "Deployment", "tech": "Kubernetes", "categoryLabel": "K8s Resource", "status": "Validated"}},
+					"data": map[string]any{"label": "Deployment", "tech": "Kubernetes", "icon": "lucide:layers", "categoryLabel": "K8s Resource", "status": "Validated"}},
 				{"id": "svc_1", "type": "customNode", "position": map[string]int{"x": 400, "y": 100},
-					"data": map[string]any{"label": "Service", "tech": "Kubernetes", "categoryLabel": "K8s Resource", "status": "Validated"}},
+					"data": map[string]any{"label": "Service", "tech": "Kubernetes", "icon": "lucide:external-link", "categoryLabel": "K8s Resource", "status": "Validated"}},
 			},
 			edges: []map[string]any{
 				{"id": "e_deploy_svc", "source": "deploy_1", "target": "svc_1"},
@@ -277,9 +371,9 @@ func seedOfficialTemplates() error {
 			tags:        []string{"ansible", "provisioning"},
 			nodes: []map[string]any{
 				{"id": "target_1", "type": "customNode", "position": map[string]int{"x": 100, "y": 100},
-					"data": map[string]any{"label": "Target Host", "tech": "Target", "categoryLabel": "Cloud Target", "status": "Validated"}},
+					"data": map[string]any{"label": "Target Host", "tech": "Target", "icon": "lucide:cloud", "categoryLabel": "Cloud Target", "status": "Validated"}},
 				{"id": "playbook_1", "type": "customNode", "position": map[string]int{"x": 400, "y": 100},
-					"data": map[string]any{"label": "App Provisioning", "tech": "Ansible", "categoryLabel": "Ansible Task", "status": "Validated"}},
+					"data": map[string]any{"label": "App Provisioning", "tech": "Ansible", "icon": "lucide:terminal", "categoryLabel": "Ansible Task", "status": "Validated"}},
 			},
 			edges: []map[string]any{
 				{"id": "e_target_playbook", "source": "target_1", "target": "playbook_1"},

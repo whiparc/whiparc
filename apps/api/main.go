@@ -351,6 +351,7 @@ func main() {
 	// and 08.1 in whiparc/cloud for schema rationale and MVP scope notes)
 	mux.HandleFunc("GET /api/templates", enableCORS(handleListTemplates))
 	mux.HandleFunc("GET /api/templates/{id}", enableCORS(handleGetTemplateByID))
+	mux.Handle("POST /api/templates/{id}/use", AuthMiddleware(http.HandlerFunc(handleUseTemplate)))
 
 	// Join Requests
 	mux.Handle("POST /api/projects/{id}/join-request", AuthMiddleware(http.HandlerFunc(handleCreateJoinRequest)))
