@@ -262,6 +262,23 @@ func main() {
 		issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		revoked_at DATETIME,
 		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+	);
+	CREATE TABLE IF NOT EXISTS templates (
+		id TEXT PRIMARY KEY,
+		source_project_id TEXT,
+		author_user_id TEXT NOT NULL,
+		title TEXT NOT NULL,
+		description TEXT,
+		category TEXT NOT NULL DEFAULT 'General',
+		tags TEXT NOT NULL DEFAULT '[]',
+		nodes_json TEXT NOT NULL,
+		edges_json TEXT NOT NULL,
+		viewport_json TEXT NOT NULL DEFAULT '{"x":0,"y":0,"zoom":1}',
+		status TEXT NOT NULL DEFAULT 'PUBLISHED' CHECK (status IN ('PUBLISHED', 'UNPUBLISHED')),
+		install_count INTEGER NOT NULL DEFAULT 0,
+		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+		FOREIGN KEY (source_project_id) REFERENCES projects(id) ON DELETE SET NULL
 	);`
 	if _, err := db.Exec(schemaQuery); err != nil {
 		log.Fatalf("[DB] Failed to initialize schema: %v\n", err)
@@ -278,6 +295,9 @@ func main() {
 	}
 	if err := migratePairedAgentsStatusAllowsDisconnected(); err != nil {
 		log.Fatalf("[DB] Failed to migrate paired_agents.status CHECK constraint: %v\n", err)
+	}
+	if err := seedOfficialTemplates(); err != nil {
+		log.Fatalf("[DB] Failed to seed official templates: %v\n", err)
 	}
 	log.Println("[DB] Database initialized successfully.")
 
@@ -326,6 +346,11 @@ func main() {
 	mux.Handle("GET /api/projects/{id}/custom-nodes", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleGetCustomNodes))))
 	mux.Handle("POST /api/projects/{id}/custom-nodes", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleCreateCustomNode))))
 	mux.Handle("DELETE /api/projects/{id}/custom-nodes/{nodeId}", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleDeleteCustomNode))))
+
+	// Template Catalog Routes (public, no auth — see product-memory 01.3
+	// and 08.1 in whiparc/cloud for schema rationale and MVP scope notes)
+	mux.HandleFunc("GET /api/templates", enableCORS(handleListTemplates))
+	mux.HandleFunc("GET /api/templates/{id}", enableCORS(handleGetTemplateByID))
 
 	// Join Requests
 	mux.Handle("POST /api/projects/{id}/join-request", AuthMiddleware(http.HandlerFunc(handleCreateJoinRequest)))
