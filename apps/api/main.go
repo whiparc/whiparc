@@ -336,6 +336,7 @@ func main() {
 	mux.Handle("GET /api/projects/{id}/credentials", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleGetProjectCredentials))))
 	mux.Handle("POST /api/projects/{id}/credentials", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleCreateProjectCredential))))
 	mux.Handle("DELETE /api/projects/{id}/credentials/{credId}", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleDeleteProjectCredential))))
+	mux.Handle("POST /api/projects/{id}/templates", AuthMiddleware(RequireProjectRole("ADMIN")(http.HandlerFunc(handlePublishProjectAsTemplate))))
 	mux.Handle("GET /api/projects/{id}/members", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleGetProjectMembers))))
 	mux.Handle("POST /api/projects/{id}/members", AuthMiddleware(RequireProjectRole("ADMIN")(http.HandlerFunc(handleAddProjectMember))))
 	mux.Handle("PUT /api/projects/{id}/members/{userId}", AuthMiddleware(RequireProjectRole("ADMIN")(http.HandlerFunc(handleUpdateProjectMemberRole))))
@@ -352,6 +353,8 @@ func main() {
 	mux.HandleFunc("GET /api/templates", enableCORS(handleListTemplates))
 	mux.HandleFunc("GET /api/templates/{id}", enableCORS(handleGetTemplateByID))
 	mux.Handle("POST /api/templates/{id}/use", AuthMiddleware(http.HandlerFunc(handleUseTemplate)))
+	mux.Handle("PATCH /api/templates/{id}", AuthMiddleware(http.HandlerFunc(handleUpdateTemplate)))
+	mux.Handle("DELETE /api/templates/{id}", AuthMiddleware(http.HandlerFunc(handleDeleteTemplate)))
 
 	// Join Requests
 	mux.Handle("POST /api/projects/{id}/join-request", AuthMiddleware(http.HandlerFunc(handleCreateJoinRequest)))

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { Icon } from '@iconify/react';
@@ -8,7 +8,9 @@ import { motion, useReducedMotion, useScroll, useTransform } from 'framer-motion
 import { useAuthStore } from './store/useAuthStore';
 import { Navbar } from './components/Navbar';
 import { TiltCard } from './components/landing/TiltCard';
+import { TemplateCard } from './components/TemplateCard';
 import { heroDisplayFont } from './fonts';
+import type { Template, TemplateListResponse } from './lib/types';
 
 // WebGL needs the browser, so the shader background is loaded client-only.
 const HeroShaderField = dynamic(
@@ -377,6 +379,96 @@ function FeaturesSection() {
               </TiltCard>
             </motion.div>
           ))}
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// --- Featured Templates ---
+
+// Top-N templates by popularity (falling back to newest for ties — the
+// same default order GET /api/templates already applies with sort=popular)
+// so a first-time visitor sees the product's actual output, not just a
+// features list. Renders nothing at all while loading, and nothing if the
+// fetch fails or the catalog is empty — a marketing page should never show
+// a spinner or an error box over a section nobody asked to see; it just
+// quietly doesn't appear. See product-memory 10.1 "Phase 4".
+function FeaturedTemplatesSection() {
+  const [templates, setTemplates] = useState<Template[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const API_URL = (typeof process !== 'undefined' && process.env.NEXT_PUBLIC_API_URL) || 'http://localhost:8080';
+    (async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/templates?sort=popular&limit=3`);
+        if (!res.ok) return;
+        const data: TemplateListResponse = await res.json();
+        if (!cancelled) setTemplates(data.templates || []);
+      } catch {
+        // Silently skip the section — see comment above.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (templates.length === 0) return null;
+
+  return (
+    <section className="relative py-24 lg:py-32 border-t border-white/[0.04]">
+      <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-indigo-500/5 rounded-full blur-[140px]" />
+
+      <div className="relative mx-auto max-w-7xl px-6 lg:px-10">
+        <motion.div
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: '-80px' }}
+          variants={staggerContainer}
+          className="text-center mb-16"
+        >
+          <motion.p variants={fadeUp} transition={{ duration: 0.5, ease: EASE }} className="text-xs uppercase tracking-widest text-indigo-400 font-semibold">
+            Template Catalog
+          </motion.p>
+          <motion.h2 variants={fadeUp} transition={{ duration: 0.6, ease: EASE }} className="mt-4 text-3xl font-extrabold text-white lg:text-5xl tracking-tight leading-tight">
+            Don&apos;t start from a blank canvas.
+          </motion.h2>
+          <motion.p variants={fadeUp} transition={{ duration: 0.5, ease: EASE }} className="mt-4 text-base text-slate-400 max-w-xl mx-auto">
+            Fork a ready-made AWS, Kubernetes, or Ansible template — browse the real canvas before you sign in.
+          </motion.p>
+        </motion.div>
+
+        <motion.div
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: '-80px' }}
+          variants={staggerContainer}
+          className="grid gap-6 md:grid-cols-3"
+        >
+          {templates.map((template) => (
+            <motion.div key={template.id} variants={scaleIn} transition={{ duration: 0.5, ease: EASE }}>
+              <TemplateCard template={template} />
+            </motion.div>
+          ))}
+        </motion.div>
+
+        <motion.div
+          initial="hidden"
+          whileInView="show"
+          viewport={{ once: true, margin: '-80px' }}
+          variants={fadeUp}
+          transition={{ duration: 0.5, ease: EASE }}
+          className="mt-12 flex justify-center"
+        >
+          <Link
+            href="/templates"
+            className="group inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-6 py-3 text-sm font-medium text-slate-300 backdrop-blur-sm transition hover:bg-white/[0.06] hover:text-white cursor-pointer"
+          >
+            Browse all templates
+            <Icon icon="lucide:arrow-right" className="text-sm transition-transform group-hover:translate-x-0.5" />
+          </Link>
         </motion.div>
       </div>
     </section>
@@ -1047,6 +1139,7 @@ export default function LandingPage() {
         <HeroSection />
         <LogoCloud />
         <FeaturesSection />
+        <FeaturedTemplatesSection />
         <HowItWorksSection />
         <CodePreviewSection />
         <CliSection />

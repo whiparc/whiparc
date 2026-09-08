@@ -1,7 +1,6 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import { Icon } from '@iconify/react';
 import type { Node, Edge } from '@xyflow/react';
 import { TemplateCanvasPreview } from './TemplateCanvasPreview';
@@ -23,7 +22,6 @@ interface TemplateDetailContentProps {
 // actual detail markup exist in exactly one place — see product-memory 10.1
 // for why both a real page and a popup need to render the same content.
 export function TemplateDetailContent({ id, variant }: TemplateDetailContentProps) {
-  const router = useRouter();
   const { user, hasHydrated } = useAuthStore();
 
   const [template, setTemplate] = useState<Template | null>(null);
@@ -79,7 +77,17 @@ export function TemplateDetailContent({ id, variant }: TemplateDetailContentProp
   const handleGetStarted = async () => {
     if (!hasHydrated || isForking) return;
     if (!user) {
-      router.push(`/login?redirect=/templates/${id}`);
+      // A hard navigation, not router.push(): when this component is
+      // rendered inside the intercepting-route popup (variant="modal"),
+      // Next.js's @modal parallel slot does not reset on a client-side
+      // push to a route outside the intercepted /templates/* family — the
+      // URL changes and /login renders underneath, but the modal's own
+      // fixed-position overlay stays mounted on top of it, hiding it
+      // entirely. A full navigation forces both the main and @modal slots
+      // to resolve fresh for the new URL, which reliably clears the modal.
+      // See product-memory 10.1 / 07.2 for the full writeup.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.href = `/login?redirect=/templates/${id}`;
       return;
     }
     setForkError(null);
@@ -92,7 +100,10 @@ export function TemplateDetailContent({ id, variant }: TemplateDetailContentProp
       });
       if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
       const data: { project_id: string } = await res.json();
-      router.push(`/workspace?project=${data.project_id}`);
+      // Same reasoning as above — hard navigation so the popup can't get
+      // stuck on top of the workspace after a signed-in fork.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination
+      window.location.href = `/workspace?project=${data.project_id}`;
     } catch (err) {
       setIsForking(false);
       const msg = err instanceof Error ? err.message : 'Failed to start a new project from this template.';

@@ -286,6 +286,207 @@ func handleUseTemplate(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"project_id": projectID})
 }
 
+// POST /api/projects/{id}/templates — publishes a snapshot of a project's
+// current canvas as a new public template. Nested under /api/projects/{id}
+// (not a flat POST /api/templates with project_id in the body) specifically
+// so it can reuse RequireProjectRole("ADMIN") exactly as every other
+// project-scoped write route does, instead of a bespoke membership check.
+// MVP publish is auto-publish, no review queue (product decision — see
+// product-memory 10.1) — the new row is 'PUBLISHED' immediately.
+func handlePublishProjectAsTemplate(w http.ResponseWriter, r *http.Request) {
+	user, ok := GetUserFromContext(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	projectID := r.PathValue("id")
+
+	var payload struct {
+		Title       string   `json:"title"`
+		Description string   `json:"description"`
+		Category    string   `json:"category"`
+		Tags        []string `json:"tags"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid payload: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	title := strings.TrimSpace(payload.Title)
+	if title == "" {
+		http.Error(w, "Title is required", http.StatusBadRequest)
+		return
+	}
+	category := strings.TrimSpace(payload.Category)
+	if category == "" {
+		category = "General"
+	}
+	tags := payload.Tags
+	if tags == nil {
+		tags = []string{}
+	}
+
+	var nodesJSON, edgesJSON, viewportJSON string
+	err := db.QueryRow("SELECT nodes_json, edges_json, viewport_json FROM canvas_states WHERE project_id = ?", projectID).
+		Scan(&nodesJSON, &edgesJSON, &viewportJSON)
+	if err == sql.ErrNoRows {
+		http.Error(w, "This project has no canvas to publish yet", http.StatusBadRequest)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	tagsJSON, err := json.Marshal(tags)
+	if err != nil {
+		http.Error(w, "Invalid tags: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	templateID := fmt.Sprintf("tmpl_%d", time.Now().UnixNano())
+	_, err = db.Exec(`
+		INSERT INTO templates (id, source_project_id, author_user_id, title, description, category, tags, nodes_json, edges_json, viewport_json, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'PUBLISHED')`,
+		templateID, projectID, user.ID, title, payload.Description, category, string(tagsJSON), nodesJSON, edgesJSON, viewportJSON)
+	if err != nil {
+		http.Error(w, "Failed to publish template: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"id": templateID})
+}
+
+// PATCH /api/templates/{id} — auth required, owner-only (author_user_id must
+// match the caller; official seeded templates have the 'whiparc_official'
+// sentinel as their author, which no real user can ever match, so they're
+// implicitly un-editable through this route without special-casing it).
+// Edits metadata and/or toggles status between PUBLISHED/UNPUBLISHED — the
+// "unpublish" action Phase 1's status column was added ahead of need for.
+func handleUpdateTemplate(w http.ResponseWriter, r *http.Request) {
+	user, ok := GetUserFromContext(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	templateID := r.PathValue("id")
+
+	var authorID string
+	err := db.QueryRow("SELECT author_user_id FROM templates WHERE id = ?", templateID).Scan(&authorID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Template not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if authorID != user.ID {
+		http.Error(w, "Forbidden: you can only edit templates you published", http.StatusForbidden)
+		return
+	}
+
+	var payload struct {
+		Title       *string   `json:"title"`
+		Description *string   `json:"description"`
+		Category    *string   `json:"category"`
+		Tags        *[]string `json:"tags"`
+		Status      *string   `json:"status"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		http.Error(w, "Invalid payload: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if payload.Status != nil && *payload.Status != "PUBLISHED" && *payload.Status != "UNPUBLISHED" {
+		http.Error(w, "status must be PUBLISHED or UNPUBLISHED", http.StatusBadRequest)
+		return
+	}
+
+	if payload.Title != nil {
+		title := strings.TrimSpace(*payload.Title)
+		if title == "" {
+			http.Error(w, "Title cannot be empty", http.StatusBadRequest)
+			return
+		}
+		if _, err := db.Exec("UPDATE templates SET title = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", title, templateID); err != nil {
+			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	if payload.Description != nil {
+		if _, err := db.Exec("UPDATE templates SET description = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", *payload.Description, templateID); err != nil {
+			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	if payload.Category != nil {
+		category := strings.TrimSpace(*payload.Category)
+		if category == "" {
+			category = "General"
+		}
+		if _, err := db.Exec("UPDATE templates SET category = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", category, templateID); err != nil {
+			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	if payload.Tags != nil {
+		tagsJSON, err := json.Marshal(*payload.Tags)
+		if err != nil {
+			http.Error(w, "Invalid tags: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		if _, err := db.Exec("UPDATE templates SET tags = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", string(tagsJSON), templateID); err != nil {
+			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+	if payload.Status != nil {
+		if _, err := db.Exec("UPDATE templates SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?", *payload.Status, templateID); err != nil {
+			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
+// DELETE /api/templates/{id} — auth required, owner-only. Permanently
+// removes the template (distinct from PATCH's status=UNPUBLISHED, which is
+// reversible); the source project itself is never touched either way.
+func handleDeleteTemplate(w http.ResponseWriter, r *http.Request) {
+	user, ok := GetUserFromContext(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	templateID := r.PathValue("id")
+
+	var authorID string
+	err := db.QueryRow("SELECT author_user_id FROM templates WHERE id = ?", templateID).Scan(&authorID)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Template not found", http.StatusNotFound)
+		return
+	}
+	if err != nil {
+		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	if authorID != user.ID {
+		http.Error(w, "Forbidden: you can only delete templates you published", http.StatusForbidden)
+		return
+	}
+
+	if _, err := db.Exec("DELETE FROM templates WHERE id = ?", templateID); err != nil {
+		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+}
+
 // seedOfficialTemplates seeds a handful of curated, official templates on
 // first boot so /templates has content before the publish flow (Phase 5)
 // ships. Officially-authored templates have source_project_id = NULL and
