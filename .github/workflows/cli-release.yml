@@ -23,14 +23,20 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      gateway_url_default: ${{ steps.version.outputs.gateway_url_default }}
     steps:
       - name: Determine version
         id: version
         run: |
           if [[ "${{ github.ref }}" == refs/tags/cli-v* ]]; then
             echo "version=${GITHUB_REF_NAME#cli-v}" >> "$GITHUB_OUTPUT"
+            # Only a tagged release gets the compiled-in hosted Gateway
+            # default — PR/dev builds off main keep the localhost fallback
+            # so they still behave like a local dev build.
+            echo "gateway_url_default=https://gateway.whiparc.com" >> "$GITHUB_OUTPUT"
           else
             echo "version=0.0.0-dev" >> "$GITHUB_OUTPUT"
+            echo "gateway_url_default=" >> "$GITHUB_OUTPUT"
           fi
 
   build:
@@ -69,7 +75,7 @@ jobs:
           fi
 
           echo "Building binary: ${BINARY_NAME} (version ${{ needs.prepare.outputs.version }})"
-          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${{ needs.prepare.outputs.version }}" -o "${BINARY_NAME}" .
+          GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${{ needs.prepare.outputs.version }} -X main.gatewayURLDefault=${{ needs.prepare.outputs.gateway_url_default }}" -o "${BINARY_NAME}" .
 
           # Move binary to root directory for artifact uploading
           mv "${BINARY_NAME}" ../../

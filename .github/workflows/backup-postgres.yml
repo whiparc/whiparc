@@ -1,0 +1,33 @@
+name: Nightly Postgres Backup
+
+# Launch runbook's "Backups & a heartbeat" phase: the fix for Supabase's free
+# tier having no automated backups. Runs deploy/backup-postgres.sh on a
+# schedule instead of a VM crontab, since it needs no separate host to
+# maintain. Inert until the five secrets below are set in this repo's Actions
+# secrets (Settings > Secrets and variables > Actions) — until then it just
+# fails fast with a clear "not set" error instead of silently doing nothing.
+on:
+  schedule:
+    - cron: "0 3 * * *" # 03:00 UTC nightly
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Run backup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          chmod +x deploy/backup-postgres.sh
+          ./deploy/backup-postgres.sh

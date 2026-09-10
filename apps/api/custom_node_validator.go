@@ -42,7 +42,7 @@ type CustomNode struct {
 // POST /api/custom-nodes/validate
 func handleValidateCustomNode(w http.ResponseWriter, r *http.Request) {
 	// Enable CORS if requested
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Origin", allowedOrigin())
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 	if r.Method == http.MethodOptions {

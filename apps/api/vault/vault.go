@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"strings"
 )
@@ -17,6 +18,11 @@ var masterKey []byte
 func init() {
 	keyStr := os.Getenv("WHIPARC_MASTER_KEY")
 	if keyStr == "" {
+		// Fine on a laptop; every cloud credential stored in cloud_credentials
+		// is encrypted with this key, so a public deployment that never sets
+		// WHIPARC_MASTER_KEY is encrypting them all with a value baked into
+		// the public source tree — no better than storing them in plaintext.
+		log.Println("[VAULT] WARNING: WHIPARC_MASTER_KEY is not set — falling back to the built-in development key. Set a real random secret before any real credential is stored.")
 		keyStr = "whiparc-fallback-secret-key-32bytes"
 	}
 	hash := sha256.Sum256([]byte(keyStr))

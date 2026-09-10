@@ -51,6 +51,15 @@ var (
 	// version is injected at build time via -ldflags "-X main.version=...";
 	// left as "dev" for local `go build`/`go run`.
 	version = "dev"
+
+	// gatewayURLDefault is injected the same way, via
+	// -ldflags "-X main.gatewayURLDefault=...", only for tagged release
+	// builds (see .github/workflows/cli-release.yml) — left empty for local
+	// builds and PR/dev artifacts, so getClientConfig falls back to
+	// http://localhost:9090 exactly as before. A tagged release build sets
+	// this to the hosted Agent Gateway's base URL (https://gateway.whiparc.com)
+	// so `whiparc sandbox up` works for a hosted user with zero config.
+	gatewayURLDefault = ""
 )
 
 func main() {
@@ -145,6 +154,16 @@ func main() {
 
 // Helpers
 
+// defaultGatewayURL is the fallback used whenever neither the config file
+// nor a --gateway flag specifies one: the compiled-in release default if
+// this binary was built from a tagged release, else localhost for local dev.
+func defaultGatewayURL() string {
+	if gatewayURLDefault != "" {
+		return gatewayURLDefault
+	}
+	return "http://localhost:9090"
+}
+
 func getClientConfig() (*Config, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -157,7 +176,7 @@ func getClientConfig() (*Config, error) {
 		if apiURLFlag != "" {
 			url = apiURLFlag
 		}
-		return &Config{APIURL: url, GatewayURL: "http://localhost:9090"}, nil
+		return &Config{APIURL: url, GatewayURL: defaultGatewayURL()}, nil
 	}
 	var cfg Config
 	_ = json.Unmarshal(file, &cfg)
@@ -168,7 +187,7 @@ func getClientConfig() (*Config, error) {
 		cfg.APIURL = "http://localhost:8080"
 	}
 	if cfg.GatewayURL == "" {
-		cfg.GatewayURL = "http://localhost:9090"
+		cfg.GatewayURL = defaultGatewayURL()
 	}
 	if tokenFlag != "" {
 		cfg.Token = tokenFlag
