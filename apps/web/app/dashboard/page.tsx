@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Icon } from '@iconify/react';
 import { useAuthStore } from '../store/useAuthStore';
 import { ProjectSettingsModal } from '../components/ProjectSettingsModal';
+import { PublishTemplateModal } from '../components/PublishTemplateModal';
 import { TiltCard } from '../components/landing/TiltCard';
 import type { Project } from '../lib/types';
 
@@ -44,6 +45,8 @@ function DashboardContent() {
 	const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
 	const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 	const [selectedProjectForSettings, setSelectedProjectForSettings] = useState<Project | null>(null);
+	const [isPublishOpen, setIsPublishOpen] = useState(false);
+	const [selectedProjectForPublish, setSelectedProjectForPublish] = useState<Project | null>(null);
 
 	// Create project form state
 	const [newProjName, setNewProjName] = useState('');
@@ -468,6 +471,18 @@ function DashboardContent() {
 
 										{project.user_role ? (
 											<div className="flex items-center gap-2">
+												{project.user_role === 'ADMIN' && (
+													<button
+														onClick={() => {
+															setSelectedProjectForPublish(project);
+															setIsPublishOpen(true);
+														}}
+														className="p-2 rounded-xl border border-border bg-card hover:bg-primary/10 hover:border-primary/20 text-slate-450 hover:text-primary transition cursor-pointer flex items-center justify-center h-8 w-8"
+														title="Publish as Template"
+													>
+														<Icon icon="lucide:upload-cloud" className="text-sm" />
+													</button>
+												)}
 												{(project.user_role === 'EDITOR' || project.user_role === 'ADMIN') && (
 													<button
 														onClick={() => {
@@ -664,6 +679,17 @@ function DashboardContent() {
 						fetchData();
 					}}
 					projectId={selectedProjectForSettings.id}
+				/>
+			)}
+
+			{isPublishOpen && selectedProjectForPublish && (
+				<PublishTemplateModal
+					isOpen={isPublishOpen}
+					onClose={() => {
+						setIsPublishOpen(false);
+						setSelectedProjectForPublish(null);
+					}}
+					project={selectedProjectForPublish}
 				/>
 			)}
 		</div>
