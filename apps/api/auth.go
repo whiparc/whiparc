@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"net/http"
 	"strings"
@@ -14,7 +13,7 @@ import (
 // and first-time OAuth login (findOrCreateOAuthUser in oauth.go) so the two
 // account-creation paths can't silently drift apart — an OAuth user who
 // never gets a personal team has nowhere to create projects.
-func createPersonalTeam(tx *sql.Tx, userID, name string) error {
+func createPersonalTeam(tx sqlExecer, userID, name string) error {
 	teamID := fmt.Sprintf("team_%d", time.Now().UnixNano())
 	slug := "personal-" + userID
 	if _, err := tx.Exec("INSERT INTO teams (id, name, slug, owner_id) VALUES (?, ?, ?, ?)", teamID, name+"'s Personal Workspace", slug, userID); err != nil {
@@ -37,7 +36,7 @@ const userContextKey contextKey = "user"
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Set CORS headers for preflight or regular request
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin())
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == http.MethodOptions {
