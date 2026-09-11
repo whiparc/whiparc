@@ -5,15 +5,10 @@ on:
     branches:
       - main
       - dev
-    tags:
-      - 'v*'
-    # No top-level `paths:` filter here on purpose: GitHub combines `paths`
-    # with `tags`/`branches` as an AND, so a version-tag push that happens
-    # not to touch these Dockerfiles would otherwise silently skip
-    # publishing entirely — exactly wrong for a release, which must always
-    # produce a full, consistent image set. The per-image `changes` job
-    # below already does the equivalent "only build what changed" filtering
-    # for ordinary branch pushes, so nothing is lost by dropping this.
+    paths:
+      - 'apps/api/Dockerfile.base'
+      - 'sandbox/Dockerfile.ssh.base'
+      - '.github/workflows/publish-base-image.yml'
   workflow_dispatch:
 
 # Avoid two pushes to the same branch racing to publish/tag the same image.
@@ -72,23 +67,13 @@ jobs:
       #  - main is the production branch: pushes there move `latest` and `main`.
       #  - dev is the default branch contributors fork/build against: pushes
       #    there only move `dev`, never `latest`/`main`.
-      #  - a `vX.Y.Z` git tag is a deliberate, versioned release: it publishes
-      #    an immutable `vX.Y.Z` tag AND moves the floating `stable` tag onto
-      #    it — `stable` is what every docker-compose file in this repo (and
-      #    docker-compose.hosted.yml's agent-gateway, published from the
-      #    separate whiparc/cloud repo) pulls by default, so a first-time
-      #    contributor or a fresh production VM always gets the last
-      #    deliberately-tagged release, not whatever most recently merged to
-      #    dev/main. Cutting a release means pushing the SAME `vX.Y.Z` tag to
-      #    both repos — there's no automated cross-repo trigger, this is a
-      #    manual-by-design two-step release action.
       #  - every build also gets an immutable `sha-<short-sha>` tag (for
       #    rollback/traceability) and a tag matching its own branch name, so
       #    a workflow_dispatch off some other branch still produces a
       #    findable, non-colliding image instead of silently touching `dev`.
       - name: Docker meta (runner base)
         id: meta-runner
-        if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.runner == 'true' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.runner == 'true' }}
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository_owner }}/whiparc-runner-base
@@ -96,13 +81,11 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
             type=raw,value=main,enable=${{ github.ref_name == 'main' }}
             type=raw,value=dev,enable=${{ github.ref_name == 'dev' }}
-            type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=${{ github.ref_name }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=ref,event=branch
             type=sha,prefix=sha-,format=short
 
       - name: Build and Push Runner Base Image
-        if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.runner == 'true' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.runner == 'true' }}
         uses: docker/build-push-action@v7
         with:
           context: ./apps/api
@@ -115,7 +98,7 @@ jobs:
 
       - name: Docker meta (sandbox base)
         id: meta-sandbox
-        if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.sandbox == 'true' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.sandbox == 'true' }}
         uses: docker/metadata-action@v5
         with:
           images: ghcr.io/${{ github.repository_owner }}/whiparc-sandbox-base
@@ -123,13 +106,11 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
             type=raw,value=main,enable=${{ github.ref_name == 'main' }}
             type=raw,value=dev,enable=${{ github.ref_name == 'dev' }}
-            type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-            type=raw,value=${{ github.ref_name }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
             type=ref,event=branch
             type=sha,prefix=sha-,format=short
 
       - name: Build and Push Sandbox Base Image
-        if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v') || needs.changes.outputs.sandbox == 'true' }}
+        if: ${{ github.event_name == 'workflow_dispatch' || needs.changes.outputs.sandbox == 'true' }}
         uses: docker/build-push-action@v7
         with:
           context: ./sandbox

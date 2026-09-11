@@ -14,6 +14,8 @@ on:
       - dev
     paths:
       - 'apps/cli/**'
+    tags:
+      - 'cli-v*'
 
 jobs:
   prepare:

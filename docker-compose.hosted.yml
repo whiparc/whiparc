@@ -38,15 +38,8 @@ services:
       dockerfile: apps/api/Dockerfile
     # Same image name/tag as docker-compose.yml's api service — same
     # Dockerfile and context, so whichever stack you build first, the other
-    # reuses that image instead of rebuilding it. Also a real, pullable GHCR
-    # reference (see publish-api-image.yml) — `docker compose up -d` with no
-    # `--build` on a fresh VM now pulls a real published image instead of
-    # failing with "pull access denied for whiparc/api, repository does not
-    # exist", which is what the bare local tag `whiparc/api:dev` used to do.
-    # Defaults to `stable` (the most recently tagged vX.Y.Z release) — what
-    # a real Hetzner deploy should run; set API_IMAGE_TAG=dev/main in .env
-    # to track a branch instead.
-    image: ghcr.io/whiparc/whiparc/api:${API_IMAGE_TAG:-stable}
+    # reuses that image instead of rebuilding it.
+    image: whiparc/api:dev
     container_name: whiparc-api-hosted
     ports:
       - "8080:8080"
@@ -88,13 +81,8 @@ services:
     # (apps/agent-gateway was extracted there with full history preserved via
     # `git subtree`, and now lives at github.com/whiparc/cloud/agent-gateway).
     # Requires `docker login ghcr.io` with read:packages on the whiparc org,
-    # since whiparc/cloud is a private repo. Defaults to `stable` (the most
-    # recently `vX.Y.Z`-tagged release, matching the api service's default
-    # above) — cutting a release means pushing the same `vX.Y.Z` tag to both
-    # whiparc/whiparc and whiparc/cloud, since there's no automated
-    # cross-repo trigger. Set AGENT_GATEWAY_IMAGE_TAG=latest in .env to track
-    # whiparc/cloud's main branch instead.
-    image: ghcr.io/whiparc/cloud/agent-gateway:${AGENT_GATEWAY_IMAGE_TAG:-stable}
+    # since whiparc/cloud is a private repo.
+    image: ghcr.io/whiparc/cloud/agent-gateway:latest
     container_name: whiparc-agent-gateway-hosted
     ports:
       - "9090:9090"
