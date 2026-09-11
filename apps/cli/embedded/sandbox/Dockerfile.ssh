@@ -4,7 +4,7 @@
 # until then this fails to resolve. Override with
 # `--build-arg BASE_IMAGE_TAG=latest` (or `=main`) for a production-style
 # build.
-ARG BASE_IMAGE_TAG=dev
+ARG BASE_IMAGE_TAG=stable
 FROM ghcr.io/whiparc/whiparc-sandbox-base:${BASE_IMAGE_TAG}
 
 # Copy the public key for passwordless authentication

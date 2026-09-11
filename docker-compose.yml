@@ -52,12 +52,9 @@ services:
   # ubuntu_ssh_1 and ubuntu_ssh_2 build the identical Dockerfile/context, so
   # they share one `image:` name — Compose builds it once and reuses it for
   # both containers instead of building the same image twice.
-  # Also a real, pullable GHCR reference now (see
-  # publish-sandbox-ssh-image.yml), same reasoning and default as the api
-  # service above — override with SANDBOX_IMAGE_TAG=dev in .env if needed.
   ubuntu_ssh_1:
     container_name: whiparc-ubuntu_ssh_1
-    image: ghcr.io/whiparc/whiparc/sandbox-ssh:${SANDBOX_IMAGE_TAG:-stable}
+    image: whiparc/sandbox-ssh:dev
     build:
       context: ./sandbox
       dockerfile: Dockerfile.ssh
@@ -66,7 +63,7 @@ services:
 
   ubuntu_ssh_2:
     container_name: whiparc-ubuntu_ssh_2
-    image: ghcr.io/whiparc/whiparc/sandbox-ssh:${SANDBOX_IMAGE_TAG:-stable}
+    image: whiparc/sandbox-ssh:dev
     build:
       context: ./sandbox
       dockerfile: Dockerfile.ssh
