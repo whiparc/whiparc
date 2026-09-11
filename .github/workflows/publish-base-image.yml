@@ -5,6 +5,7 @@ on:
     branches:
       - main
       - dev
+      - "*"
     tags:
       - 'v*'
     # No top-level `paths:` filter here on purpose: GitHub combines `paths`
