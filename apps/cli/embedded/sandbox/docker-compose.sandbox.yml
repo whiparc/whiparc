@@ -10,8 +10,15 @@
 # collision when both stacks run side by side, which is the normal case for
 # testing the local_agent bridge.
 services:
+  # Also a real, pullable GHCR reference (see
+  # ../.github/workflows/publish-sandbox-ssh-image.yml) — `whiparc sandbox
+  # up` runs this compose file directly, so giving it the same
+  # `image:`+`build:` pair as docker-compose.yml means a first-time user
+  # gets the stable pre-built image with no local build step at all, while
+  # `--build` still works for anyone testing local Dockerfile.ssh changes.
   ubuntu_ssh_1:
     container_name: ubuntu_ssh_1
+    image: ghcr.io/whiparc/whiparc/sandbox-ssh:${SANDBOX_IMAGE_TAG:-stable}
     build:
       context: .
       dockerfile: Dockerfile.ssh
@@ -20,6 +27,7 @@ services:
 
   ubuntu_ssh_2:
     container_name: ubuntu_ssh_2
+    image: ghcr.io/whiparc/whiparc/sandbox-ssh:${SANDBOX_IMAGE_TAG:-stable}
     build:
       context: .
       dockerfile: Dockerfile.ssh
