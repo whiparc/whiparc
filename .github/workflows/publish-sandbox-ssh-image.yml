@@ -1,0 +1,87 @@
+name: Publish Sandbox SSH Image to GHCR
+
+# sandbox/Dockerfile.ssh's final image (the "local machine" SSH targets used
+# by both docker-compose.yml and sandbox/docker-compose.sandbox.yml, driven
+# by `whiparc sandbox up`) had the same gap apps/api's did before
+# publish-api-image.yml: only its base layer (whiparc-sandbox-base) was ever
+# published, so `image: whiparc/sandbox-ssh:dev` was purely a local build
+# tag with nothing behind it on a fresh machine. This publishes the real
+# thing, same pattern as publish-api-image.yml.
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    tags:
+      - 'v*'
+    # No `paths:` filter — see publish-base-image.yml's trigger comment for
+    # why combining it with `tags:` would let a version-tag release silently
+    # skip publishing.
+  workflow_dispatch:
+
+concurrency:
+  group: publish-sandbox-ssh-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build & Publish Sandbox SSH Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Same tagging policy as publish-api-image.yml / publish-base-image.yml.
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/whiparc/sandbox-ssh
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=main,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=dev,enable=${{ github.ref_name == 'dev' }}
+            type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=${{ github.ref_name }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=ref,event=branch
+            type=sha,prefix=sha-,format=short
+
+      # Same base-image-track pinning reasoning as publish-api-image.yml.
+      - name: Resolve base image tag
+        id: base-tag
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "tag=stable" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "tag=main" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=dev" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and Push Sandbox SSH Image
+        uses: docker/build-push-action@v7
+        with:
+          context: ./sandbox
+          file: ./sandbox/Dockerfile.ssh
+          build-args: |
+            BASE_IMAGE_TAG=${{ steps.base-tag.outputs.tag }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=sandbox-ssh-image
+          cache-to: type=gha,mode=max,scope=sandbox-ssh-image
