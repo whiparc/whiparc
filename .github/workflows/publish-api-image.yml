@@ -1,0 +1,110 @@
+name: Publish API Image to GHCR
+
+# apps/api's final application image was never actually published anywhere —
+# only its base layer (whiparc-runner-base, see publish-base-image.yml) was.
+# Every docker-compose file's `image: whiparc/api:dev` was purely a local
+# build tag (meaningful only alongside that same service's `build:` key) —
+# fine for `docker compose up --build` on a machine with the full repo
+# checked out, but `docker compose up` without `--build` on a fresh
+# machine (no local image under that tag yet) tries to pull it as if it
+# were a real registry reference and fails with "pull access denied for
+# whiparc/api, repository does not exist" — there was never anything to
+# pull. This workflow is the fix: publish a real, pullable image, the same
+# way agent-gateway already is from whiparc/cloud (see
+# docker-compose.hosted.yml's agent-gateway comment) — except this one is
+# public, since whiparc/whiparc itself is public/source-available.
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    tags:
+      - 'v*'
+    # No `paths:` filter, deliberately: GitHub combines `paths` with
+    # `tags`/`branches` as an AND, so a version-tag push that happened not
+    # to touch apps/api/apps/cli directly would otherwise silently skip
+    # publishing — wrong for a release. See publish-base-image.yml's trigger
+    # comment for the same reasoning. The cost is this workflow now also
+    # runs (cheaply, GHA-cached) on branch pushes that don't touch this
+    # image's own inputs, which is an acceptable trade for release
+    # correctness.
+  workflow_dispatch:
+
+# Avoid two pushes to the same branch racing to publish/tag the same image.
+concurrency:
+  group: publish-api-image-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build & Publish API Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Log in to GitHub Container Registry (GHCR)
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Tagging policy — same as publish-base-image.yml's, see that file's
+      # trigger comment for the full reasoning: main moves latest/main, dev
+      # only moves dev, a `vX.Y.Z` git tag publishes an immutable `vX.Y.Z`
+      # tag AND moves the floating `stable` tag onto it (what every compose
+      # file here defaults to pulling), every build also gets an immutable
+      # sha-<short-sha> tag plus a tag matching its own branch name.
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/whiparc/api
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=main,enable=${{ github.ref_name == 'main' }}
+            type=raw,value=dev,enable=${{ github.ref_name == 'dev' }}
+            type=raw,value=stable,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=raw,value=${{ github.ref_name }},enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=ref,event=branch
+            type=sha,prefix=sha-,format=short
+
+      # Pin the runner-base layer to the matching release track so this
+      # image is never quietly built on top of a different track's base
+      # (see apps/api/Dockerfile's ARG BASE_IMAGE_TAG): a versioned release
+      # builds on runner-base's own `stable` tag (published by the same
+      # `vX.Y.Z` tag pushed to this repo — see publish-base-image.yml),
+      # main builds on runner-base:main, everything else (dev, PRs,
+      # workflow_dispatch off some other branch) builds on runner-base:dev.
+      - name: Resolve base image tag
+        id: base-tag
+        run: |
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "tag=stable" >> "$GITHUB_OUTPUT"
+          elif [[ "${{ github.ref_name }}" == "main" ]]; then
+            echo "tag=main" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=dev" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build and Push API Image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: ./apps/api/Dockerfile
+          build-args: |
+            BASE_IMAGE_TAG=${{ steps.base-tag.outputs.tag }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=api-image
+          cache-to: type=gha,mode=max,scope=api-image

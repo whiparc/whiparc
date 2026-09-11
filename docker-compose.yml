@@ -9,7 +9,14 @@ services:
     # Explicit (rather than Compose's default per-project name) so this
     # matches docker-compose.hosted.yml's api image — building one stack
     # then the other reuses the same image/cache instead of rebuilding it.
-    image: whiparc/api:dev
+    # Also a real, pullable GHCR reference (see publish-api-image.yml) —
+    # `docker compose up` without `--build` now pulls a real published image
+    # instead of failing with "pull access denied for whiparc/api", which
+    # is what the bare local tag `whiparc/api:dev` used to do. Defaults to
+    # `stable` (the most recently tagged vX.Y.Z release) so a first-time
+    # contributor gets a known-good image with zero setup; override with
+    # API_IMAGE_TAG=dev in .env to track the bleeding edge instead.
+    image: ghcr.io/whiparc/whiparc/api:${API_IMAGE_TAG:-stable}
     container_name: whiparc-api
     ports:
       - "8080:8080"
@@ -45,9 +52,12 @@ services:
   # ubuntu_ssh_1 and ubuntu_ssh_2 build the identical Dockerfile/context, so
   # they share one `image:` name — Compose builds it once and reuses it for
   # both containers instead of building the same image twice.
+  # Also a real, pullable GHCR reference now (see
+  # publish-sandbox-ssh-image.yml), same reasoning and default as the api
+  # service above — override with SANDBOX_IMAGE_TAG=dev in .env if needed.
   ubuntu_ssh_1:
     container_name: whiparc-ubuntu_ssh_1
-    image: whiparc/sandbox-ssh:dev
+    image: ghcr.io/whiparc/whiparc/sandbox-ssh:${SANDBOX_IMAGE_TAG:-stable}
     build:
       context: ./sandbox
       dockerfile: Dockerfile.ssh
@@ -56,7 +66,7 @@ services:
 
   ubuntu_ssh_2:
     container_name: whiparc-ubuntu_ssh_2
-    image: whiparc/sandbox-ssh:dev
+    image: ghcr.io/whiparc/whiparc/sandbox-ssh:${SANDBOX_IMAGE_TAG:-stable}
     build:
       context: ./sandbox
       dockerfile: Dockerfile.ssh
