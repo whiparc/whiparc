@@ -44,6 +44,12 @@ services:
     ports:
       - "8080:8080"
     env_file:
+      # Everything production-only (DB_DRIVER, DATABASE_URL, WHIPARC_MASTER_KEY,
+      # JWT_SECRET, FRONTEND_URL, OAuth client IDs/secrets — see .env.example)
+      # flows through here from a .env file placed alongside this compose
+      # file on the VM. Leaving DB_DRIVER/DATABASE_URL unset keeps the
+      # SQLite-on-a-volume behavior below; set DB_DRIVER=postgres and
+      # DATABASE_URL to a Supabase connection string for the hosted launch.
       - path: .env
         required: false
     environment:

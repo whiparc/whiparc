@@ -21,10 +21,26 @@ import (
 	"api/vault"
 
 	"github.com/gorilla/websocket"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/crypto/ssh"
 	_ "modernc.org/sqlite"
 )
+
+// maxPipelineLogBytes caps what gets persisted to pipeline_runs.logs once a
+// run finishes. Without this, a busy project's untruncated deploy logs are
+// the fastest way to eat a hosted Postgres free tier's storage quota — the
+// live WebSocket stream a client is watching during the run is always the
+// full, untruncated log; only the at-rest copy written at completion is
+// capped, keeping the tail (the part worth re-reading after the fact).
+const maxPipelineLogBytes = 200_000
+
+func truncateLogs(logs string) string {
+	if len(logs) <= maxPipelineLogBytes {
+		return logs
+	}
+	return logs[len(logs)-maxPipelineLogBytes:] + "\n...truncated..."
+}
 
 type PipelineRun struct {
 	ID        string    `json:"id"`
@@ -44,10 +60,11 @@ type RunTracker struct {
 }
 
 var (
-	db             *sql.DB
-	upgrader       = websocket.Upgrader{CheckOrigin: func(r *http.Request) bool { return true }}
-	trackers       = make(map[string]*RunTracker)
-	trackersMutex  sync.Mutex
+	db            *dbHandle
+	dbBackend     string // "sqlite" (default) or "postgres" — set once in main()
+	upgrader      = websocket.Upgrader{CheckOrigin: checkWebsocketOrigin}
+	trackers      = make(map[string]*RunTracker)
+	trackersMutex sync.Mutex
 )
 
 func main() {
@@ -55,234 +72,112 @@ func main() {
 	log.Println("  Whiparc Runner Go Backend Initialization   ")
 	log.Println("===================================================")
 
-	// Ensure the db folder exists
-	dbDir := "/app/data"
-	if os.Getenv("IS_DOCKER") != "true" {
-		dbDir = "./data"
+	dbBackend = strings.ToLower(os.Getenv("DB_DRIVER"))
+	if dbBackend == "" {
+		dbBackend = "sqlite"
 	}
-	_ = os.MkdirAll(dbDir, 0755)
 
-	dbPath := filepath.Join(dbDir, "dev.db")
-	log.Printf("[DB] Connecting to sqlite at %s\n", dbPath)
-
+	var rawDB *sql.DB
 	var err error
-	db, err = sql.Open("sqlite", dbPath)
-	if err != nil {
-		log.Fatalf("[DB] Failed to open database: %v\n", err)
+
+	switch dbBackend {
+	case "postgres":
+		dsn := os.Getenv("DATABASE_URL")
+		if dsn == "" {
+			log.Fatalf("[DB] DB_DRIVER=postgres requires DATABASE_URL to be set\n")
+		}
+		log.Println("[DB] Connecting to postgres")
+		rawDB, err = sql.Open("pgx", dsn)
+		if err != nil {
+			log.Fatalf("[DB] Failed to open database: %v\n", err)
+		}
+		// A real connection pool, unlike SQLite's forced single connection
+		// below — Postgres handles concurrent writers natively, so raising
+		// this is what actually buys the throughput this migration is for.
+		rawDB.SetMaxOpenConns(20)
+	default:
+		dbBackend = "sqlite"
+		// Ensure the db folder exists
+		dbDir := "/app/data"
+		if os.Getenv("IS_DOCKER") != "true" {
+			dbDir = "./data"
+		}
+		_ = os.MkdirAll(dbDir, 0755)
+
+		dbPath := filepath.Join(dbDir, "dev.db")
+		log.Printf("[DB] Connecting to sqlite at %s\n", dbPath)
+
+		rawDB, err = sql.Open("sqlite", dbPath)
+		if err != nil {
+			log.Fatalf("[DB] Failed to open database: %v\n", err)
+		}
+
+		// SQLite only ever allows one writer at a time, but database/sql's
+		// connection pool opens multiple physical connections to this file by
+		// default — a second writer then gets an immediate "database is locked"
+		// error (SQLITE_BUSY) instead of waiting, since no busy_timeout is set.
+		// Forcing a single connection makes Go's pool respect SQLite's actual
+		// concurrency model instead of fighting it; busy_timeout is kept as a
+		// belt-and-suspenders guard against an external lock (e.g. a manual
+		// sqlite3 CLI session touching the same file). See
+		// obsidian_memory/07.2 for the incident this was found from.
+		rawDB.SetMaxOpenConns(1)
+		if _, err := rawDB.Exec("PRAGMA busy_timeout = 5000;"); err != nil {
+			log.Fatalf("[DB] Failed to set busy_timeout pragma: %v\n", err)
+		}
 	}
+
+	db = &dbHandle{DB: rawDB, backend: dbBackend}
 	defer db.Close()
 
-	// SQLite only ever allows one writer at a time, but database/sql's
-	// connection pool opens multiple physical connections to this file by
-	// default — a second writer then gets an immediate "database is locked"
-	// error (SQLITE_BUSY) instead of waiting, since no busy_timeout is set.
-	// Forcing a single connection makes Go's pool respect SQLite's actual
-	// concurrency model instead of fighting it; busy_timeout is kept as a
-	// belt-and-suspenders guard against an external lock (e.g. a manual
-	// sqlite3 CLI session touching the same file). See
-	// obsidian_memory/07.2 for the incident this was found from.
-	db.SetMaxOpenConns(1)
-	if _, err := db.Exec("PRAGMA busy_timeout = 5000;"); err != nil {
-		log.Fatalf("[DB] Failed to set busy_timeout pragma: %v\n", err)
-	}
-
 	// Create table if not exists
-	schemaQuery := `
-	CREATE TABLE IF NOT EXISTS pipeline_runs (
-		id TEXT PRIMARY KEY,
-		status TEXT NOT NULL,
-		logs TEXT NOT NULL,
-		canvas TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-	CREATE TABLE IF NOT EXISTS users (
-		id TEXT PRIMARY KEY,
-		email TEXT UNIQUE NOT NULL,
-		password_hash TEXT,
-		name TEXT NOT NULL,
-		plan TEXT NOT NULL DEFAULT 'FREE' CHECK (plan IN ('FREE', 'PRO', 'ENTERPRISE')),
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	);
-	CREATE TABLE IF NOT EXISTS teams (
-		id TEXT PRIMARY KEY,
-		name TEXT NOT NULL,
-		slug TEXT UNIQUE NOT NULL,
-		owner_id TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (owner_id) REFERENCES users(id) ON DELETE RESTRICT
-	);
-	CREATE TABLE IF NOT EXISTS team_members (
-		id TEXT PRIMARY KEY,
-		team_id TEXT NOT NULL,
-		user_id TEXT NOT NULL,
-		role TEXT NOT NULL CHECK (role IN ('OWNER', 'ADMIN', 'MEMBER')),
-		joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(team_id, user_id),
-		FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-	);
-	CREATE TABLE IF NOT EXISTS projects (
-		id TEXT PRIMARY KEY,
-		team_id TEXT NOT NULL,
-		name TEXT NOT NULL,
-		description TEXT,
-		visibility TEXT NOT NULL DEFAULT 'PRIVATE' CHECK (visibility IN ('PRIVATE', 'TEAM', 'PUBLIC')),
-		created_by TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
-		FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
-	);
-	CREATE TABLE IF NOT EXISTS project_members (
-		id TEXT PRIMARY KEY,
-		project_id TEXT NOT NULL,
-		user_id TEXT NOT NULL,
-		role TEXT NOT NULL CHECK (role IN ('ADMIN', 'EDITOR', 'VIEWER')),
-		added_by TEXT NOT NULL,
-		joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(project_id, user_id),
-		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-	);
-	CREATE TABLE IF NOT EXISTS project_join_requests (
-		id TEXT PRIMARY KEY,
-		project_id TEXT NOT NULL,
-		user_id TEXT NOT NULL,
-		status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED')),
-		note TEXT,
-		reviewed_by TEXT,
-		requested_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		reviewed_at DATETIME,
-		UNIQUE(project_id, user_id, status),
-		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-	);
-	CREATE TABLE IF NOT EXISTS invitations (
-		id TEXT PRIMARY KEY,
-		team_id TEXT NOT NULL,
-		project_id TEXT,
-		email TEXT NOT NULL,
-		role TEXT NOT NULL,
-		token TEXT UNIQUE NOT NULL,
-		status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACCEPTED', 'EXPIRED')),
-		invited_by TEXT NOT NULL,
-		expires_at DATETIME NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (team_id) REFERENCES teams(id) ON DELETE CASCADE,
-		FOREIGN KEY (invited_by) REFERENCES users(id) ON DELETE CASCADE
-	);
-	CREATE TABLE IF NOT EXISTS canvas_states (
-		project_id TEXT PRIMARY KEY,
-		version INTEGER NOT NULL DEFAULT 1,
-		nodes_json TEXT NOT NULL,
-		edges_json TEXT NOT NULL,
-		viewport_json TEXT NOT NULL,
-		updated_by TEXT NOT NULL,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-		FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE RESTRICT
-	);
-	CREATE TABLE IF NOT EXISTS canvas_snapshots (
-		id TEXT PRIMARY KEY,
-		project_id TEXT NOT NULL,
-		version INTEGER NOT NULL,
-		commit_message TEXT,
-		nodes_json TEXT NOT NULL,
-		edges_json TEXT NOT NULL,
-		created_by TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-		FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
-	);
-	CREATE TABLE IF NOT EXISTS custom_nodes (
-		id TEXT PRIMARY KEY,
-		project_id TEXT NOT NULL,
-		created_by TEXT NOT NULL,
-		title TEXT NOT NULL,
-		tech TEXT NOT NULL CHECK (tech IN ('Terraform', 'Ansible', 'Kubernetes')),
-		category TEXT NOT NULL DEFAULT 'Custom Blocks',
-		description TEXT,
-		code_type TEXT NOT NULL CHECK (code_type IN ('tf', 'yml', 'yaml')),
-		raw_code TEXT NOT NULL,
-		parsed_meta_json TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-		FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
-	);
-	CREATE TABLE IF NOT EXISTS oauth_identities (
-		id TEXT PRIMARY KEY,
-		user_id TEXT NOT NULL,
-		provider TEXT NOT NULL CHECK (provider IN ('google', 'github')),
-		provider_user_id TEXT NOT NULL,
-		email TEXT,
-		access_token TEXT,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		UNIQUE(provider, provider_user_id),
-		UNIQUE(user_id, provider),
-		FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-	);
-	CREATE TABLE IF NOT EXISTS cloud_credentials (
-		id TEXT PRIMARY KEY,
-		project_id TEXT NOT NULL,
-		provider TEXT NOT NULL CHECK (provider IN ('AWS', 'GCP', 'SSH', 'GITHUB')),
-		name TEXT NOT NULL,
-		encrypted_data BLOB NOT NULL,
-		nonce BLOB NOT NULL,
-		auth_tag BLOB NOT NULL,
-		key_fingerprint TEXT NOT NULL,
-		created_by TEXT NOT NULL,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-		FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
-	);
-	CREATE TABLE IF NOT EXISTS paired_agents (
-		id TEXT PRIMARY KEY,
-		project_id TEXT NOT NULL,
-		agent_id TEXT UNIQUE NOT NULL,
-		name TEXT NOT NULL,
-		public_key TEXT NOT NULL,
-		encrypted_private_key BLOB NOT NULL,
-		nonce BLOB NOT NULL,
-		auth_tag BLOB NOT NULL,
-		key_fingerprint TEXT NOT NULL,
-		status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'ACTIVE', 'REVOKED', 'DISCONNECTED')),
-		created_by TEXT NOT NULL,
-		registered_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		last_seen_at DATETIME,
-		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
-		FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE RESTRICT
-	);
-	CREATE TABLE IF NOT EXISTS agent_pairing_tokens (
-		token_hash TEXT PRIMARY KEY,
-		project_id TEXT NOT NULL,
-		agent_id TEXT,
-		issued_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-		revoked_at DATETIME,
-		FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
-	);`
+	schemaQuery := sqliteSchemaSQL
+	if dbBackend == "postgres" {
+		schemaQuery = pgSchema(schemaQuery)
+	}
 	if _, err := db.Exec(schemaQuery); err != nil {
 		log.Fatalf("[DB] Failed to initialize schema: %v\n", err)
 	}
-	// Run migrations to alter existing pipeline_runs table columns safely
-	_, _ = db.Exec("ALTER TABLE pipeline_runs ADD COLUMN project_id TEXT;")
-	_, _ = db.Exec("ALTER TABLE pipeline_runs ADD COLUMN user_id TEXT;")
-	_, _ = db.Exec("ALTER TABLE users ADD COLUMN plan TEXT NOT NULL DEFAULT 'FREE' CHECK (plan IN ('FREE', 'PRO', 'ENTERPRISE'));")
-	if err := migrateUsersPasswordHashNullable(); err != nil {
-		log.Fatalf("[DB] Failed to migrate users.password_hash to nullable: %v\n", err)
+
+	// Run migrations to alter existing pipeline_runs table columns safely.
+	// Postgres supports ADD COLUMN IF NOT EXISTS natively, so it doesn't need
+	// SQLite's "just ignore the duplicate-column error" approach.
+	addColumnIfNotExists := ""
+	if dbBackend == "postgres" {
+		addColumnIfNotExists = " IF NOT EXISTS"
 	}
-	if err := migrateCloudCredentialsProviderGithub(); err != nil {
-		log.Fatalf("[DB] Failed to migrate cloud_credentials to allow GITHUB: %v\n", err)
+	_, _ = db.Exec(fmt.Sprintf("ALTER TABLE pipeline_runs ADD COLUMN%s project_id TEXT;", addColumnIfNotExists))
+	_, _ = db.Exec(fmt.Sprintf("ALTER TABLE pipeline_runs ADD COLUMN%s user_id TEXT;", addColumnIfNotExists))
+	_, _ = db.Exec(fmt.Sprintf("ALTER TABLE users ADD COLUMN%s plan TEXT NOT NULL DEFAULT 'FREE' CHECK (plan IN ('FREE', 'PRO', 'ENTERPRISE'));", addColumnIfNotExists))
+
+	// The three migrations below exist only to bring a *pre-existing* SQLite
+	// database's constraints up to date with schemaQuery above (rebuilding a
+	// table is SQLite's only way to relax a NOT NULL or widen a CHECK
+	// constraint). schemaQuery already creates a fresh Postgres database with
+	// every one of these constraints in its final shape, and they lean on
+	// SQLite-only introspection (PRAGMA table_info, sqlite_master) that has
+	// no Postgres equivalent — so there is nothing for them to do there.
+	if dbBackend == "sqlite" {
+		if err := migrateUsersPasswordHashNullable(); err != nil {
+			log.Fatalf("[DB] Failed to migrate users.password_hash to nullable: %v\n", err)
+		}
+		if err := migrateCloudCredentialsProviderGithub(); err != nil {
+			log.Fatalf("[DB] Failed to migrate cloud_credentials to allow GITHUB: %v\n", err)
+		}
+		if err := migratePairedAgentsStatusAllowsDisconnected(); err != nil {
+			log.Fatalf("[DB] Failed to migrate paired_agents.status CHECK constraint: %v\n", err)
+		}
 	}
-	if err := migratePairedAgentsStatusAllowsDisconnected(); err != nil {
-		log.Fatalf("[DB] Failed to migrate paired_agents.status CHECK constraint: %v\n", err)
+	if err := seedOfficialTemplates(); err != nil {
+		log.Fatalf("[DB] Failed to seed official templates: %v\n", err)
 	}
 	log.Println("[DB] Database initialized successfully.")
 
 	// Set up routing
 	mux := http.NewServeMux()
+
+	// Unauthenticated — polled by the reverse proxy / uptime monitor.
+	mux.HandleFunc("GET /healthz", handleHealthz)
 
 	// API Routes
 	mux.Handle("GET /api/projects/{id}/runs", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleGetRuns))))
@@ -316,6 +211,7 @@ func main() {
 	mux.Handle("GET /api/projects/{id}/credentials", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleGetProjectCredentials))))
 	mux.Handle("POST /api/projects/{id}/credentials", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleCreateProjectCredential))))
 	mux.Handle("DELETE /api/projects/{id}/credentials/{credId}", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleDeleteProjectCredential))))
+	mux.Handle("POST /api/projects/{id}/templates", AuthMiddleware(RequireProjectRole("ADMIN")(http.HandlerFunc(handlePublishProjectAsTemplate))))
 	mux.Handle("GET /api/projects/{id}/members", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleGetProjectMembers))))
 	mux.Handle("POST /api/projects/{id}/members", AuthMiddleware(RequireProjectRole("ADMIN")(http.HandlerFunc(handleAddProjectMember))))
 	mux.Handle("PUT /api/projects/{id}/members/{userId}", AuthMiddleware(RequireProjectRole("ADMIN")(http.HandlerFunc(handleUpdateProjectMemberRole))))
@@ -326,6 +222,14 @@ func main() {
 	mux.Handle("GET /api/projects/{id}/custom-nodes", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleGetCustomNodes))))
 	mux.Handle("POST /api/projects/{id}/custom-nodes", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleCreateCustomNode))))
 	mux.Handle("DELETE /api/projects/{id}/custom-nodes/{nodeId}", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleDeleteCustomNode))))
+
+	// Template Catalog Routes (public, no auth — see product-memory 01.3
+	// and 08.1 in whiparc/cloud for schema rationale and MVP scope notes)
+	mux.HandleFunc("GET /api/templates", enableCORS(handleListTemplates))
+	mux.HandleFunc("GET /api/templates/{id}", enableCORS(handleGetTemplateByID))
+	mux.Handle("POST /api/templates/{id}/use", AuthMiddleware(http.HandlerFunc(handleUseTemplate)))
+	mux.Handle("PATCH /api/templates/{id}", AuthMiddleware(http.HandlerFunc(handleUpdateTemplate)))
+	mux.Handle("DELETE /api/templates/{id}", AuthMiddleware(http.HandlerFunc(handleDeleteTemplate)))
 
 	// Join Requests
 	mux.Handle("POST /api/projects/{id}/join-request", AuthMiddleware(http.HandlerFunc(handleCreateJoinRequest)))
@@ -380,10 +284,35 @@ func main() {
 	}
 }
 
+// allowedOrigin returns the single origin the API accepts cross-origin
+// requests from. FRONTEND_URL is already the production-vs-dev switch this
+// codebase uses for the OAuth redirect target (see oauth.go), so it doubles
+// as the CORS allowlist instead of introducing a second env var that could
+// drift from it — in production this must be set to https://whiparc.com; the
+// "*" fallback only exists so local dev (no env vars set) keeps working.
+func allowedOrigin() string {
+	if v := os.Getenv("FRONTEND_URL"); v != "" {
+		return v
+	}
+	return "*"
+}
+
+// checkWebsocketOrigin gates the WebSocket upgrader the same way as the
+// plain HTTP CORS helpers below — an open CheckOrigin (the previous
+// `return true` default) lets any site's browser JS open a run's live log
+// stream on a signed-in user's behalf.
+func checkWebsocketOrigin(r *http.Request) bool {
+	allowed := allowedOrigin()
+	if allowed == "*" {
+		return true
+	}
+	return r.Header.Get("Origin") == allowed
+}
+
 // CORSWrapper handles CORS for all incoming API routes and intercepts OPTIONS preflight requests
 func CORSWrapper(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin())
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == "OPTIONS" {
@@ -397,7 +326,7 @@ func CORSWrapper(next http.Handler) http.Handler {
 // CORS Helper middleware
 func enableCORS(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		w.Header().Set("Access-Control-Allow-Origin", allowedOrigin())
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 		if r.Method == "OPTIONS" {
@@ -409,10 +338,25 @@ func enableCORS(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func handleOptions(w http.ResponseWriter, _ *http.Request) {
-	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Origin", allowedOrigin())
 	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
 	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 	w.WriteHeader(http.StatusOK)
+}
+
+// handleHealthz is polled by the reverse proxy / uptime monitor in
+// production — it only reports healthy once the DB connection this process
+// opened at startup is actually reachable, so a Postgres outage (or a
+// SQLite file gone missing) shows up as a failing health check instead of a
+// misleadingly-alive process.
+func handleHealthz(w http.ResponseWriter, r *http.Request) {
+	if err := db.Ping(); err != nil {
+		w.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = w.Write([]byte("db unreachable: " + err.Error()))
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write([]byte("ok"))
 }
 
 func handleGetRuns(w http.ResponseWriter, r *http.Request) {
@@ -653,7 +597,7 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 			broadcastToTracker(runID, "status_change", status)
 		}, func(finalStatus string, logs string) {
 			tracker.Lock()
-			finalLogs := tracker.logs
+			finalLogs := truncateLogs(tracker.logs)
 			tracker.Unlock()
 
 			// Complete execution: commit to DB
@@ -927,7 +871,7 @@ func handleDestroy(w http.ResponseWriter, r *http.Request) {
 			broadcastNodeStatus(runID, nodeId, status)
 		}, nil, func(finalStatus string, logs string) {
 			tracker.Lock()
-			finalLogs := tracker.logs
+			finalLogs := truncateLogs(tracker.logs)
 			tracker.Unlock()
 
 			_, err = db.Exec("UPDATE pipeline_runs SET status = ?, logs = ?, updated_at = datetime('now') WHERE id = ?", finalStatus, finalLogs, runID)
@@ -959,7 +903,21 @@ func handleDestroy(w http.ResponseWriter, r *http.Request) {
 
 // --- AUTHENTICATION & COLLABORATION STACK IMPLEMENTATION ---
 
-var jwtSecret = []byte("whiparc_workspace_orchestration_secret_key_98765!")
+// jwtSecret signs every session token this API issues — anyone who knows it
+// can forge a valid token for any user. It used to be hardcoded here with no
+// override, which is harmless on a laptop but means a public deployment that
+// never sets JWT_SECRET is signing every user's session with a secret that's
+// sitting in the public source tree.
+var jwtSecret []byte
+
+func init() {
+	keyStr := os.Getenv("JWT_SECRET")
+	if keyStr == "" {
+		log.Println("[AUTH] WARNING: JWT_SECRET is not set — falling back to the built-in development key. Set a real random secret before exposing this API publicly.")
+		keyStr = "whiparc_workspace_orchestration_secret_key_98765!"
+	}
+	jwtSecret = []byte(keyStr)
+}
 
 type TokenHeader struct {
 	Alg string `json:"alg"`

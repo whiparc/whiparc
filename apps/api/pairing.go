@@ -444,9 +444,20 @@ func handleRegisterAgentToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := db.Exec(`INSERT OR REPLACE INTO agent_pairing_tokens (token_hash, project_id, agent_id, issued_at, revoked_at)
-		VALUES (?, ?, ?, datetime('now'), NULL)`,
-		hashAgentToken(payload.Token), payload.ProjectID, payload.AgentID)
+	upsertQuery := `INSERT OR REPLACE INTO agent_pairing_tokens (token_hash, project_id, agent_id, issued_at, revoked_at)
+		VALUES (?, ?, ?, datetime('now'), NULL)`
+	if dbBackend == "postgres" {
+		// Postgres has no "OR REPLACE" — token_hash is the primary key, so an
+		// upsert on conflict with it is the equivalent behavior.
+		upsertQuery = `INSERT INTO agent_pairing_tokens (token_hash, project_id, agent_id, issued_at, revoked_at)
+			VALUES (?, ?, ?, datetime('now'), NULL)
+			ON CONFLICT (token_hash) DO UPDATE SET
+				project_id = EXCLUDED.project_id,
+				agent_id = EXCLUDED.agent_id,
+				issued_at = EXCLUDED.issued_at,
+				revoked_at = EXCLUDED.revoked_at`
+	}
+	_, err := db.Exec(upsertQuery, hashAgentToken(payload.Token), payload.ProjectID, payload.AgentID)
 	if err != nil {
 		log.Printf("[SANDBOX AGENT] Failed to persist agent pairing token for project %s: %v\n", payload.ProjectID, err)
 		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)

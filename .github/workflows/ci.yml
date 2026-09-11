@@ -40,6 +40,23 @@ jobs:
       fail-fast: false
       matrix:
         module: [apps/api, apps/cli]
+    # Only apps/api touches a database, but Postgres services are cheap and
+    # scoped to the job — no reason to split apps/api into its own job just
+    # to give it one. apps/cli's test step below simply never sets
+    # TEST_DATABASE_URL, so its tests run exactly as before.
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: whiparc_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
@@ -60,4 +77,6 @@ jobs:
 
       - name: Test
         working-directory: ${{ matrix.module }}
+        env:
+          TEST_DATABASE_URL: ${{ matrix.module == 'apps/api' && 'postgres://postgres:postgres@localhost:5432/whiparc_test?sslmode=disable' || '' }}
         run: go test ./...

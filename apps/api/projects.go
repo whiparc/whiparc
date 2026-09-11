@@ -469,8 +469,13 @@ func handleApproveJoinRequest(w http.ResponseWriter, r *http.Request) {
 
 	// Add user to project_members
 	pmemID := fmt.Sprintf("pmem_%d", time.Now().UnixNano())
-	_, err = tx.Exec("INSERT OR IGNORE INTO project_members (id, project_id, user_id, role, added_by) VALUES (?, ?, ?, ?, ?)",
-		pmemID, projectID, reqUserID, "EDITOR", user.ID)
+	insertMemberQuery := "INSERT OR IGNORE INTO project_members (id, project_id, user_id, role, added_by) VALUES (?, ?, ?, ?, ?)"
+	if dbBackend == "postgres" {
+		// Postgres has no "OR IGNORE" — project_members has a UNIQUE(project_id,
+		// user_id) constraint, so ignoring a conflict on it is the equivalent.
+		insertMemberQuery = "INSERT INTO project_members (id, project_id, user_id, role, added_by) VALUES (?, ?, ?, ?, ?) ON CONFLICT (project_id, user_id) DO NOTHING"
+	}
+	_, err = tx.Exec(insertMemberQuery, pmemID, projectID, reqUserID, "EDITOR", user.ID)
 	if err != nil {
 		http.Error(w, "Failed to add project membership: "+err.Error(), http.StatusInternalServerError)
 		return
