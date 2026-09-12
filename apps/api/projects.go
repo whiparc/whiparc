@@ -154,17 +154,26 @@ func handleGetProjects(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// NOTE: no GROUP BY here. project_members has UNIQUE(project_id, user_id)
+	// and team_members has UNIQUE(team_id, user_id), so filtering both joins
+	// to a single user_id already guarantees at most one matching row per
+	// project — a GROUP BY p.id was never needed for de-duplication. It was
+	// removed because Postgres (unlike SQLite) rejects selecting pm.role
+	// un-aggregated when grouping only by p.id ("column pm.role must appear
+	// in the GROUP BY clause or be used in an aggregate function"), which
+	// made this entire query fail on Postgres — the real cause of projects
+	// never showing up after the Supabase migration even though creation
+	// succeeded.
 	query := `
 		SELECT p.id, p.team_id, p.name, p.description, p.visibility, p.created_by, p.created_at, p.updated_at,
 		       COALESCE(pm.role, CASE WHEN p.created_by = ? THEN 'ADMIN' ELSE '' END) as user_role
 		FROM projects p
 		LEFT JOIN project_members pm ON pm.project_id = p.id AND pm.user_id = ?
 		LEFT JOIN team_members tm ON tm.team_id = p.team_id AND tm.user_id = ?
-		WHERE p.created_by = ? 
-		   OR pm.user_id IS NOT NULL 
-		   OR (p.visibility = 'TEAM' AND tm.user_id IS NOT NULL) 
-		   OR p.visibility = 'PUBLIC'
-		GROUP BY p.id`
+		WHERE p.created_by = ?
+		   OR pm.user_id IS NOT NULL
+		   OR (p.visibility = 'TEAM' AND tm.user_id IS NOT NULL)
+		   OR p.visibility = 'PUBLIC'`
 
 	rows, err := db.Query(query, user.ID, user.ID, user.ID, user.ID)
 	if err != nil {
@@ -373,7 +382,7 @@ func handleCreateJoinRequest(w http.ResponseWriter, r *http.Request) {
 	_, err = db.Exec("INSERT INTO project_join_requests (id, project_id, user_id, note) VALUES (?, ?, ?, ?)",
 		reqID, projectID, user.ID, payload.Note)
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE") {
+		if isUniqueConstraintErr(err) {
 			http.Error(w, "A request is already pending or approved for this project", http.StatusConflict)
 		} else {
 			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
@@ -767,7 +776,7 @@ func handleAddProjectMember(w http.ResponseWriter, r *http.Request) {
 	_, err = db.Exec("INSERT INTO project_members (id, project_id, user_id, role, added_by) VALUES (?, ?, ?, ?, ?)",
 		memberID, projectID, targetUserID, payload.Role, user.ID)
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+		if isUniqueConstraintErr(err) {
 			http.Error(w, "User is already a member of this project", http.StatusConflict)
 			return
 		}

@@ -168,6 +168,9 @@ func main() {
 			log.Fatalf("[DB] Failed to migrate paired_agents.status CHECK constraint: %v\n", err)
 		}
 	}
+	if err := runMigrations(db); err != nil {
+		log.Fatalf("[DB] Failed to run migrations: %v\n", err)
+	}
 	if err := seedOfficialTemplates(); err != nil {
 		log.Fatalf("[DB] Failed to seed official templates: %v\n", err)
 	}
@@ -1036,7 +1039,11 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 	insertQuery := "INSERT INTO users (id, email, password_hash, name) VALUES (?, ?, ?, ?)"
 	_, err = tx.Exec(insertQuery, userID, email, hash, name)
 	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE") {
+		// SQLite reports "UNIQUE constraint failed", Postgres reports
+		// "duplicate key value violates unique constraint" (lowercase) —
+		// match case-insensitively on "unique" so this branch fires on both
+		// backends instead of leaking the raw Postgres error to the client.
+		if strings.Contains(strings.ToLower(err.Error()), "unique") {
 			http.Error(w, "Email already exists", http.StatusConflict)
 		} else {
 			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
