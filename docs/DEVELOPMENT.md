@@ -107,6 +107,8 @@ By default:
 - The server listens on port `8080` (overwrite by setting the `PORT`
   environment variable).
 - It creates and connects to a SQLite database at `apps/api/data/dev.db`.
+  This is the default for local development and for contributors — no
+  external database or account is needed to run or test Whiparc.
 - It reads the private SSH key from `../../sandbox/id_rsa` to authenticate
   against the sandbox containers.
 
@@ -118,6 +120,38 @@ DevOps sandbox) in containerized form:
 ```bash
 docker compose up --build
 ```
+
+This also defaults to the SQLite file (on the `api-db-data` named volume) —
+`docker-compose.yml` does not set `DB_DRIVER`.
+
+## Testing Against the Hosted Stack (Postgres) Locally
+
+The production deployment runs against Postgres (currently Supabase), not
+SQLite. Contributors do not need this — it's for maintainers who need to
+reproduce hosted-only behavior (e.g. Postgres-specific SQL errors) before it
+reaches production.
+
+`docker-compose.hosted.yml` simulates the hosted backend (`api` +
+`agent-gateway` + LocalStack) as a separate Compose project:
+
+```bash
+docker compose -f docker-compose.hosted.yml up --build
+```
+
+Set `DB_DRIVER=postgres` and `DATABASE_URL` (see `.env.example`) before
+running it to point at a real Postgres instance — a local `postgres:16`
+container, or a scratch Supabase project. Leaving both unset keeps this
+compose file on SQLite as well.
+
+The API's `apps/api/db_driver.go` is the single abstraction point between
+the two backends: one SQLite-dialect schema is the source of truth, and a
+small query-rebinding shim (placeholders, `LIKE`→`ILIKE`, `datetime('now')`)
+adapts it to Postgres at runtime. When adding a new raw SQL query, keep it
+written in SQLite's dialect and consider whether it needs a
+backend-specific branch (see the `INSERT OR IGNORE`/`INSERT OR REPLACE`
+call sites in `projects.go`/`pairing.go` for the pattern), the same way
+`.github/workflows/ci.yml` already runs the Go test suite against a real
+`postgres:16-alpine` service container on every PR.
 
 ## CI
 
