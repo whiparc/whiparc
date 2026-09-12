@@ -147,3 +147,21 @@ body {
   background-color: var(--tertiary) !important;
   box-shadow: 0 0 16px var(--tertiary), 0 0 8px var(--tertiary) !important;
 }
+
+/* 3. React Flow Edge Label Theme Styling */
+.react-flow__edge-textbg {
+  fill: #0D0F16 !important;
+  stroke: #1E2233 !important;
+  stroke-width: 1px !important;
+  rx: 6px !important;
+  ry: 6px !important;
+}
+
+.react-flow__edge-text {
+  fill: #F1F5F9 !important;
+  font-family: var(--font-sans) !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.025em !important;
+}
+

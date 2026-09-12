@@ -309,8 +309,6 @@ variable "gcp_ssh_pub_key" {
         const tagsList = p.tags || [{ key: 'Environment', value: 'prod' }, { key: 'Role', value: 'web' }];
         const tagLines = tagsList.map((t: Tag) => `${t.key} = "${t.value}"`).join('\n    ');
 
-        const awsTargetNode = connectedTargets.find(t => t.id.startsWith('aws_target'));
-        const awsEnv = (awsTargetNode?.data as unknown as CanvasNodeData)?.environment || 'localstack';
         let subnetLine = '';
         if (p.subnetId) {
           const val = p.subnetId.trim();
@@ -968,8 +966,6 @@ export function generateBundleFiles(nodes: Node[], edges: Edge[]): FileItem[] {
   }
 
   if (hasAnsible) {
-    const targetNode = nodes.find(n => (n.data as unknown as CanvasNodeData)?.tech === 'Target');
-    const isGcp = targetNode?.id.startsWith('gcp_target');
     const playbookYml = generateAnsibleYAML(nodes, edges);
     const colon = ':';
 
