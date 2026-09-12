@@ -12,6 +12,7 @@ import {
   useReactFlow,
   Connection,
   Edge,
+  MarkerType,
   Node,
   NodeChange,
   EdgeChange
@@ -20,7 +21,7 @@ import '@xyflow/react/dist/style.css';
 import { Icon } from '@iconify/react';
 import { clsx } from 'clsx';
 
-import useCanvasStore, { getInitialNodes, getInitialEdges } from '../store/useCanvasStore';
+import useCanvasStore, { getInitialNodes, getInitialEdges, resolveMarkerColor } from '../store/useCanvasStore';
 import ReactFlowCanvasNode from '../components/ReactFlowCanvasNode';
 import ProfileMenu from '../components/ProfileMenu';
 import Tooltip from '../components/Tooltip';
@@ -3618,6 +3619,33 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
     onConnect(params);
   }, [onConnect, isReadOnly]);
 
+  const styledEdges = useMemo(() => {
+    return edges.map((edge) => {
+      const stroke = (edge.style?.stroke as string) || '#8B5CF6';
+      return {
+        ...edge,
+        labelStyle: edge.labelStyle || {
+          fill: '#F1F5F9',
+          fontSize: 11,
+          fontWeight: 600,
+        },
+        labelBgStyle: edge.labelBgStyle || {
+          fill: '#0D0F16',
+          stroke: '#1E2233',
+          strokeWidth: 1,
+        },
+        labelBgPadding: edge.labelBgPadding || [8, 4],
+        labelBgBorderRadius: edge.labelBgBorderRadius || 6,
+        markerEnd: edge.markerEnd || {
+          type: MarkerType.ArrowClosed,
+          width: 12,
+          height: 12,
+          color: resolveMarkerColor(stroke),
+        },
+      };
+    });
+  }, [edges]);
+
   const nodeTypes = useMemo(() => ({ customNode: ReactFlowCanvasNode }), []);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
@@ -3735,7 +3763,26 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
       ))}
       <ReactFlow
         nodes={nodes}
-        edges={edges}
+        edges={styledEdges}
+        defaultEdgeOptions={{
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 12,
+            height: 12,
+          },
+          labelStyle: {
+            fill: '#F1F5F9',
+            fontSize: 11,
+            fontWeight: 600,
+          },
+          labelBgStyle: {
+            fill: '#0D0F16',
+            stroke: '#1E2233',
+            strokeWidth: 1,
+          },
+          labelBgPadding: [8, 4],
+          labelBgBorderRadius: 6,
+        }}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}

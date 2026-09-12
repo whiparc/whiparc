@@ -47,10 +47,14 @@ function ExecutionStatusBar({ status, isDestroy }: { status: NodeExecutionStatus
 }
 
 export default function ReactFlowCanvasNode({ id, data, selected }: ReactFlowCanvasNodeProps) {
-  const { setSelectedNodeId, deleteNode, selectedNodeId } = useCanvasStore();
+  const { setSelectedNodeId, deleteNode, selectedNodeId, edges, deleteEdge, saveStatus } = useCanvasStore();
   const isExecuting = useCanvasStore((state) => state.isExecuting);
   const execStatus = useCanvasStore((state) => state.executionStatuses[id] ?? 'idle');
   const pipelineAction = useCanvasStore((state) => state.pipelineAction);
+  const isReadOnly = isExecuting || saveStatus === 'readonly';
+
+  const incomingEdges = React.useMemo(() => edges.filter((e) => e.target === id), [edges, id]);
+  const outgoingEdges = React.useMemo(() => edges.filter((e) => e.source === id), [edges, id]);
 
   // Zustand selectedNodeId is the single source of truth for the active marker.
   // React Flow's `selected` prop is intentionally ignored here — it reflects internal
@@ -114,6 +118,21 @@ export default function ReactFlowCanvasNode({ id, data, selected }: ReactFlowCan
           className="!w-3 !h-3 !rounded-full !border-2 !border-primary !bg-background hover:!bg-primary !transition-colors !cursor-crosshair !left-[-6px] !top-1/2 !transform !-translate-y-1/2 !border-solid !opacity-100"
           style={{ position: 'absolute', zIndex: 30 }}
         />
+        {!isReadOnly && incomingEdges.length > 0 && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              incomingEdges.forEach((edge) => deleteEdge(edge.id));
+            }}
+            className="absolute -left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-slate-900 border border-amber-500 text-amber-500 hover:bg-amber-500 hover:text-slate-950 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150 z-40 shadow-md cursor-pointer"
+            title="Clear incoming connection"
+            aria-label="Clear incoming connection"
+          >
+            <Icon icon="lucide:x" className="text-[10px] font-bold" />
+          </button>
+        )}
 
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-1.5 pr-6">
@@ -160,6 +179,21 @@ export default function ReactFlowCanvasNode({ id, data, selected }: ReactFlowCan
           className="!w-3 !h-3 !rounded-full !border-2 !border-primary !bg-background hover:!bg-primary !transition-colors !cursor-crosshair !right-[-6px] !top-1/2 !transform !-translate-y-1/2 !border-solid !opacity-100"
           style={{ position: 'absolute', zIndex: 30 }}
         />
+        {!isReadOnly && outgoingEdges.length > 0 && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              outgoingEdges.forEach((edge) => deleteEdge(edge.id));
+            }}
+            className="absolute -right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-slate-900 border border-amber-500 text-amber-500 hover:bg-amber-500 hover:text-slate-950 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-150 z-40 shadow-md cursor-pointer"
+            title="Clear outgoing connection"
+            aria-label="Clear outgoing connection"
+          >
+            <Icon icon="lucide:x" className="text-[10px] font-bold" />
+          </button>
+        )}
       </div>
 
       <ExecutionStatusBar status={execStatus} isDestroy={pipelineAction === 'destroy'} />

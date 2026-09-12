@@ -7,6 +7,7 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  MarkerType,
   type Node,
   type Edge,
 } from '@xyflow/react';
@@ -48,9 +49,26 @@ function PreviewInner({ nodes, edges, viewport, interactive = true }: TemplateCa
   const styledEdges = useMemo(() => {
     const techById = new Map(nodes.map((n) => [n.id, (n.data as { tech?: NodeTech })?.tech]));
     return edges.map((edge) => {
-      if (edge.style && (edge.style as { stroke?: string }).stroke) return edge;
-      const { stroke, animated } = resolveEdgeVisuals(techById.get(edge.source), techById.get(edge.target));
-      return { ...edge, style: { stroke, strokeWidth: 2.5 }, animated };
+      const { stroke: defaultStroke, animated: defaultAnimated } = resolveEdgeVisuals(techById.get(edge.source), techById.get(edge.target));
+      const stroke = (edge.style && (edge.style as { stroke?: string }).stroke) || defaultStroke;
+      const markerColor = stroke.startsWith('url(#grad-tf-ansible)')
+        ? '#8B5CF6'
+        : stroke.startsWith('url(#grad-ansible-k8s)')
+        ? '#0EA5E9'
+        : stroke.startsWith('url(')
+        ? '#8B5CF6'
+        : stroke;
+      return {
+        ...edge,
+        style: { stroke, strokeWidth: 2.5 },
+        animated: edge.animated ?? defaultAnimated,
+        markerEnd: edge.markerEnd || {
+          type: MarkerType.ArrowClosed,
+          width: 12,
+          height: 12,
+          color: markerColor,
+        },
+      };
     });
   }, [nodes, edges]);
 
@@ -59,6 +77,25 @@ function PreviewInner({ nodes, edges, viewport, interactive = true }: TemplateCa
       nodes={nodes}
       edges={styledEdges}
       nodeTypes={nodeTypes}
+      defaultEdgeOptions={{
+        markerEnd: {
+          type: MarkerType.ArrowClosed,
+          width: 12,
+          height: 12,
+        },
+        labelStyle: {
+          fill: '#F1F5F9',
+          fontSize: 11,
+          fontWeight: 600,
+        },
+        labelBgStyle: {
+          fill: '#0D0F16',
+          stroke: '#1E2233',
+          strokeWidth: 1,
+        },
+        labelBgPadding: [8, 4],
+        labelBgBorderRadius: 6,
+      }}
       defaultViewport={viewport}
       fitView={!viewport}
       fitViewOptions={{ padding: 0.25 }}

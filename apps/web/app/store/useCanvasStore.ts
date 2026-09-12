@@ -3,6 +3,7 @@ import {
     Connection,
     Edge,
     EdgeChange,
+    MarkerType,
     Node,
     NodeChange,
     addEdge,
@@ -141,6 +142,13 @@ export const getInitialNodes = (): Node[] => [
   }
 ];
 
+export const resolveMarkerColor = (stroke: string): string => {
+  if (stroke.startsWith('url(#grad-tf-ansible)')) return '#8B5CF6';
+  if (stroke.startsWith('url(#grad-ansible-k8s)')) return '#0EA5E9';
+  if (stroke.startsWith('url(')) return '#8B5CF6';
+  return stroke;
+};
+
 // Initial edges matching the design-idea connection layouts and styling
 export const getInitialEdges = (): Edge[] => [
   {
@@ -148,7 +156,13 @@ export const getInitialEdges = (): Edge[] => [
     source: 'aws_security_group.web_sg',
     target: 'aws_instance.web_server',
     style: { stroke: '#6366F1', strokeWidth: 2.5 },
-    animated: false
+    animated: false,
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 12,
+      height: 12,
+      color: '#6366F1',
+    },
   },
   {
     id: 'e_instance_nginx',
@@ -156,14 +170,26 @@ export const getInitialEdges = (): Edge[] => [
     target: 'install_nginx.yml',
     style: { stroke: 'url(#grad-tf-ansible)', strokeWidth: 2.5 },
     className: 'animate-dash-flow',
-    animated: true
+    animated: true,
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 12,
+      height: 12,
+      color: '#8B5CF6',
+    },
   },
   {
     id: 'e_nginx_assets',
     source: 'install_nginx.yml',
     target: 'deploy_site_assets',
     style: { stroke: '#8B5CF6', strokeWidth: 2.5 },
-    animated: false
+    animated: false,
+    markerEnd: {
+      type: MarkerType.ArrowClosed,
+      width: 12,
+      height: 12,
+      color: '#8B5CF6',
+    },
   }
 ];
 
@@ -219,13 +245,31 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
                     return {
                         ...edge,
                         label: label || undefined,
+                        labelStyle: {
+                            fill: '#F1F5F9',
+                            fontSize: 11,
+                            fontWeight: 600,
+                        },
+                        labelBgStyle: {
+                            fill: '#0D0F16',
+                            stroke: '#1E2233',
+                            strokeWidth: 1,
+                        },
+                        labelBgPadding: [8, 4] as [number, number],
+                        labelBgBorderRadius: 6,
                         animated,
                         className: animated ? 'animate-dash-flow' : '',
                         style: {
                             ...edge.style,
                             stroke,
                             strokeWidth
-                        }
+                        },
+                        markerEnd: {
+                            type: MarkerType.ArrowClosed,
+                            width: 12,
+                            height: 12,
+                            color: resolveMarkerColor(stroke),
+                        },
                     };
                 }
                 return edge;
@@ -308,7 +352,13 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
           target: connection.target,
           style: { stroke, strokeWidth: 2.5 },
           className,
-          animated
+          animated,
+          markerEnd: {
+            type: MarkerType.ArrowClosed,
+            width: 12,
+            height: 12,
+            color: resolveMarkerColor(stroke),
+          },
         };
 
         set({
