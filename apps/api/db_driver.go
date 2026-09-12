@@ -313,6 +313,11 @@ CREATE TABLE IF NOT EXISTS templates (
 	created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 	updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 	FOREIGN KEY (source_project_id) REFERENCES projects(id) ON DELETE SET NULL
+);
+CREATE TABLE IF NOT EXISTS schema_migrations (
+	version INTEGER PRIMARY KEY,
+	description TEXT NOT NULL,
+	applied_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );`
 
 // pgSchema derives the Postgres schema from the SQLite one used everywhere
