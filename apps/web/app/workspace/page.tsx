@@ -21,7 +21,7 @@ import '@xyflow/react/dist/style.css';
 import { Icon } from '@iconify/react';
 import { clsx } from 'clsx';
 
-import useCanvasStore, { getInitialNodes, getInitialEdges, resolveMarkerColor } from '../store/useCanvasStore';
+import useCanvasStore, { resolveMarkerColor } from '../store/useCanvasStore';
 import ReactFlowCanvasNode from '../components/ReactFlowCanvasNode';
 import ProfileMenu from '../components/ProfileMenu';
 import Tooltip from '../components/Tooltip';
@@ -40,15 +40,6 @@ import type { Project } from '../lib/types';
 interface Tag {
   key: string;
   value: string;
-}
-
-interface NodeParameters {
-  instanceName: string;
-  amiId: string;
-  instanceType: string;
-  subnetId: string;
-  rootVolumeSize: number;
-  tags: Tag[];
 }
 
 interface LibraryNode {
@@ -504,7 +495,7 @@ const LibraryPanel: React.FC<LibraryPanelProps> = ({
     let parsedMeta: { parameters?: Record<string, unknown> } = {};
     try {
       parsedMeta = JSON.parse(cn.parsed_meta_json || '{}');
-    } catch (e) {}
+    } catch {}
     return {
       id: cn.id,
       tech: cn.tech,
@@ -1230,7 +1221,6 @@ interface InspectorPanelProps {
   updateNodeData: (nodeId: string, newData: Record<string, unknown>) => void;
   updateEdgeData: (edgeId: string, label: string, animated: boolean, stroke: string, strokeWidth: number) => void;
   deleteEdge: (edgeId: string) => void;
-  ansiblePlaybook: string;
   nodes: Node[];
   edges: Edge[];
   setSelectedNodeId: (id: string | null) => void;
@@ -1348,7 +1338,6 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
   updateNodeData,
   updateEdgeData,
   deleteEdge,
-  ansiblePlaybook,
   nodes,
   edges,
   setSelectedNodeId,
@@ -1363,19 +1352,11 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
   const [activeVmTab, setActiveVmTab] = useState<'aws' | 'gcp' | 'azure'>('aws');
 
   const p: InspectorNodeParameters = (selectedNode?.data?.parameters as InspectorNodeParameters | undefined) || (selectedNode ? (getDefaultParametersForNode(selectedNode.id) as InspectorNodeParameters) : {});
-  const sg = p;
 
   const handleParameterChange = (key: string, value: unknown) => {
     if (!selectedNode || isReadOnly) return;
     updateNodeData(selectedNode.id, {
       parameters: { ...p, [key]: value }
-    });
-  };
-
-  const handleSgChange = (key: string, value: unknown) => {
-    if (!selectedNode) return;
-    updateNodeData(selectedNode.id, {
-      parameters: { ...sg, [key]: value }
     });
   };
 
@@ -1410,8 +1391,6 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
   const portVal = (selectedNode?.data?.port as string) || '';
   const dbUserVal = (selectedNode?.data?.dbUser as string) || '';
   const dbPassVal = (selectedNode?.data?.dbPass as string) || '';
-  const repoUrlVal = (selectedNode?.data?.repoUrl as string) || '';
-  const branchVal = (selectedNode?.data?.branch as string) || '';
   const environmentVal = (selectedNode?.data?.environment as string) || 'localstack';
   const regionVal = (selectedNode?.data?.region as string) || 'us-east-1';
   const credentialIdVal = (selectedNode?.data?.credentialId as string) || '';
@@ -1420,9 +1399,6 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
   const gcpZoneVal = (selectedNode?.data?.gcpZone as string) || 'us-central1-a';
   const startCommandVal = (selectedNode?.data?.startCommand as string) || '';
   const appPortVal = (selectedNode?.data?.appPort as string) || '';
-  const appTypeVal = (selectedNode?.data?.appType as string) || '';
-  const buildCommandVal = (selectedNode?.data?.buildCommand as string) || '';
-  const destPathVal = (selectedNode?.data?.destPath as string) || '/home/ubuntu/app';
 
   return (
     <aside className={clsx(
@@ -3583,16 +3559,14 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
     onNodesChange, 
     onEdgesChange, 
     onConnect, 
-    addNode, 
-    selectedNodeId, 
+    addNode,
     setSelectedNodeId,
     activeTool,
     saveStatus,
-    selectedEdgeId,
     setSelectedEdgeId
   } = useCanvasStore();
-  
-  const { screenToFlowPosition, fitView } = useReactFlow();
+
+  const { screenToFlowPosition } = useReactFlow();
 
   const isReadOnly = deployStatus === 'PENDING' || deployStatus === 'RUNNING' || saveStatus === 'readonly';
 
@@ -3687,7 +3661,7 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
     if (isCustom && parametersStr) {
       try {
         parsedParameters = JSON.parse(parametersStr);
-      } catch (e) {}
+      } catch {}
     }
 
     const newNode: Node = {
@@ -3870,7 +3844,6 @@ function WorkspaceContent() {
     setCustomLibraryNodes,
     setProjectId,
     selectedEdgeId,
-    setSelectedEdgeId,
     updateEdgeData,
     deleteEdge
   } = useCanvasStore();
@@ -3898,7 +3871,7 @@ function WorkspaceContent() {
   const [collaborators, setCollaborators] = useState<{ id: string; name: string; color: string }[]>([]);
   const [isSyncConnected, setIsSyncConnected] = useState(false);
   const [peerCursors, setPeerCursors] = useState<Record<string, { x: number; y: number; name: string; color: string }>>({});
-  const [peerEdits, setPeerEdits] = useState<Record<string, string>>({}); // maps nodeId -> userName editing it
+  const [, setPeerEdits] = useState<Record<string, string>>({}); // maps nodeId -> userName editing it
   const [projectDetails, setProjectDetails] = useState<Project | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isCustomNodeOpen, setIsCustomNodeOpen] = useState(false);
@@ -3917,7 +3890,7 @@ function WorkspaceContent() {
   const [deployStatus, setDeployStatus] = useState<"IDLE" | "PENDING" | "RUNNING" | "CLEANUP" | "SUCCESS" | "FAILED">("IDLE");
   const [logs, setLogs] = useState("");
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
-  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [, setActiveRunId] = useState<string | null>(null);
   const [autoDestroy, setAutoDestroy] = useState(true);
 
   const wsRef = useRef<WebSocket | null>(null);
@@ -4643,7 +4616,7 @@ function WorkspaceContent() {
 
   useEffect(() => {
     if (selectedEdgeId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+       
       setInspectorTab('Parameters');
     }
   }, [selectedEdgeId]);
@@ -4775,7 +4748,6 @@ function WorkspaceContent() {
           updateNodeData={updateNodeData}
           updateEdgeData={updateEdgeData}
           deleteEdge={deleteEdge}
-          ansiblePlaybook={ansiblePlaybook}
           nodes={nodes}
           edges={edges}
           setSelectedNodeId={setSelectedNodeId}

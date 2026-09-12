@@ -46,7 +46,7 @@ function ExecutionStatusBar({ status, isDestroy }: { status: NodeExecutionStatus
   );
 }
 
-export default function ReactFlowCanvasNode({ id, data, selected }: ReactFlowCanvasNodeProps) {
+export default function ReactFlowCanvasNode({ id, data }: ReactFlowCanvasNodeProps) {
   const { setSelectedNodeId, deleteNode, selectedNodeId, edges, deleteEdge, saveStatus } = useCanvasStore();
   const isExecuting = useCanvasStore((state) => state.isExecuting);
   const execStatus = useCanvasStore((state) => state.executionStatuses[id] ?? 'idle');

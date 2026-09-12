@@ -22,7 +22,6 @@ export default function CustomNodeModal({ isOpen, onClose, projectId }: CustomNo
   const { user, token, upgradePlan } = useAuthStore();
   const { addCustomLibraryNode, addNode } = useCanvasStore();
 
-  const [activeTab, setActiveTab] = useState<'editor' | 'preview'>('editor');
   const [tech, setTech] = useState<'Terraform' | 'Ansible' | 'Kubernetes'>('Terraform');
   const [title, setTitle] = useState('');
   const [category, setCategory] = useState('');
