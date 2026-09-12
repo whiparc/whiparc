@@ -4334,7 +4334,10 @@ function WorkspaceContent() {
       setLogs(prev => prev + `[CLIENT] Deployment registered with runID: ${runId}\n[CLIENT] Establishing log streaming WebSocket connection...\n`);
 
       // Connect to WebSocket endpoint
-      const wsUrl = `ws://localhost:8080/api/ws/runs/${runId}`;
+      const apiHost = process.env.NEXT_PUBLIC_API_URL
+        ? process.env.NEXT_PUBLIC_API_URL.replace(/^http/, 'ws')
+        : 'ws://localhost:8080';
+      const wsUrl = `${apiHost}/api/ws/runs/${runId}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
@@ -4413,7 +4416,10 @@ function WorkspaceContent() {
       setLogs(prev => prev + `[CLIENT] Destroy run registered with runID: ${runId}\n[CLIENT] Establishing log streaming WebSocket connection...\n`);
 
       // Connect to WebSocket endpoint
-      const wsUrl = `ws://localhost:8080/api/ws/runs/${runId}`;
+      const apiHost = process.env.NEXT_PUBLIC_API_URL
+        ? process.env.NEXT_PUBLIC_API_URL.replace(/^http/, 'ws')
+        : 'ws://localhost:8080';
+      const wsUrl = `${apiHost}/api/ws/runs/${runId}`;
       const ws = new WebSocket(wsUrl);
       wsRef.current = ws;
 
