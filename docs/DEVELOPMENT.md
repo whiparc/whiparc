@@ -164,6 +164,44 @@ call sites in `projects.go`/`pairing.go` for the pattern), the same way
 `.github/workflows/ci.yml` already runs the Go test suite against a real
 `postgres:16-alpine` service container on every PR.
 
+## CLI Configuration
+
+The `whiparc` CLI (`apps/cli/`) persists its settings to
+`~/.whiparc/config.json`, managed via `whiparc config set <key> <value>`.
+Three keys are supported: `api-url`, `gateway-url`, and `sandbox-agent-beta`.
+
+**Which URL a fresh CLI install defaults to depends on how it was built**,
+via two build-time-injected variables (`apps/cli/main.go`'s
+`apiURLDefault`/`gatewayURLDefault`, set with `-ldflags "-X ..."` — see
+`.github/workflows/cli-release.yml`):
+
+- A plain local build (`go build .` / `go run .` from `apps/cli/`, exactly
+  what contributors get) has both variables empty, so it defaults to
+  `http://localhost:8080` / `http://localhost:9090` — matching this repo's
+  own `docker-compose.yml`/`sandbox` setup with zero configuration needed.
+- A **tagged CLI release** (`cli-v*`, what a hosted user downloads) has both
+  compiled in as `https://api.whiparc.com` / `https://gateway.whiparc.com`,
+  so it also works with zero configuration — for the hosted deployment.
+
+**Either default can always be overridden**, regardless of how the binary
+was built — this matters if you're a contributor testing against your own
+local `apps/api` while using an officially downloaded release binary rather
+than a build from source, or conversely pointing a locally-built CLI at a
+real deployment:
+
+```bash
+# Persists across future commands, whichever binary you're running:
+whiparc config set api-url http://localhost:8080
+whiparc config set gateway-url http://localhost:9090
+
+# One-shot, this invocation only, without touching the saved config:
+whiparc --api-url http://localhost:8080 projects list
+```
+
+`whiparc login` also accepts `--api-url` directly and persists whatever it
+resolves to, so `whiparc login --api-url http://localhost:8080` both logs in
+against your local backend and leaves every later command pointed there too.
+
 ## CI
 
 Pull requests run `.github/workflows/ci.yml` (lint/build for `apps/web`,
