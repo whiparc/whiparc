@@ -132,16 +132,27 @@ reproduce hosted-only behavior (e.g. Postgres-specific SQL errors) before it
 reaches production.
 
 `docker-compose.hosted.yml` simulates the hosted backend (`api` +
-`agent-gateway` + LocalStack) as a separate Compose project:
+`agent-gateway` + LocalStack) as a separate Compose project, and — unlike
+`docker-compose.yml` — always runs on Postgres, via its own bundled,
+disposable `postgres` service (same `postgres:16-alpine` image and config
+`.github/workflows/ci.yml` uses for tests). There's no SQLite mode here and
+nothing external to provision:
 
 ```bash
 docker compose -f docker-compose.hosted.yml up --build
 ```
 
-Set `DB_DRIVER=postgres` and `DATABASE_URL` (see `.env.example`) before
-running it to point at a real Postgres instance — a local `postgres:16`
-container, or a scratch Supabase project. Leaving both unset keeps this
-compose file on SQLite as well.
+`DB_DRIVER=postgres` is fixed in the compose file itself. `DATABASE_URL`
+defaults to the bundled `postgres` service; set `DATABASE_URL` in a `.env`
+file alongside this compose file only if you deliberately want to point at
+something else instead (a real scratch Supabase project, say) — see
+`.env.example`.
+
+On first run, the bundled `postgres` service's `initdb` can appear to hang
+at "performing post-bootstrap initialization" for several minutes with
+near-zero CPU — a known Windows/Docker Desktop quirk, not a real problem.
+`api`'s `depends_on: postgres: condition: service_healthy` already accounts
+for this; just let it finish rather than restarting the stack.
 
 The API's `apps/api/db_driver.go` is the single abstraction point between
 the two backends: one SQLite-dialect schema is the source of truth, and a
