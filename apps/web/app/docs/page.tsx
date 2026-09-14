@@ -664,12 +664,25 @@ Agent agent-a1b2c3d4 is now ACTIVE. Sandbox is ready.`} />
 
               <div className="rounded-2xl border border-border bg-card/60 p-6 backdrop-blur-md">
                 <h3 className="text-base font-semibold text-white flex items-center gap-2">
-                  <Icon icon="lucide:info" className="text-primary text-base" /> Custom Gateway URL
+                  <Icon icon="lucide:check-circle" className="text-primary text-base" /> No setup needed for whiparc.com
                 </h3>
                 <p className="text-sm text-slate-400 mt-2">
-                  The CLI defaults to a local Gateway at <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">http://localhost:9090</code> (for testing against a locally-run stack). Against a real deployment, set the actual Gateway URL first:
+                  The official CLI already points at Whiparc&apos;s hosted API and Agent Gateway by default — <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">whiparc login</code> and <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">whiparc sandbox up</code> above work as-is, nothing to configure first.
                 </p>
-                <CodeBlock code="whiparc config set gateway-url https://gateway.<your-domain>" />
+              </div>
+
+              <div className="rounded-2xl border border-border bg-card/60 p-6 backdrop-blur-md">
+                <h3 className="text-base font-semibold text-white flex items-center gap-2">
+                  <Icon icon="lucide:info" className="text-primary text-base" /> Self-hosting or local development
+                </h3>
+                <p className="text-sm text-slate-400 mt-2">
+                  Only needed if you&apos;re running your own Whiparc instance, or developing against a local <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">apps/api</code>/Agent Gateway from source — point the CLI at it instead:
+                </p>
+                <CodeBlock code={`whiparc config set api-url https://api.<your-domain>
+whiparc config set gateway-url https://gateway.<your-domain>`} />
+                <p className="text-sm text-slate-400 mt-2">
+                  Each setting persists to <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">~/.whiparc/config.json</code> for every future command. A one-off override without changing the saved config also works: <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">whiparc --api-url http://localhost:8080 login</code>.
+                </p>
               </div>
 
               <div className="pt-4">
@@ -747,7 +760,7 @@ Agent agent-a1b2c3d4 is now ACTIVE. Sandbox is ready.`} />
               <div className="space-y-3 pt-4">
                 <h3 className="text-base font-semibold text-white">Agent status stuck on PENDING</h3>
                 <p className="text-sm text-slate-400">
-                  Pairing was registered but the Agent process hasn’t connected yet — usually a Docker or network issue on your machine. Check <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">docker ps</code> for the sandbox containers and confirm your machine can reach the Gateway URL from `whiparc config set gateway-url`.
+                  Pairing was registered but the Agent process hasn’t connected yet — usually a Docker or network issue on your machine. Check <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">docker ps</code> for the sandbox containers and confirm your machine can reach your configured Gateway URL (defaults to Whiparc&apos;s hosted Gateway; see <code className="text-xs bg-secondary/60 px-1.5 py-0.5 rounded">whiparc config set gateway-url</code> above if you&apos;ve pointed it elsewhere).
                 </p>
               </div>
 
