@@ -60,6 +60,14 @@ var (
 	// this to the hosted Agent Gateway's base URL (https://gateway.whiparc.com)
 	// so `whiparc sandbox up` works for a hosted user with zero config.
 	gatewayURLDefault = ""
+
+	// apiURLDefault is gatewayURLDefault's counterpart for the API backend —
+	// same injection mechanism, same tagged-release-only behavior. Until this
+	// existed, every CLI build (including tagged releases) fell back to
+	// http://localhost:8080 for APIURL with no hosted equivalent, so `whiparc
+	// login` failed outright for a hosted user unless they passed --api-url
+	// on every invocation or hand-edited ~/.whiparc/config.json.
+	apiURLDefault = ""
 )
 
 func main() {
@@ -77,7 +85,7 @@ func main() {
 	}
 	rootCmd.SetVersionTemplate("whiparc version {{.Version}}\n")
 
-	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Override API backend URL (default is http://localhost:8080 or config value)")
+	rootCmd.PersistentFlags().StringVar(&apiURLFlag, "api-url", "", "Override API backend URL (defaults to the config value, or https://api.whiparc.com in a tagged release build / http://localhost:8080 otherwise)")
 	rootCmd.PersistentFlags().StringVar(&tokenFlag, "token", "", "Manually specify JWT token override")
 	rootCmd.PersistentFlags().BoolVar(&noColorFlag, "no-color", false, "Disable colored output")
 
@@ -164,6 +172,16 @@ func defaultGatewayURL() string {
 	return "http://localhost:9090"
 }
 
+// defaultAPIURL mirrors defaultGatewayURL: a tagged release build gets the
+// hosted API's base URL compiled in, everything else falls back to
+// localhost.
+func defaultAPIURL() string {
+	if apiURLDefault != "" {
+		return apiURLDefault
+	}
+	return "http://localhost:8080"
+}
+
 func getClientConfig() (*Config, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
@@ -172,7 +190,7 @@ func getClientConfig() (*Config, error) {
 	path := filepath.Join(home, ".whiparc", "config.json")
 	file, err := os.ReadFile(path)
 	if err != nil {
-		url := "http://localhost:8080"
+		url := defaultAPIURL()
 		if apiURLFlag != "" {
 			url = apiURLFlag
 		}
@@ -184,7 +202,7 @@ func getClientConfig() (*Config, error) {
 		cfg.APIURL = apiURLFlag
 	}
 	if cfg.APIURL == "" {
-		cfg.APIURL = "http://localhost:8080"
+		cfg.APIURL = defaultAPIURL()
 	}
 	if cfg.GatewayURL == "" {
 		cfg.GatewayURL = defaultGatewayURL()
