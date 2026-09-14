@@ -18,6 +18,7 @@ function LoginForm() {
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   // The sign-in/sign-up mode toggle below navigates via a plain router.push
   // of a hardcoded '/login' or '/login?mode=signup' — without this, that
@@ -40,6 +41,20 @@ function LoginForm() {
     }
     clearError();
     setFormError(null);
+
+    // Informational (non-error) notices passed via redirect, e.g. after a
+    // signup attempt on an already-registered email bounces here.
+    const noticeParam = searchParams.get('notice');
+    if (noticeParam === 'exists') {
+      setNotice('You already have an account with this email — sign in below.');
+      const prefillEmail = searchParams.get('email');
+      if (prefillEmail) {
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setEmail(prefillEmail);
+      }
+    } else {
+      setNotice(null);
+    }
   }, [searchParams, clearError]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -62,6 +77,15 @@ function LoginForm() {
     let success = false;
     if (isSignUp) {
       success = await signup(nameTrimmed, emailTrimmed, password);
+
+      if (!success && useAuthStore.getState().signupEmailExists) {
+        // Already registered — send them to sign in with a friendly notice
+        // instead of showing an error on the signup form.
+        router.push(
+          withRedirect(`/login?mode=login&notice=exists&email=${encodeURIComponent(emailTrimmed)}`)
+        );
+        return;
+      }
     } else {
       success = await login(emailTrimmed, password);
     }
@@ -162,6 +186,16 @@ function LoginForm() {
             </p>
           </div>
         </div>
+
+        {/* Informational notice (e.g. redirected here after a signup attempt
+            on an already-registered email) — distinct from the error banner
+            below since this isn't a failure on this page. */}
+        {notice && !(error || formError) && (
+          <div className="bg-primary/10 border border-primary/20 text-primary rounded-xl p-4 text-sm flex items-start gap-3 animate-in slide-in-from-top-2 duration-200">
+            <Icon icon="lucide:info" className="text-lg flex-shrink-0 mt-0.5" />
+            <p className="leading-snug">{notice}</p>
+          </div>
+        )}
 
         {/* Display System Errors */}
         {(error || formError) && (

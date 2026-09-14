@@ -13,6 +13,11 @@ interface AuthState {
   user: User | null;
   isLoading: boolean;
   error: string | null;
+  // Set instead of `error` when signup fails because the email is already
+  // registered (HTTP 409). Kept separate from `error` so the login page can
+  // route the user to sign-in with a friendly notice instead of rendering
+  // the raw backend message in the error banner.
+  signupEmailExists: boolean;
   hasHydrated: boolean;
   setHasHydrated: (v: boolean) => void;
   login: (email: string, password: string) => Promise<boolean>;
@@ -61,10 +66,11 @@ export const useAuthStore = create<AuthState>()(
       user: null,
       isLoading: false,
       error: null,
+      signupEmailExists: false,
       hasHydrated: false,
 
       setHasHydrated: (v) => set({ hasHydrated: v }),
-      clearError: () => set({ error: null }),
+      clearError: () => set({ error: null, signupEmailExists: false }),
 
       login: async (email, password) => {
         set({ isLoading: true, error: null });
@@ -92,7 +98,7 @@ export const useAuthStore = create<AuthState>()(
       },
 
       signup: async (name, email, password) => {
-        set({ isLoading: true, error: null });
+        set({ isLoading: true, error: null, signupEmailExists: false });
         try {
           const res = await fetch(`${API_URL}/api/auth/signup`, {
             method: 'POST',
@@ -103,6 +109,13 @@ export const useAuthStore = create<AuthState>()(
           });
 
           if (!res.ok) {
+            // Existing account — surface this as a distinct state instead of
+            // a generic error, so the UI can send the user to sign in with a
+            // friendly notice rather than showing a raw error banner.
+            if (res.status === 409) {
+              set({ isLoading: false, signupEmailExists: true });
+              return false;
+            }
             const errText = await res.text();
             throw new Error(errText || 'Signup failed');
           }

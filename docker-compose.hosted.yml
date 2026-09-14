@@ -24,6 +24,16 @@
 # your shell environment) to override the default dev-only secret below —
 # it must match on both services, which the shared variable here guarantees.
 #
+# Database: this stack always runs on Postgres — a bundled, disposable
+# `postgres` service, not SQLite. Unlike docker-compose.yml (the contributor
+# stack, which stays on zero-dependency SQLite by design — see
+# obsidian_memory/09.2), this file exists specifically to reproduce the
+# hosted deployment's shape, and the hosted deployment runs on Postgres
+# (Supabase). DATABASE_URL defaults to the bundled `postgres` service below;
+# set DATABASE_URL in a .env file alongside this compose file to point at a
+# real (e.g. scratch Supabase) instance instead when you deliberately need
+# to test against one — the bundled container is for everyday local use.
+#
 # Explicit project name: without this, Compose derives the project name from
 # the directory (same as docker-compose.yml's default), which makes it treat
 # this file's "api" service as the SAME logical service as the main stack's —
@@ -51,12 +61,12 @@ services:
     ports:
       - "8080:8080"
     env_file:
-      # Everything production-only (DB_DRIVER, DATABASE_URL, WHIPARC_MASTER_KEY,
-      # JWT_SECRET, FRONTEND_URL, OAuth client IDs/secrets — see .env.example)
-      # flows through here from a .env file placed alongside this compose
-      # file on the VM. Leaving DB_DRIVER/DATABASE_URL unset keeps the
-      # SQLite-on-a-volume behavior below; set DB_DRIVER=postgres and
-      # DATABASE_URL to a Supabase connection string for the hosted launch.
+      # Everything production-only (WHIPARC_MASTER_KEY, JWT_SECRET,
+      # FRONTEND_URL, OAuth client IDs/secrets, and an override DATABASE_URL
+      # if you want one — see .env.example) flows through here from a .env
+      # file placed alongside this compose file on the VM. DB_DRIVER is
+      # fixed to postgres below, not sourced from .env — this stack has no
+      # SQLite mode to fall back to.
       - path: .env
         required: false
     environment:
@@ -67,8 +77,19 @@ services:
       - GATEWAY_URL=http://agent-gateway:9090
       - GATEWAY_RUNNER_SECRET=${GATEWAY_RUNNER_SECRET:-hosted-dev-secret}
       - whiparc_GATEWAY_SECRET=${GATEWAY_RUNNER_SECRET:-hosted-dev-secret}
+      - DB_DRIVER=postgres
+      # ${DATABASE_URL:-...} rather than a plain env_file passthrough: a
+      # DATABASE_URL set in .env (e.g. a real scratch Supabase project) wins;
+      # otherwise this falls back to the bundled `postgres` service below,
+      # reached by its container DNS name, not localhost.
+      - DATABASE_URL=${DATABASE_URL:-postgres://postgres:postgres@postgres:5432/whiparc_hosted?sslmode=disable}
     volumes:
-      - hosted-api-db-data:/app/data
+      # Still needed with Postgres as the DB — apps/api/runner/runner.go
+      # writes each deploy's live Terraform/Ansible workspace under
+      # /app/data/workspace/current regardless of DB backend. No longer
+      # holds a SQLite file in this stack, hence the rename from the old
+      # hosted-api-db-data.
+      - hosted-api-workspace:/app/data
       # Read-only: the api container only ever *reads* the shared sandbox
       # public key (readSandboxPublicKey in main.go) as a fallback for
       # LocalStack runs with no project SSH credential configured. Writing a
@@ -80,8 +101,12 @@ services:
       # mount fixes.
       - ./sandbox:/app/sandbox:ro
     depends_on:
-      - agent-gateway
-      - localstack
+      agent-gateway:
+        condition: service_started
+      localstack:
+        condition: service_started
+      postgres:
+        condition: service_healthy
 
   agent-gateway:
     # Built and published by whiparc/cloud's publish-agent-gateway.yml workflow
@@ -114,5 +139,35 @@ services:
     volumes:
       - "/var/run/docker.sock:/var/run/docker.sock"
 
+  # Disposable local stand-in for the hosted deployment's Supabase Postgres —
+  # same image/config as .github/workflows/ci.yml's test service, so "test
+  # locally the same way CI does" is literally true, not just similar. Not
+  # published to the host by default (api reaches it as `postgres:5432` over
+  # the compose network); uncomment the `ports:` line below only if you want
+  # to `psql` in from outside Docker, and pick a non-5432 host port if you
+  # do, in case something else on the host already owns 5432.
+  postgres:
+    container_name: whiparc-postgres-hosted
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=whiparc_hosted
+    # ports:
+    #   - "55432:5432"
+    volumes:
+      - hosted-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # A freshly-pulled postgres:16-alpine's initdb can sit at "performing
+      # post-bootstrap initialization ... ok" for several minutes with
+      # near-zero CPU on Windows/Docker Desktop specifically (see
+      # obsidian_memory/07.2 entry 21) — confirmed while building this file
+      # (took ~4 minutes on this machine). retries is generous enough to
+      # cover that; it doesn't mean a healthy startup is ever actually slow.
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
 volumes:
-  hosted-api-db-data:
+  hosted-api-workspace:
+  hosted-postgres-data:

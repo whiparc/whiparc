@@ -79,7 +79,7 @@ jobs:
           mv "${BINARY_NAME}" ../../
 
       - name: Upload Build Artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: whiparc-${{ matrix.goos }}-${{ matrix.goarch }}
           path: whiparc-${{ matrix.goos }}-${{ matrix.goarch }}*
@@ -138,7 +138,7 @@ jobs:
           # so there's no arm64 binary yet to package here either.
 
       - name: Upload installer artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: whiparc-installers-windows-linux
           # A single glob over one flat directory — not separate lines for
@@ -173,7 +173,7 @@ jobs:
             bash ./installers/macos/build-pkg.sh
 
       - name: Upload installer artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: whiparc-installer-macos
           path: whiparc-macos.pkg

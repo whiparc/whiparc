@@ -763,6 +763,12 @@ func migratePairedAgentsStatusAllowsDisconnected() error {
 	return tx.Commit()
 }
 
+// isUniqueConstraintErr detects a unique-constraint violation across both
+// backends: SQLite reports "UNIQUE constraint failed" while Postgres reports
+// "duplicate key value violates unique constraint" (lowercase) — matching
+// only the uppercase SQLite phrasing let these fall through to a generic 500
+// on Postgres instead of the intended friendly conflict response (the same
+// bug already fixed for the signup path in main.go's handleSignup).
 func isUniqueConstraintErr(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
+	return err != nil && strings.Contains(strings.ToLower(err.Error()), "unique")
 }
