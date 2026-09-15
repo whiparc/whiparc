@@ -1530,6 +1530,20 @@ func extractSecretsAndEnvironment(projectID string, canvasStr string) ([]string,
 			extraEnv = append(extraEnv, "TF_VAR_gcp_ssh_pub_key="+pubKeyStr)
 			extraEnv = append(extraEnv, "TF_VAR_azure_ssh_pub_key="+pubKeyStr)
 			sshPubKeyInjected = true
+		} else {
+			// Was silent before: the deploy would proceed straight into
+			// Terraform with bundleGenerator.ts's syntactically-invalid
+			// dummySshKey placeholder still in play, surfacing only as a
+			// confusing "InvalidKeyPair.Format" error deep inside the
+			// provider's ImportKeyPair call, with no link back to the
+			// missing file. Most common cause: a hosted-only deployment
+			// (docker-compose.hosted.yml) whose ./sandbox bind mount is
+			// present but empty, because sandbox/id_rsa[.pub] is
+			// gitignored and nothing generates it there — only the
+			// local-dev `ssh-keygen ... -f sandbox/id_rsa` step (see
+			// docs/DEVELOPMENT.md) or `whiparc sandbox up` do that, and
+			// neither runs against a hosted-only checkout.
+			log.Printf("[SANDBOX] Warning: no SSH public key available for LocalStack deploy of project %s (%v) — falling back to bundleGenerator.ts's placeholder key, which real/LocalStack EC2 key-format validation will reject", projectID, err)
 		}
 	}
 
