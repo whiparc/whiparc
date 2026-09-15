@@ -6,6 +6,7 @@ import { Icon } from '@iconify/react';
 import { motion } from 'framer-motion';
 import { useAuthStore } from '../store/useAuthStore';
 import ProfileMenu from './ProfileMenu';
+import { GitHubStarButton } from './GitHubStarButton';
 
 export type NavItem = { label: string; href: string };
 
@@ -32,7 +33,7 @@ export function Navbar() {
         <div className="flex items-center justify-between rounded-2xl border border-white/[0.06] bg-background/60 px-6 py-3 shadow-2xl backdrop-blur-xl">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-amber-600 shadow-lg shadow-indigo-500/20">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-secondary-brand shadow-lg shadow-primary/20">
               <svg className="h-4.5 w-4.5 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM9 14H5a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1v-4a1 1 0 00-1-1z" />
                 <path strokeLinecap="round" strokeLinejoin="round" d="M14 15h5M14 19h5" />
@@ -52,9 +53,10 @@ export function Navbar() {
 
           {/* Desktop CTA */}
           <div className="hidden items-center gap-3 lg:flex">
+            <GitHubStarButton />
             {isLoggedIn ? (
               <>
-                <Link href="/dashboard" className="rounded-xl bg-gradient-to-r from-indigo-500 to-amber-600 px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all active:scale-95 cursor-pointer">
+                <Link href="/dashboard" className="rounded-xl bg-gradient-to-r from-primary to-secondary-brand px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all active:scale-95 cursor-pointer">
                   Dashboard
                 </Link>
                 <ProfileMenu variant="compact" />
@@ -64,7 +66,7 @@ export function Navbar() {
                 <Link href="/login" className="text-sm text-slate-400 transition hover:text-white cursor-pointer">
                   Sign in
                 </Link>
-                <Link href="/login?mode=signup" className="rounded-xl bg-gradient-to-r from-indigo-500 to-amber-600 px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all active:scale-95 cursor-pointer">
+                <Link href="/login?mode=signup" className="rounded-xl bg-gradient-to-r from-primary to-secondary-brand px-5 py-2.5 text-xs font-semibold text-white shadow-lg shadow-primary/20 hover:shadow-primary/30 transition-all active:scale-95 cursor-pointer">
                   Get Started Free
                 </Link>
               </>
@@ -101,12 +103,22 @@ export function Navbar() {
                 </Link>
               ))}
               <hr className="border-white/[0.06]" />
+              <a
+                href="https://github.com/whiparc/whiparc"
+                target="_blank"
+                rel="noreferrer"
+                aria-label="Star Whiparc on GitHub"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.06] py-3 text-sm font-semibold text-slate-200 cursor-pointer"
+              >
+                <Icon icon="lucide:github" className="text-base" />
+                Star on GitHub
+              </a>
               {isLoggedIn ? (
-                <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="w-full text-center rounded-xl bg-gradient-to-r from-indigo-500 to-amber-600 py-3 text-sm font-semibold text-white cursor-pointer">Dashboard</Link>
+                <Link href="/dashboard" onClick={() => setMobileOpen(false)} className="w-full text-center rounded-xl bg-gradient-to-r from-primary to-secondary-brand py-3 text-sm font-semibold text-white cursor-pointer">Dashboard</Link>
               ) : (
                 <div className="flex flex-col gap-3">
                   <Link href="/login" onClick={() => setMobileOpen(false)} className="w-full text-center rounded-xl border border-white/[0.06] py-3 text-sm font-semibold text-white cursor-pointer">Sign in</Link>
-                  <Link href="/login?mode=signup" onClick={() => setMobileOpen(false)} className="w-full text-center rounded-xl bg-gradient-to-r from-indigo-500 to-amber-600 py-3 text-sm font-semibold text-white cursor-pointer">Get Started Free</Link>
+                  <Link href="/login?mode=signup" onClick={() => setMobileOpen(false)} className="w-full text-center rounded-xl bg-gradient-to-r from-primary to-secondary-brand py-3 text-sm font-semibold text-white cursor-pointer">Get Started Free</Link>
                 </div>
               )}
             </nav>
