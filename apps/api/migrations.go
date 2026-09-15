@@ -37,6 +37,26 @@ var migrations = []migration{
 			return nil
 		},
 	},
+	{
+		version:     2,
+		description: "add_email_verification_fields_to_users",
+		up: func(tx sqlExecer) error {
+			if _, err := tx.Exec("ALTER TABLE users ADD COLUMN email_verified BOOLEAN NOT NULL DEFAULT FALSE"); err != nil {
+				return fmt.Errorf("failed to add email_verified: %w", err)
+			}
+			if _, err := tx.Exec("ALTER TABLE users ADD COLUMN verification_token TEXT"); err != nil {
+				return fmt.Errorf("failed to add verification_token: %w", err)
+			}
+			if _, err := tx.Exec("ALTER TABLE users ADD COLUMN verification_expires_at DATETIME"); err != nil {
+				return fmt.Errorf("failed to add verification_expires_at: %w", err)
+			}
+			// Existing accounts are grandfathered as verified
+			if _, err := tx.Exec("UPDATE users SET email_verified = TRUE"); err != nil {
+				return fmt.Errorf("failed to grandfather existing users: %w", err)
+			}
+			return nil
+		},
+	},
 }
 
 // runMigrations applies, in version order, any migration above not yet

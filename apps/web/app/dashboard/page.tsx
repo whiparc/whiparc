@@ -8,6 +8,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import { ProjectSettingsModal } from '../components/ProjectSettingsModal';
 import { PublishTemplateModal } from '../components/PublishTemplateModal';
 import { TiltCard } from '../components/landing/TiltCard';
+import EmailVerificationBanner from '../components/EmailVerificationBanner';
 import type { Project } from '../lib/types';
 
 interface Team {
@@ -321,6 +322,8 @@ function DashboardContent() {
 					</div>
 				</div>
 			</header>
+
+			<EmailVerificationBanner />
 
 			{/* Main Content Area */}
 			<main className="flex-grow mx-auto w-full max-w-7xl px-6 py-12 lg:px-10 flex flex-col gap-10">
