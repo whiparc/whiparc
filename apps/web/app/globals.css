@@ -8,6 +8,8 @@
   --primary-foreground: #FFFFFF;
   --secondary: #12141C;
   --secondary-foreground: #FFFFFF;
+  --secondary-brand: #D97706;
+  --secondary-brand-foreground: #FFFFFF;
   --tertiary: #F59E0B;
   --muted: #0F1015;
   --muted-foreground: #94A3B8;
@@ -29,6 +31,8 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary-brand: var(--secondary-brand);
+  --color-secondary-brand-foreground: var(--secondary-brand-foreground);
   --color-tertiary: var(--tertiary);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);

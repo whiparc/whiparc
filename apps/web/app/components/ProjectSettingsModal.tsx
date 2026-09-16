@@ -29,6 +29,8 @@ interface CredentialItem {
   created_at: string;
 }
 
+type ProjectSettingsTab = 'general' | 'members' | 'credentials' | 'agents' | 'danger';
+
 interface ProjectSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -36,6 +38,7 @@ interface ProjectSettingsModalProps {
   onUpdateProjectDetails: (updated: Project) => void;
   projectId: string;
   onCredentialsChange?: (credentials: CredentialItem[]) => void;
+  initialTab?: ProjectSettingsTab;
 }
 
 export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
@@ -44,9 +47,10 @@ export const ProjectSettingsModal: React.FC<ProjectSettingsModalProps> = ({
   projectDetails,
   onUpdateProjectDetails,
   projectId,
-  onCredentialsChange
+  onCredentialsChange,
+  initialTab
 }) => {
-  const [activeTab, setActiveTab] = useState<'general' | 'members' | 'credentials' | 'agents' | 'danger'>('general');
+  const [activeTab, setActiveTab] = useState<ProjectSettingsTab>(initialTab ?? 'general');
   const [name, setName] = useState(projectDetails?.name || '');
   const [description, setDescription] = useState(projectDetails?.description || '');
   const [visibility, setVisibility] = useState(projectDetails?.visibility || 'PRIVATE');
