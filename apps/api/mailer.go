@@ -4,14 +4,24 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"html"
 	"log"
 	"net/http"
+	"net/mail"
 	"net/smtp"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 )
+
+// sanitizeHeaderField removes CR, LF, and null characters to prevent SMTP header injection (CWE-640).
+func sanitizeHeaderField(s string) string {
+	s = strings.ReplaceAll(s, "\r", "")
+	s = strings.ReplaceAll(s, "\n", "")
+	s = strings.ReplaceAll(s, "\x00", "")
+	return strings.TrimSpace(s)
+}
 
 // EmailSender defines the interface for delivering outbound transactional emails.
 type EmailSender interface {
@@ -22,9 +32,13 @@ type EmailSender interface {
 type ConsoleMailer struct{}
 
 func (c *ConsoleMailer) SendVerificationEmail(toEmail, toName, verificationLink string) error {
+	cleanName := sanitizeHeaderField(toName)
+	cleanEmail := sanitizeHeaderField(toEmail)
+	cleanLink := sanitizeHeaderField(verificationLink)
+
 	divider := strings.Repeat("=", 70)
 	log.Printf("\n%s\n[EMAIL DISPATCH - LOCAL/DEV CONSOLE MODE]\nTo: %s <%s>\nSubject: Verify your Whiparc account\nAction Link: %s\nExpires: in 24 hours\n%s\n",
-		divider, toName, toEmail, verificationLink, divider)
+		divider, cleanName, cleanEmail, cleanLink, divider)
 	return nil
 }
 
@@ -36,6 +50,13 @@ type ResendMailer struct {
 }
 
 func (r *ResendMailer) SendVerificationEmail(toEmail, toName, verificationLink string) error {
+	cleanName := sanitizeHeaderField(toName)
+	cleanEmail := sanitizeHeaderField(toEmail)
+	cleanLink := sanitizeHeaderField(verificationLink)
+
+	escapedName := html.EscapeString(cleanName)
+	escapedLink := html.EscapeString(cleanLink)
+
 	htmlBody := fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head>
@@ -55,13 +76,13 @@ func (r *ResendMailer) SendVerificationEmail(toEmail, toName, verificationLink s
     <p style="font-size: 12px; color: #484f58; margin: 0;">If you did not sign up for Whiparc, please disregard this email. This link will expire in 24 hours.</p>
   </div>
 </body>
-</html>`, toName, verificationLink, verificationLink)
+</html>`, escapedName, escapedLink, escapedLink)
 
-	textBody := fmt.Sprintf("Welcome to Whiparc, %s!\n\nPlease verify your email address by opening the following link:\n%s\n\nThis link expires in 24 hours.", toName, verificationLink)
+	textBody := fmt.Sprintf("Welcome to Whiparc, %s!\n\nPlease verify your email address by opening the following link:\n%s\n\nThis link expires in 24 hours.", cleanName, cleanLink)
 
 	payload := map[string]interface{}{
 		"from":    r.from,
-		"to":      []string{toEmail},
+		"to":      []string{cleanEmail},
 		"subject": "Verify your Whiparc account",
 		"html":    htmlBody,
 		"text":    textBody,
@@ -89,7 +110,7 @@ func (r *ResendMailer) SendVerificationEmail(toEmail, toName, verificationLink s
 		return fmt.Errorf("resend returned status code %d", resp.StatusCode)
 	}
 
-	log.Printf("[EMAIL] Verification email sent to %s via Resend\n", toEmail)
+	log.Printf("[EMAIL] Verification email sent to %s via Resend\n", cleanEmail)
 	return nil
 }
 
@@ -103,12 +124,24 @@ type SMTPMailer struct {
 }
 
 func (s *SMTPMailer) SendVerificationEmail(toEmail, toName, verificationLink string) error {
+	cleanName := sanitizeHeaderField(toName)
+	cleanToEmail := sanitizeHeaderField(toEmail)
+	cleanFrom := sanitizeHeaderField(s.from)
+	cleanLink := sanitizeHeaderField(verificationLink)
+
+	// Format address headers safely using net/mail to eliminate CRLF and header injection risks
+	toAddress := (&mail.Address{Name: cleanName, Address: cleanToEmail}).String()
+	fromAddress := cleanFrom
+	if fromParsed, err := mail.ParseAddress(cleanFrom); err == nil {
+		fromAddress = fromParsed.String()
+	}
+
 	addr := fmt.Sprintf("%s:%d", s.host, s.port)
 	subject := "Subject: Verify your Whiparc account\r\n"
-	fromHeader := fmt.Sprintf("From: %s\r\n", s.from)
-	toHeader := fmt.Sprintf("To: %s <%s>\r\n", toName, toEmail)
+	fromHeader := fmt.Sprintf("From: %s\r\n", fromAddress)
+	toHeader := fmt.Sprintf("To: %s\r\n", toAddress)
 	mimeHeader := "MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n"
-	body := fmt.Sprintf("Welcome to Whiparc, %s!\r\n\r\nPlease verify your email address by clicking the link below:\r\n%s\r\n\r\nThis link will expire in 24 hours.\r\n", toName, verificationLink)
+	body := fmt.Sprintf("Welcome to Whiparc, %s!\r\n\r\nPlease verify your email address by clicking the link below:\r\n%s\r\n\r\nThis link will expire in 24 hours.\r\n", cleanName, cleanLink)
 
 	msg := []byte(fromHeader + toHeader + subject + mimeHeader + body)
 
@@ -117,12 +150,12 @@ func (s *SMTPMailer) SendVerificationEmail(toEmail, toName, verificationLink str
 		auth = smtp.PlainAuth("", s.user, s.pass, s.host)
 	}
 
-	err := smtp.SendMail(addr, auth, s.from, []string{toEmail}, msg)
+	err := smtp.SendMail(addr, auth, cleanFrom, []string{cleanToEmail}, msg)
 	if err != nil {
 		return fmt.Errorf("smtp send failed: %w", err)
 	}
 
-	log.Printf("[EMAIL] Verification email sent to %s via SMTP\n", toEmail)
+	log.Printf("[EMAIL] Verification email sent to %s via SMTP\n", cleanToEmail)
 	return nil
 }
 
