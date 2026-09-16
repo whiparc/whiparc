@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
@@ -258,7 +258,7 @@ function LogoCloud() {
           transition={{ duration: 0.5 }}
           className="text-center text-[11px] uppercase tracking-[0.25em] text-slate-500 font-medium mb-8"
         >
-          Works with the stack you already run
+          Compiles to the tools you already run
         </motion.p>
         <motion.div
           initial="hidden"
@@ -283,7 +283,7 @@ function LogoCloud() {
   );
 }
 
-// --- Features Section (3D Tilt Cards) ---
+// --- Features Section ---
 
 function FeaturesSection() {
   const features = [
@@ -293,8 +293,6 @@ function FeaturesSection() {
       description: 'Drag nodes, draw edges. Whiparc resolves the topology and writes real HCL, YAML, and Kubernetes manifests — no hand-written boilerplate.',
       gradient: 'from-primary/10 to-primary/5',
       iconColor: 'text-indigo-400',
-      borderHover: 'hover:border-primary/20',
-      border: 'border-white/[0.06]',
     },
     {
       icon: 'lucide:container',
@@ -302,8 +300,6 @@ function FeaturesSection() {
       description: 'Run terraform apply and ansible-playbook against Docker on your own machine. Zero AWS bill. Zero blast radius.',
       gradient: 'from-amber-500/10 to-amber-500/5',
       iconColor: 'text-amber-400',
-      borderHover: 'hover:border-amber-500/30',
-      border: 'border-amber-500/20',
     },
     {
       icon: 'lucide:file-code-2',
@@ -311,8 +307,6 @@ function FeaturesSection() {
       description: "Already have .tf or .yaml? Drop it in. The AST parser rebuilds it as connected nodes automatically.",
       gradient: 'from-emerald-500/10 to-emerald-500/5',
       iconColor: 'text-emerald-400',
-      borderHover: 'hover:border-emerald-500/20',
-      border: 'border-white/[0.06]',
     },
     {
       icon: 'lucide:activity',
@@ -320,23 +314,17 @@ function FeaturesSection() {
       description: "Every apply streams over WebSocket straight onto the canvas — you watch the exact node that's deploying, not a scrolling log file.",
       gradient: 'from-white/[0.06] to-white/[0.02]',
       iconColor: 'text-slate-300',
-      borderHover: 'hover:border-white/[0.12]',
-      border: 'border-white/[0.06]',
     },
   ];
 
   return (
     <section id="features" className="relative py-24 lg:py-32">
-      {/* Background glow */}
-      <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-amber-500/5 rounded-full blur-[140px]" />
-
-      <div className="relative mx-auto max-w-7xl px-6 lg:px-10">
+      <div className="relative mx-auto max-w-2xl px-6 lg:px-10">
         <motion.div
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, margin: '-80px' }}
           variants={staggerContainer}
-          className="text-center mb-16"
         >
           <motion.p variants={fadeUp} transition={{ duration: 0.5, ease: EASE }} className="text-xs uppercase tracking-widest text-indigo-400 font-semibold">
             Why not just another Terraform GUI
@@ -344,40 +332,30 @@ function FeaturesSection() {
           <motion.h2 variants={fadeUp} transition={{ duration: 0.6, ease: EASE }} className="mt-4 text-3xl font-extrabold text-white lg:text-5xl tracking-tight leading-tight">
             Diagrams don&apos;t deploy. This does.
           </motion.h2>
-          <motion.p variants={fadeUp} transition={{ duration: 0.5, ease: EASE }} className="mt-4 text-base text-slate-400 max-w-xl mx-auto">
+          <motion.p variants={fadeUp} transition={{ duration: 0.5, ease: EASE }} className="mt-4 text-base text-slate-400">
             Most visual infra tools stop at generating code. Whiparc runs it — for real, against a sandbox that costs you nothing.
           </motion.p>
         </motion.div>
 
-        <motion.div
+        <motion.ul
           initial="hidden"
           whileInView="show"
           viewport={{ once: true, margin: '-80px' }}
           variants={staggerContainer}
-          className="grid gap-6 md:grid-cols-2 lg:grid-cols-4"
+          className="mt-12 flex flex-col divide-y divide-white/[0.06] border-t border-white/[0.06]"
         >
           {features.map((feature) => (
-            <motion.div key={feature.title} variants={scaleIn} transition={{ duration: 0.5, ease: EASE }}>
-              <TiltCard
-                tiltLimit={12}
-                scale={1.03}
-                effect="evade"
-                spotlight
-                className={`h-full rounded-2xl border ${feature.border} bg-white/[0.02] p-8 backdrop-blur-md transition-colors ${feature.borderHover} cursor-default`}
-              >
-                <div className="relative z-20">
-                  {/* Icon */}
-                  <div className={`flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br ${feature.gradient} border border-white/[0.06] mb-6`}>
-                    <Icon icon={feature.icon} className={`text-xl ${feature.iconColor}`} />
-                  </div>
-
-                  <h3 className="text-lg font-bold text-white">{feature.title}</h3>
-                  <p className="mt-3 text-sm leading-relaxed text-slate-400">{feature.description}</p>
-                </div>
-              </TiltCard>
-            </motion.div>
+            <motion.li key={feature.title} variants={fadeUp} transition={{ duration: 0.5, ease: EASE }} className="flex items-start gap-4 py-6">
+              <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br ${feature.gradient} border border-white/[0.06]`}>
+                <Icon icon={feature.icon} className={`text-lg ${feature.iconColor}`} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">{feature.title}</h3>
+                <p className="mt-1.5 text-sm leading-relaxed text-slate-400">{feature.description}</p>
+              </div>
+            </motion.li>
           ))}
-        </motion.div>
+        </motion.ul>
       </div>
     </section>
   );
@@ -417,8 +395,6 @@ function FeaturedTemplatesSection() {
 
   return (
     <section className="relative py-24 lg:py-32 border-t border-white/[0.04]">
-      <div className="pointer-events-none absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[400px] bg-primary/5 rounded-full blur-[140px]" />
-
       <div className="relative mx-auto max-w-7xl px-6 lg:px-10">
         <motion.div
           initial="hidden"
@@ -536,25 +512,17 @@ function HowItWorksSection() {
         >
           {steps.map((step) => (
             <motion.div key={step.step} variants={fadeUp} transition={{ duration: 0.5, ease: EASE }}>
-              <TiltCard
-                tiltLimit={10}
-                scale={1.02}
-                effect="evade"
-                spotlight
-                className={`relative h-full rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 backdrop-blur-sm transition-colors ${step.borderHover} cursor-default`}
-              >
-                <div className="relative z-20">
-                  {/* Step number */}
-                  <span className="text-5xl font-extrabold text-white/[0.10] absolute top-4 right-6 font-mono">{step.step}</span>
+              <div className={`relative h-full rounded-2xl border border-white/[0.06] bg-white/[0.02] p-8 backdrop-blur-sm transition-colors ${step.borderHover}`}>
+                {/* Step number */}
+                <span className="text-5xl font-extrabold text-white/[0.10] absolute top-4 right-6 font-mono">{step.step}</span>
 
-                  <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${step.bgColor} ${step.borderColor} border mb-6`}>
-                    <Icon icon={step.icon} className={`text-lg ${step.color}`} />
-                  </div>
-
-                  <h3 className="text-xl font-bold text-white">{step.title}</h3>
-                  <p className="mt-3 text-sm leading-relaxed text-slate-400">{step.description}</p>
+                <div className={`flex h-11 w-11 items-center justify-center rounded-xl ${step.bgColor} ${step.borderColor} border mb-6`}>
+                  <Icon icon={step.icon} className={`text-lg ${step.color}`} />
                 </div>
-              </TiltCard>
+
+                <h3 className="text-xl font-bold text-white">{step.title}</h3>
+                <p className="mt-3 text-sm leading-relaxed text-slate-400">{step.description}</p>
+              </div>
             </motion.div>
           ))}
         </motion.div>
@@ -623,8 +591,6 @@ spec:
 
   return (
     <section className="relative py-24 lg:py-32 border-t border-white/[0.04]">
-      <div className="pointer-events-none absolute top-0 left-1/4 w-[500px] h-[300px] bg-primary/5 rounded-full blur-[120px]" />
-
       <div className="relative mx-auto max-w-7xl px-6 lg:px-10">
         <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
           {/* Left: text */}
@@ -634,10 +600,7 @@ spec:
             viewport={{ once: true, margin: '-80px' }}
             variants={staggerContainer}
           >
-            <motion.p variants={fadeUp} transition={{ duration: 0.5, ease: EASE }} className="text-xs uppercase tracking-widest text-indigo-400 font-semibold">
-              Visual to Code
-            </motion.p>
-            <motion.h2 variants={fadeUp} transition={{ duration: 0.6, ease: EASE }} className="mt-4 text-3xl font-extrabold text-white lg:text-4xl tracking-tight leading-tight">
+            <motion.h2 variants={fadeUp} transition={{ duration: 0.6, ease: EASE }} className="text-3xl font-extrabold text-white lg:text-4xl tracking-tight leading-tight">
               Every node compiles to production-ready code.
             </motion.h2>
             <motion.p variants={fadeUp} transition={{ duration: 0.5, ease: EASE }} className="mt-4 text-base text-slate-400 leading-relaxed">
@@ -827,51 +790,45 @@ function PricingSection() {
         >
           {tiers.map((tier) => (
             <motion.div key={tier.name} variants={scaleIn} transition={{ duration: 0.5, ease: EASE }}>
-              <TiltCard
-                tiltLimit={8}
-                scale={1.02}
-                effect="evade"
-                spotlight
-                className={`h-full rounded-2xl border p-8 backdrop-blur-md ${
+              <div
+                className={`relative flex h-full flex-col rounded-2xl border p-8 backdrop-blur-md ${
                   tier.popular
                     ? 'border-primary/30 bg-indigo-950/10'
                     : 'border-white/[0.06] bg-white/[0.02]'
                 }`}
               >
-                <div className="relative z-20 flex flex-col h-full">
-                  {tier.popular && (
-                    <span className="absolute -top-4 right-4 rounded-full bg-gradient-to-r from-primary to-secondary-brand px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
-                      Most Popular
-                    </span>
-                  )}
+                {tier.popular && (
+                  <span className="absolute -top-4 right-4 rounded-full bg-gradient-to-r from-primary to-secondary-brand px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-white">
+                    Most Popular
+                  </span>
+                )}
 
-                  <p className="text-sm font-semibold text-white">{tier.name}</p>
-                  <p className="text-xs text-slate-500 mt-1">{tier.subtitle}</p>
+                <p className="text-sm font-semibold text-white">{tier.name}</p>
+                <p className="text-xs text-slate-500 mt-1">{tier.subtitle}</p>
 
-                  <div className="mt-6">
-                    <span className="text-4xl font-extrabold text-white font-mono">{tier.price}</span>
-                    {tier.period && <span className="text-sm text-slate-500 ml-1">{tier.period}</span>}
-                  </div>
-
-                  <hr className="border-white/[0.06] my-6" />
-
-                  <ul className="space-y-3 flex-1">
-                    {tier.features.map((feature) => (
-                      <li key={feature} className="flex items-center gap-3 text-sm text-slate-400">
-                        <Icon icon="lucide:check" className="text-indigo-400 text-sm shrink-0" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-
-                  <Link
-                    href={tier.name === 'Enterprise' ? '/login' : '/login?mode=signup'}
-                    className={`mt-8 w-full text-center rounded-xl px-4 py-3.5 text-sm font-semibold transition-all active:scale-95 cursor-pointer ${tier.ctaStyle}`}
-                  >
-                    {tier.cta}
-                  </Link>
+                <div className="mt-6">
+                  <span className="text-4xl font-extrabold text-white font-mono">{tier.price}</span>
+                  {tier.period && <span className="text-sm text-slate-500 ml-1">{tier.period}</span>}
                 </div>
-              </TiltCard>
+
+                <hr className="border-white/[0.06] my-6" />
+
+                <ul className="space-y-3 flex-1">
+                  {tier.features.map((feature) => (
+                    <li key={feature} className="flex items-center gap-3 text-sm text-slate-400">
+                      <Icon icon="lucide:check" className="text-indigo-400 text-sm shrink-0" />
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+
+                <Link
+                  href={tier.name === 'Enterprise' ? '/login' : '/login?mode=signup'}
+                  className={`mt-8 w-full text-center rounded-xl px-4 py-3.5 text-sm font-semibold transition-all active:scale-95 cursor-pointer ${tier.ctaStyle}`}
+                >
+                  {tier.cta}
+                </Link>
+              </div>
             </motion.div>
           ))}
         </motion.div>
@@ -885,11 +842,6 @@ function PricingSection() {
 function CTASection() {
   return (
     <section className="relative py-24 lg:py-32 border-t border-white/[0.04] overflow-hidden">
-      {/* Background effects */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[400px] bg-gradient-to-r from-primary/10 via-amber-500/8 to-primary/10 rounded-full blur-[140px]" />
-      </div>
-
       <motion.div
         initial="hidden"
         whileInView="show"
@@ -934,8 +886,6 @@ function CliSection() {
 
   return (
     <section id="cli" className="relative py-24 lg:py-32 border-t border-white/[0.04] overflow-hidden">
-      <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-primary/3 via-transparent to-amber-500/3" />
-
       <div className="relative mx-auto max-w-7xl px-6 lg:px-10">
         <div className="grid gap-12 lg:grid-cols-2 lg:items-center">
           {/* Left: text */}
@@ -1084,21 +1034,7 @@ function FAQSection() {
 
 // --- Footer ---
 
-function Footer() {
-  const [email, setEmail] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
-
-  const handleSubscribe = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!email) return;
-    setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
-      setSubmitted(true);
-    }, 1000);
-  };
-
+export function Footer() {
   const footerLinks = {
     Product: [
       { label: 'Features', href: '#features' },
@@ -1112,9 +1048,9 @@ function Footer() {
       { label: 'GitHub repo', href: 'https://github.com/whiparc/whiparc' },
     ],
     Company: [
-      { label: 'About', href: '#' },
-      { label: 'Security', href: '#' },
-      { label: 'Contact', href: '#' },
+      { label: 'About', href: '/about' },
+      { label: 'Security', href: '/security' },
+      { label: 'Contact', href: '/contact' },
     ],
   };
 
@@ -1139,29 +1075,6 @@ function Footer() {
 
             <div className="mt-5">
               <GitHubStarButton />
-            </div>
-
-            {/* Newsletter */}
-            <div className="mt-6">
-              <form onSubmit={handleSubscribe} className="flex gap-2">
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  disabled={loading || submitted}
-                  placeholder="your@email.com"
-                  className="h-10 flex-1 rounded-xl border border-white/[0.06] bg-white/[0.03] px-4 text-sm text-white outline-none placeholder:text-slate-600 focus:border-primary/30 backdrop-blur-sm"
-                />
-                <button
-                  type="submit"
-                  disabled={loading || submitted}
-                  className="h-10 rounded-xl bg-gradient-to-r from-primary to-secondary-brand px-4 text-xs font-semibold text-white transition hover:opacity-90 active:scale-95 disabled:opacity-50 cursor-pointer"
-                >
-                  {loading ? <Icon icon="lucide:loader-2" className="animate-spin" /> : submitted ? <Icon icon="lucide:check" /> : 'Subscribe'}
-                </button>
-              </form>
-              {submitted && <p className="mt-2 text-xs text-indigo-400">Subscribed successfully.</p>}
             </div>
           </div>
 
@@ -1201,9 +1114,9 @@ function Footer() {
         <div className="mx-auto max-w-7xl flex flex-col gap-4 px-6 py-6 text-xs text-slate-600 lg:flex-row lg:items-center lg:justify-between lg:px-10">
           <p>&copy; 2026 Whiparc. All rights reserved.</p>
           <div className="flex gap-6">
-            <span className="hover:text-slate-400 transition cursor-pointer">Privacy</span>
-            <span className="hover:text-slate-400 transition cursor-pointer">Terms</span>
-            <span className="hover:text-slate-400 transition cursor-pointer">Security</span>
+            <Link href="/privacy" className="hover:text-slate-400 transition cursor-pointer">Privacy</Link>
+            <Link href="/terms" className="hover:text-slate-400 transition cursor-pointer">Terms</Link>
+            <Link href="/security" className="hover:text-slate-400 transition cursor-pointer">Security</Link>
           </div>
         </div>
       </div>
