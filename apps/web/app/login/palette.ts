@@ -1,0 +1,40 @@
+export type LoginTheme = 'dark' | 'light';
+
+// Ported from the Claude Design mock's DARK/LIGHT constants — same token
+// names as the marketing page's palette (ground/panel/line/ink/accent/amber)
+// plus a few login-specific ones (elevated input fill, a third ink step for
+// placeholders, and semantic success/danger for form feedback).
+export const LOGIN_PALETTES: Record<LoginTheme, Record<string, string>> = {
+  dark: {
+    '--ground': '#07080B',
+    '--panel': '#0D0F16',
+    '--elevated': '#12141C',
+    '--line': '#1E2233',
+    '--ink': '#FFFFFF',
+    '--ink2': '#94A3B8',
+    '--ink3': '#64748B',
+    '--accent-ink': '#9EA2F9',
+    '--accent': '#6366F1',
+    '--accent-hover': '#4F46E5',
+    '--amber': '#F59E0B',
+    '--success': '#10B981',
+    '--danger': '#F43F5E',
+    '--chip': 'rgba(255,255,255,.04)',
+  },
+  light: {
+    '--ground': '#FBFBFC',
+    '--panel': '#FFFFFF',
+    '--elevated': '#FFFFFF',
+    '--line': '#E3E6ED',
+    '--ink': '#0F1220',
+    '--ink2': '#5B6577',
+    '--ink3': '#8A93A6',
+    '--accent-ink': '#4338CA',
+    '--accent': '#4F46E5',
+    '--accent-hover': '#4338CA',
+    '--amber': '#B45309',
+    '--success': '#047857',
+    '--danger': '#BE123C',
+    '--chip': 'rgba(15,18,32,.04)',
+  },
+};

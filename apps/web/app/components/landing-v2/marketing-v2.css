@@ -1,0 +1,111 @@
+/* Marketing page v2 — wireframe "blueprint" component frame + scroll-driven
+   keyframes. Ported from the Claude Design mock's Industry design-system
+   styles.css (.blueprint/.corner) and the page's own <style> block. */
+
+.wp-root {
+  overflow-x: clip;
+}
+
+.wp-root a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.wp-root a:hover {
+  color: #9ea2f9;
+}
+
+/* .wp-blueprint / .wp-corner now live in ../ui/blueprint.css, shared with
+   other Industry-design-system pages (see MarketingPageV2.tsx's imports). */
+
+@keyframes wpUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes wpFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes wpBlink {
+  0%, 49% {
+    opacity: 1;
+  }
+  50%, 100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wp-root {
+    scroll-behavior: auto;
+  }
+}
+
+/* Pinned scrollytelling track heights — the extra height above 100vh is
+   the actual scroll distance MarketingEngine's frame() spends walking the
+   stages/cards through. Shorter on narrow viewports both because the
+   tracks feel longer per swipe on mobile and because there's less
+   horizontal content competing for attention while pinned. */
+.wp-stage-track {
+  position: relative;
+  height: 260vh;
+}
+
+.wp-limit-track {
+  position: relative;
+  height: 280vh;
+}
+
+@media (max-width: 767px) {
+  .wp-stage-track {
+    height: 190vh;
+  }
+
+  .wp-limit-track {
+    height: 210vh;
+  }
+}
+
+@media (max-width: 480px) {
+  .wp-stage-track {
+    height: 170vh;
+  }
+
+  .wp-limit-track {
+    height: 190vh;
+  }
+}
+
+/* Nav: logo, GitHub link and the "Start free" CTA are load-bearing; the
+   AUTO/DARK/LIGHT segmented control is a nice-to-have that, combined with
+   everything else marked flex-shrink:0, was pushing the CTA button past
+   the right edge on narrow phones instead of just letting the (already
+   collapsible) nav links give way. Drop it below the width where that
+   starts happening rather than let any of the load-bearing controls clip. */
+@media (max-width: 640px) {
+  /* Overrides each element's inline `display: flex` (set in Nav.tsx) —
+     inline styles otherwise beat any stylesheet rule regardless of
+     selector specificity, so this needs !important to actually hide it. */
+  [data-seg] {
+    display: none !important;
+  }
+
+  /* Below this width the nav-links row has already shrunk (via its own
+     overflow:hidden) to showing one illegible truncated word fragment —
+     drop it entirely rather than show a fragment. */
+  [data-navlinks] {
+    display: none !important;
+  }
+}
