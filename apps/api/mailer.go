@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -9,6 +10,7 @@ import (
 	"net/http"
 	"net/mail"
 	"net/smtp"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -23,6 +25,18 @@ func sanitizeHeaderField(s string) string {
 	return strings.TrimSpace(s)
 }
 
+// sanitizeName filters a recipient name to an allowlist of safe characters (letters, digits, spaces, dots, dashes, underscores).
+func sanitizeName(name string) string {
+	clean := sanitizeHeaderField(name)
+	var sb strings.Builder
+	for _, r := range clean {
+		if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == ' ' || r == '.' || r == '_' || r == '-' {
+			sb.WriteRune(r)
+		}
+	}
+	return strings.TrimSpace(sb.String())
+}
+
 // EmailSender defines the interface for delivering outbound transactional emails.
 type EmailSender interface {
 	SendVerificationEmail(toEmail, toName, verificationLink string) error
@@ -32,7 +46,7 @@ type EmailSender interface {
 type ConsoleMailer struct{}
 
 func (c *ConsoleMailer) SendVerificationEmail(toEmail, toName, verificationLink string) error {
-	cleanName := sanitizeHeaderField(toName)
+	cleanName := sanitizeName(toName)
 	cleanEmail := sanitizeHeaderField(toEmail)
 	cleanLink := sanitizeHeaderField(verificationLink)
 
@@ -50,7 +64,7 @@ type ResendMailer struct {
 }
 
 func (r *ResendMailer) SendVerificationEmail(toEmail, toName, verificationLink string) error {
-	cleanName := sanitizeHeaderField(toName)
+	cleanName := sanitizeName(toName)
 	cleanEmail := sanitizeHeaderField(toEmail)
 	cleanLink := sanitizeHeaderField(verificationLink)
 
@@ -124,24 +138,38 @@ type SMTPMailer struct {
 }
 
 func (s *SMTPMailer) SendVerificationEmail(toEmail, toName, verificationLink string) error {
-	cleanName := sanitizeHeaderField(toName)
-	cleanToEmail := sanitizeHeaderField(toEmail)
-	cleanFrom := sanitizeHeaderField(s.from)
-	cleanLink := sanitizeHeaderField(verificationLink)
+	// Strictly parse and validate destination email address (RFC 5322)
+	parsedTo, err := mail.ParseAddress(toEmail)
+	if err != nil {
+		return fmt.Errorf("invalid recipient address: %w", err)
+	}
 
-	// Format address headers safely using net/mail to eliminate CRLF and header injection risks
-	toAddress := (&mail.Address{Name: cleanName, Address: cleanToEmail}).String()
+	// Strictly parse and validate verification URL
+	parsedURL, err := url.ParseRequestURI(verificationLink)
+	if err != nil {
+		return fmt.Errorf("invalid verification link: %w", err)
+	}
+	safeLink := parsedURL.String()
+
+	cleanName := sanitizeName(toName)
+	cleanFrom := sanitizeHeaderField(s.from)
+	if cleanFrom == "" {
+		cleanFrom = "noreply@whiparc.com"
+	}
+
 	fromAddress := cleanFrom
 	if fromParsed, err := mail.ParseAddress(cleanFrom); err == nil {
 		fromAddress = fromParsed.String()
 	}
+
+	toAddress := (&mail.Address{Name: cleanName, Address: parsedTo.Address}).String()
 
 	addr := fmt.Sprintf("%s:%d", s.host, s.port)
 	subject := "Subject: Verify your Whiparc account\r\n"
 	fromHeader := fmt.Sprintf("From: %s\r\n", fromAddress)
 	toHeader := fmt.Sprintf("To: %s\r\n", toAddress)
 	mimeHeader := "MIME-Version: 1.0\r\nContent-Type: text/plain; charset=UTF-8\r\n\r\n"
-	body := fmt.Sprintf("Welcome to Whiparc, %s!\r\n\r\nPlease verify your email address by clicking the link below:\r\n%s\r\n\r\nThis link will expire in 24 hours.\r\n", cleanName, cleanLink)
+	body := fmt.Sprintf("Welcome to Whiparc, %s!\r\n\r\nPlease verify your email address by clicking the link below:\r\n%s\r\n\r\nThis link will expire in 24 hours.\r\n", cleanName, safeLink)
 
 	msg := []byte(fromHeader + toHeader + subject + mimeHeader + body)
 
@@ -150,12 +178,65 @@ func (s *SMTPMailer) SendVerificationEmail(toEmail, toName, verificationLink str
 		auth = smtp.PlainAuth("", s.user, s.pass, s.host)
 	}
 
-	err := smtp.SendMail(addr, auth, cleanFrom, []string{cleanToEmail}, msg)
-	if err != nil {
-		return fmt.Errorf("smtp send failed: %w", err)
+	fromEnvelope := cleanFrom
+	if fromParsed, err := mail.ParseAddress(cleanFrom); err == nil && fromParsed.Address != "" {
+		fromEnvelope = fromParsed.Address
 	}
 
-	log.Printf("[EMAIL] Verification email sent to %s via SMTP\n", cleanToEmail)
+	return s.sendMail(addr, auth, fromEnvelope, []string{parsedTo.Address}, msg)
+}
+
+func (s *SMTPMailer) sendMail(addr string, auth smtp.Auth, from string, to []string, msg []byte) error {
+	client, err := smtp.Dial(addr)
+	if err != nil {
+		return fmt.Errorf("smtp dial failed: %w", err)
+	}
+	defer client.Close()
+
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		tlsConfig := &tls.Config{ServerName: s.host}
+		if err := client.StartTLS(tlsConfig); err != nil {
+			return fmt.Errorf("smtp starttls failed: %w", err)
+		}
+	}
+
+	if auth != nil {
+		if ok, _ := client.Extension("AUTH"); ok {
+			if err := client.Auth(auth); err != nil {
+				return fmt.Errorf("smtp auth failed: %w", err)
+			}
+		}
+	}
+
+	if err := client.Mail(from); err != nil {
+		return fmt.Errorf("smtp mail command failed: %w", err)
+	}
+
+	for _, recipient := range to {
+		if err := client.Rcpt(recipient); err != nil {
+			return fmt.Errorf("smtp rcpt command failed: %w", err)
+		}
+	}
+
+	wc, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("smtp data command failed: %w", err)
+	}
+
+	if _, err := wc.Write(msg); err != nil {
+		_ = wc.Close()
+		return fmt.Errorf("smtp write message failed: %w", err)
+	}
+
+	if err := wc.Close(); err != nil {
+		return fmt.Errorf("smtp close data failed: %w", err)
+	}
+
+	if err := client.Quit(); err != nil {
+		log.Printf("[EMAIL] Warning: smtp quit returned error: %v\n", err)
+	}
+
+	log.Printf("[EMAIL] Verification email sent to %v via SMTP\n", to)
 	return nil
 }
 
