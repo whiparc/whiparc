@@ -49,7 +49,6 @@ function LoginForm() {
       setNotice('You already have an account with this email — sign in below.');
       const prefillEmail = searchParams.get('email');
       if (prefillEmail) {
-        // eslint-disable-next-line react-hooks/set-state-in-effect
         setEmail(prefillEmail);
       }
     } else {

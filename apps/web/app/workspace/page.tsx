@@ -28,6 +28,7 @@ import Tooltip from '../components/Tooltip';
 import CustomNodeModal from '../components/CustomNodeModal';
 import { ProjectSettingsModal } from '../components/ProjectSettingsModal';
 import { InputWithVariablePicker } from '../components/VariablePicker';
+import EmailVerificationBanner from '../components/EmailVerificationBanner';
 import { generateAnsibleYAML } from '../lib/exportYaml';
 import { downloadZipBundle, downloadTerraformZip, generateBundleFiles, generateTerraformFiles } from '../lib/bundleGenerator';
 import { DEFAULT_INSTANCE_PARAMS, DEFAULT_SG_PARAMS } from '../lib/terraformDefaults';
@@ -4660,6 +4661,8 @@ function WorkspaceContent() {
         agentStatus={agentStatus}
         migrationStatus={migrationStatus}
       />
+
+      <EmailVerificationBanner />
 
       <div className="flex-1 flex overflow-hidden relative">
         <LibraryPanel

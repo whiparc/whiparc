@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -65,6 +66,10 @@ var (
 	upgrader      = websocket.Upgrader{CheckOrigin: checkWebsocketOrigin}
 	trackers      = make(map[string]*RunTracker)
 	trackersMutex sync.Mutex
+	emailSender   EmailSender
+	signupLimiter *RateLimiter
+	loginLimiter  *RateLimiter
+	resendLimiter *RateLimiter
 )
 
 func main() {
@@ -176,6 +181,12 @@ func main() {
 	}
 	log.Println("[DB] Database initialized successfully.")
 
+	// Initialize mailer and rate limiters
+	emailSender = NewEmailSender()
+	signupLimiter = NewRateLimiter(5, 1*time.Hour, 5)       // 5 signups per hour per IP
+	loginLimiter = NewRateLimiter(10, 15*time.Minute, 10)   // 10 logins per 15 min per IP
+	resendLimiter = NewRateLimiter(3, 15*time.Minute, 3)    // 3 resends per 15 min per user/IP
+
 	// Set up routing
 	mux := http.NewServeMux()
 
@@ -192,6 +203,9 @@ func main() {
 	// Auth & Workspace Sync Routes
 	mux.HandleFunc("POST /api/auth/signup", enableCORS(handleSignup))
 	mux.HandleFunc("POST /api/auth/login", enableCORS(handleLogin))
+	mux.HandleFunc("POST /api/auth/verify-email", enableCORS(handleVerifyEmail))
+	mux.HandleFunc("GET /api/auth/verify-email", enableCORS(handleVerifyEmail))
+	mux.Handle("POST /api/auth/resend-verification", AuthMiddleware(http.HandlerFunc(handleResendVerification)))
 	mux.Handle("POST /api/auth/upgrade", AuthMiddleware(http.HandlerFunc(handleUpgradePlan)))
 	mux.Handle("GET /api/auth/me", AuthMiddleware(http.HandlerFunc(handleMe)))
 	mux.HandleFunc("GET /api/auth/{provider}/login", handleOAuthLogin)
@@ -928,24 +942,34 @@ type TokenHeader struct {
 }
 
 type TokenClaims struct {
-	ID    string `json:"id"`
-	Email string `json:"email"`
-	Name  string `json:"name"`
-	Plan  string `json:"plan"`
-	Exp   int64  `json:"exp"`
+	ID            string `json:"id"`
+	Email         string `json:"email"`
+	Name          string `json:"name"`
+	Plan          string `json:"plan"`
+	EmailVerified bool   `json:"email_verified"`
+	Exp           int64  `json:"exp"`
 }
 
-func GenerateToken(userID, email, name, plan string) (string, error) {
+func generateRandomHex(n int) string {
+	b := make([]byte, n)
+	if _, err := rand.Read(b); err != nil {
+		return fmt.Sprintf("%x", time.Now().UnixNano())
+	}
+	return hex.EncodeToString(b)
+}
+
+func GenerateToken(userID, email, name, plan string, emailVerified bool) (string, error) {
 	header := TokenHeader{Alg: "HS256", Typ: "JWT"}
 	headerJSON, _ := json.Marshal(header)
 	headerB64 := base64.RawURLEncoding.EncodeToString(headerJSON)
 
 	claims := TokenClaims{
-		ID:    userID,
-		Email: email,
-		Name:  name,
-		Plan:  plan,
-		Exp:   time.Now().Add(24 * time.Hour).Unix(),
+		ID:            userID,
+		Email:         email,
+		Name:          name,
+		Plan:          plan,
+		EmailVerified: emailVerified,
+		Exp:           time.Now().Add(24 * time.Hour).Unix(),
 	}
 	claimsJSON, _ := json.Marshal(claims)
 	claimsB64 := base64.RawURLEncoding.EncodeToString(claimsJSON)
@@ -1004,6 +1028,11 @@ func checkPasswordHash(password, hash string) bool {
 }
 
 func handleSignup(w http.ResponseWriter, r *http.Request) {
+	if !signupLimiter.Allow(ClientIP(r)) {
+		http.Error(w, "Too many signup attempts. Please wait a few minutes before trying again.", http.StatusTooManyRequests)
+		return
+	}
+
 	var payload struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -1021,6 +1050,12 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate email structure and reject disposable/burner domains
+	if err := ValidateEmail(email); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
 	hash, err := hashPassword(payload.Password)
 	if err != nil {
 		http.Error(w, "Failed to secure password: "+err.Error(), http.StatusInternalServerError)
@@ -1028,6 +1063,8 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 	}
 
 	userID := fmt.Sprintf("usr_%d", time.Now().UnixNano())
+	verificationToken := generateRandomHex(32)
+	verificationExpiresAt := time.Now().Add(24 * time.Hour)
 
 	tx, err := db.Begin()
 	if err != nil {
@@ -1036,8 +1073,8 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback()
 
-	insertQuery := "INSERT INTO users (id, email, password_hash, name) VALUES (?, ?, ?, ?)"
-	_, err = tx.Exec(insertQuery, userID, email, hash, name)
+	insertQuery := "INSERT INTO users (id, email, password_hash, name, email_verified, verification_token, verification_expires_at) VALUES (?, ?, ?, ?, FALSE, ?, ?)"
+	_, err = tx.Exec(insertQuery, userID, email, hash, name, verificationToken, verificationExpiresAt)
 	if err != nil {
 		// SQLite reports "UNIQUE constraint failed", Postgres reports
 		// "duplicate key value violates unique constraint" (lowercase) —
@@ -1061,15 +1098,39 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Dispatch verification email in background (Console / Resend / SMTP)
+	verificationLink := fmt.Sprintf("%s/verify-email?token=%s", oauthFrontendBase(), verificationToken)
+	go func() {
+		if err := emailSender.SendVerificationEmail(email, name, verificationLink); err != nil {
+			log.Printf("[EMAIL] Failed to send verification email to %s: %v\n", email, err)
+		}
+	}()
+
+	token, err := GenerateToken(userID, email, name, "FREE", false)
+	if err != nil {
+		http.Error(w, "Failed to sign token: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"id":    userID,
-		"email": email,
-		"name":  name,
+		"token": token,
+		"user": map[string]interface{}{
+			"id":             userID,
+			"email":          email,
+			"name":           name,
+			"plan":           "FREE",
+			"email_verified": false,
+		},
 	})
 }
 
 func handleLogin(w http.ResponseWriter, r *http.Request) {
+	if !loginLimiter.Allow(ClientIP(r)) {
+		http.Error(w, "Too many login attempts. Please wait a few minutes before trying again.", http.StatusTooManyRequests)
+		return
+	}
+
 	var payload struct {
 		Email    string `json:"email"`
 		Password string `json:"password"`
@@ -1086,8 +1147,9 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var userID, name, plan string
+	var emailVerified bool
 	var hash sql.NullString
-	err := db.QueryRow("SELECT id, name, password_hash, plan FROM users WHERE email = ?", email).Scan(&userID, &name, &hash, &plan)
+	err := db.QueryRow("SELECT id, name, password_hash, plan, email_verified FROM users WHERE email = ?", email).Scan(&userID, &name, &hash, &plan, &emailVerified)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Invalid email or password", http.StatusUnauthorized)
 		return
@@ -1108,7 +1170,7 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := GenerateToken(userID, email, name, plan)
+	token, err := GenerateToken(userID, email, name, plan, emailVerified)
 	if err != nil {
 		http.Error(w, "Failed to sign token: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -1117,12 +1179,140 @@ func handleLogin(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"token": token,
-		"user": map[string]string{
-			"id":    userID,
-			"email": email,
-			"name":  name,
-			"plan":  plan,
+		"user": map[string]interface{}{
+			"id":             userID,
+			"email":          email,
+			"name":           name,
+			"plan":           plan,
+			"email_verified": emailVerified,
 		},
+	})
+}
+
+// POST or GET /api/auth/verify-email
+func handleVerifyEmail(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", allowedOrigin())
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	var tokenStr string
+	if r.Method == http.MethodPost {
+		var payload struct {
+			Token string `json:"token"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&payload)
+		tokenStr = strings.TrimSpace(payload.Token)
+	}
+	if tokenStr == "" {
+		tokenStr = strings.TrimSpace(r.URL.Query().Get("token"))
+	}
+
+	if tokenStr == "" {
+		http.Error(w, "Verification token is required", http.StatusBadRequest)
+		return
+	}
+
+	var userID, email, name, plan string
+	var expiresAt time.Time
+	err := db.QueryRow("SELECT id, email, name, plan, verification_expires_at FROM users WHERE verification_token = ?", tokenStr).Scan(&userID, &email, &name, &plan, &expiresAt)
+	if err == sql.ErrNoRows {
+		http.Error(w, "Invalid or already used verification link", http.StatusBadRequest)
+		return
+	} else if err != nil {
+		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if time.Now().After(expiresAt) {
+		http.Error(w, "Verification link has expired. Please log in and request a new one.", http.StatusBadRequest)
+		return
+	}
+
+	_, err = db.Exec("UPDATE users SET email_verified = TRUE, verification_token = NULL, verification_expires_at = NULL WHERE id = ?", userID)
+	if err != nil {
+		http.Error(w, "Failed to update verification status: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	newToken, err := GenerateToken(userID, email, name, plan, true)
+	if err != nil {
+		http.Error(w, "Failed to sign updated session token: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Email verified successfully",
+		"token":   newToken,
+		"user": map[string]interface{}{
+			"id":             userID,
+			"email":          email,
+			"name":           name,
+			"plan":           plan,
+			"email_verified": true,
+		},
+	})
+}
+
+// POST /api/auth/resend-verification
+func handleResendVerification(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Access-Control-Allow-Origin", allowedOrigin())
+	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+	if r.Method == http.MethodOptions {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	user, ok := GetUserFromContext(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if !resendLimiter.Allow(user.ID) {
+		http.Error(w, "Too many resend attempts. Please wait a few minutes before trying again.", http.StatusTooManyRequests)
+		return
+	}
+
+	var emailVerified bool
+	var email, name string
+	err := db.QueryRow("SELECT email_verified, email, name FROM users WHERE id = ?", user.ID).Scan(&emailVerified, &email, &name)
+	if err != nil {
+		http.Error(w, "User not found", http.StatusNotFound)
+		return
+	}
+
+	if emailVerified {
+		http.Error(w, "Email is already verified", http.StatusBadRequest)
+		return
+	}
+
+	newToken := generateRandomHex(32)
+	newExpiresAt := time.Now().Add(24 * time.Hour)
+
+	_, err = db.Exec("UPDATE users SET verification_token = ?, verification_expires_at = ? WHERE id = ?", newToken, newExpiresAt, user.ID)
+	if err != nil {
+		http.Error(w, "Failed to create verification token: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	verificationLink := fmt.Sprintf("%s/verify-email?token=%s", oauthFrontendBase(), newToken)
+	go func() {
+		if err := emailSender.SendVerificationEmail(email, name, verificationLink); err != nil {
+			log.Printf("[EMAIL] Failed to resend verification email to %s: %v\n", email, err)
+		}
+	}()
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"message": "Verification link sent successfully",
 	})
 }
 
@@ -1367,7 +1557,7 @@ func handleUpgradePlan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newToken, err := GenerateToken(user.ID, user.Email, user.Name, plan)
+	newToken, err := GenerateToken(user.ID, user.Email, user.Name, plan, user.EmailVerified)
 	if err != nil {
 		http.Error(w, "Failed to sign token", http.StatusInternalServerError)
 		return
@@ -1376,11 +1566,12 @@ func handleUpgradePlan(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"token": newToken,
-		"user": map[string]string{
-			"id":    user.ID,
-			"email": user.Email,
-			"name":  user.Name,
-			"plan":  plan,
+		"user": map[string]interface{}{
+			"id":             user.ID,
+			"email":          user.Email,
+			"name":           user.Name,
+			"plan":           plan,
+			"email_verified": user.EmailVerified,
 		},
 	})
 }

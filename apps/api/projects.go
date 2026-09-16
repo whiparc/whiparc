@@ -531,10 +531,11 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"id":    user.ID,
-		"email": user.Email,
-		"name":  user.Name,
-		"plan":  user.Plan,
+		"id":             user.ID,
+		"email":          user.Email,
+		"name":           user.Name,
+		"plan":           user.Plan,
+		"email_verified": user.EmailVerified,
 	})
 }
 

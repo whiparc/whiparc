@@ -244,8 +244,9 @@ func handleOAuthCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := GenerateToken(user.ID, user.Email, user.Name, user.Plan)
+	token, err := GenerateToken(user.ID, user.Email, user.Name, user.Plan, user.EmailVerified)
 	if err != nil {
+		log.Printf("[OAUTH] Failed to sign token: %v\n", err)
 		http.Error(w, "Failed to sign token: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
@@ -445,10 +446,11 @@ func fetchGithubPrimaryEmail(accessToken string) (string, bool, error) {
 // --- Find-or-create ---
 
 type oauthResolvedUser struct {
-	ID    string
-	Email string
-	Name  string
-	Plan  string
+	ID            string
+	Email         string
+	Name          string
+	Plan          string
+	EmailVerified bool
 }
 
 // findOrCreateOAuthUser resolves a provider identity to an app user,
@@ -498,8 +500,8 @@ func findOrCreateOAuthUser(provider, providerUserID, email string, emailVerified
 		}
 
 		if _, err = tx.Exec(
-			"INSERT INTO users (id, email, password_hash, name) VALUES (?, ?, NULL, ?)",
-			userID, resolvedEmail, resolvedName,
+			"INSERT INTO users (id, email, password_hash, name, email_verified) VALUES (?, ?, NULL, ?, ?)",
+			userID, resolvedEmail, resolvedName, true,
 		); err != nil {
 			return nil, fmt.Errorf("failed to create user: %w", err)
 		}
@@ -526,7 +528,7 @@ func findOrCreateOAuthUser(provider, providerUserID, email string, emailVerified
 
 func loadOAuthResolvedUser(userID string) (*oauthResolvedUser, error) {
 	var u oauthResolvedUser
-	err := db.QueryRow("SELECT id, email, name, plan FROM users WHERE id = ?", userID).Scan(&u.ID, &u.Email, &u.Name, &u.Plan)
+	err := db.QueryRow("SELECT id, email, name, plan, email_verified FROM users WHERE id = ?", userID).Scan(&u.ID, &u.Email, &u.Name, &u.Plan, &u.EmailVerified)
 	if err != nil {
 		return nil, err
 	}
