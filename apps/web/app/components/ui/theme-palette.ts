@@ -1,10 +1,11 @@
-export type LoginTheme = 'dark' | 'light';
+export type Theme = 'dark' | 'light';
 
-// Ported from the Claude Design mock's DARK/LIGHT constants — same token
-// names as the marketing page's palette (ground/panel/line/ink/accent/amber)
-// plus a few login-specific ones (elevated input fill, a third ink step for
-// placeholders, and semantic success/danger for form feedback).
-export const LOGIN_PALETTES: Record<LoginTheme, Record<string, string>> = {
+// Shared dark/light token set for the Industry-design-system pages (login,
+// dashboard, and others as they're ported) — each page owns its own local
+// theme state (no cross-page persistence), but they all repaint against
+// these same values so switching between them doesn't feel like a
+// different product.
+export const THEME_PALETTES: Record<Theme, Record<string, string>> = {
   dark: {
     '--ground': '#07080B',
     '--panel': '#0D0F16',

@@ -7,7 +7,7 @@ import { Icon } from '@iconify/react';
 import { useAuthStore } from '../store/useAuthStore';
 import { spaceGroteskFont, barlowFont, jetBrainsMonoFont } from '../fonts';
 import { BlueprintCorners } from '../components/ui/BlueprintCorners';
-import { LOGIN_PALETTES, type LoginTheme } from './palette';
+import { THEME_PALETTES, type Theme } from '../components/ui/theme-palette';
 import '../components/ui/blueprint.css';
 import './login.css';
 
@@ -37,7 +37,7 @@ export function LoginPageV2() {
   const searchParams = useSearchParams();
   const { login, signup, isLoading, error, clearError } = useAuthStore();
 
-  const [theme, setTheme] = useState<LoginTheme>('dark');
+  const [theme, setTheme] = useState<Theme>('dark');
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -57,7 +57,12 @@ export function LoginPageV2() {
 
   useEffect(() => {
     const mode = searchParams.get('mode');
-    setIsSignUp(mode === 'signup');
+    if (mode === 'signup') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setIsSignUp(true);
+    } else {
+      setIsSignUp(false);
+    }
     clearError();
     setFormError(null);
 
@@ -71,7 +76,6 @@ export function LoginPageV2() {
     } else {
       setNotice(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, clearError]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -140,7 +144,7 @@ export function LoginPageV2() {
 
   const toggleMode = () => router.push(withRedirect(isSignUp ? '/login' : '/login?mode=signup'));
 
-  const palette = LOGIN_PALETTES[theme];
+  const palette = THEME_PALETTES[theme];
   const rootVars = useMemo(
     () =>
       ({
