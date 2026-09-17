@@ -158,9 +158,10 @@ export const getInitialEdges = (): Edge[] => [
     style: { stroke: '#6366F1', strokeWidth: 2.5 },
     animated: false,
     markerEnd: {
-      type: MarkerType.ArrowClosed,
+      type: MarkerType.Arrow,
       width: 12,
       height: 12,
+      strokeWidth: 1.6,
       color: '#6366F1',
     },
   },
@@ -172,9 +173,10 @@ export const getInitialEdges = (): Edge[] => [
     className: 'animate-dash-flow',
     animated: true,
     markerEnd: {
-      type: MarkerType.ArrowClosed,
+      type: MarkerType.Arrow,
       width: 12,
       height: 12,
+      strokeWidth: 1.6,
       color: '#8B5CF6',
     },
   },
@@ -185,9 +187,10 @@ export const getInitialEdges = (): Edge[] => [
     style: { stroke: '#8B5CF6', strokeWidth: 2.5 },
     animated: false,
     markerEnd: {
-      type: MarkerType.ArrowClosed,
+      type: MarkerType.Arrow,
       width: 12,
       height: 12,
+      strokeWidth: 1.6,
       color: '#8B5CF6',
     },
   }
@@ -265,9 +268,10 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
                             strokeWidth
                         },
                         markerEnd: {
-                            type: MarkerType.ArrowClosed,
+                            type: MarkerType.Arrow,
                             width: 12,
                             height: 12,
+                            strokeWidth: 1.6,
                             color: resolveMarkerColor(stroke),
                         },
                     };
@@ -354,9 +358,10 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
           className,
           animated,
           markerEnd: {
-            type: MarkerType.ArrowClosed,
+            type: MarkerType.Arrow,
             width: 12,
             height: 12,
+            strokeWidth: 1.6,
             color: resolveMarkerColor(stroke),
           },
         };

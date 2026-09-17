@@ -1,0 +1,75 @@
+@keyframes wpBeat {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.wp-ws-navlink:hover {
+  background: var(--chip);
+  color: var(--ink);
+}
+
+.wp-ws-iconbtn:hover {
+  border-color: var(--accent-ink);
+  color: var(--ink);
+}
+
+.wp-ws-ghost:hover {
+  background: var(--chip);
+}
+
+.wp-ws-tab {
+  cursor: pointer;
+}
+
+.wp-ws-tab:hover:not([data-active='true']) {
+  color: var(--ink);
+}
+
+.wp-ws-nodecard {
+  cursor: grab;
+}
+
+.wp-ws-nodecard:hover {
+  border-color: var(--accent-ink);
+}
+
+.wp-ws-nodecard:active {
+  cursor: grabbing;
+}
+
+.wp-ws-input {
+  transition: border-color 0.15s ease;
+}
+
+.wp-ws-input:focus-visible {
+  outline: none;
+  border-color: var(--accent-ink);
+}
+
+.wp-ws-console-toggle:hover {
+  background: var(--chip);
+}
+
+/* Inspector panel — see INSPECTOR_SCOPE_STYLE in page.tsx for the CSS
+   custom-property remap that gets the panel's existing shadcn/Tailwind
+   classes (bg-card, border-border, text-foreground, ...) onto the blueprint
+   design system's colors. These rules cover what variable remapping alone
+   can't: square (not rounded) fields to match the blueprint aesthetic, and
+   monospace uppercase labels/kickers matching the rest of the redesign. */
+.wp-inspector-scope [class*="rounded"]:not([class*="rounded-full"]) {
+  border-radius: 0 !important;
+}
+
+.wp-inspector-scope .uppercase {
+  font-family: var(--font-mono-marketing, monospace);
+  letter-spacing: 0.08em;
+}
+
+.wp-inspector-scope h3 {
+  font-family: var(--font-display, inherit);
+}
