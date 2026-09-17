@@ -51,8 +51,6 @@ type CanvasState = {
     resetCanvas: () => void;
     isExecuting: boolean;
     setIsExecuting: (executing: boolean) => void;
-    activeTool: 'select' | 'pan' | 'link';
-    setActiveTool: (tool: 'select' | 'pan' | 'link') => void;
     executionStatuses: Record<string, NodeExecutionStatus>;
     setNodeExecutionStatus: (nodeId: string, status: NodeExecutionStatus) => void;
     resetExecutionStatuses: () => void;
@@ -203,7 +201,6 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
     selectedNodeId: null,
     selectedEdgeId: null,
     isExecuting: false,
-    activeTool: 'select',
     executionStatuses: {},
     pipelineAction: null,
     projectId: null,
@@ -211,7 +208,6 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
     version: 1,
 
     setIsExecuting: (executing) => set({ isExecuting: executing }),
-    setActiveTool: (tool) => set({ activeTool: tool }),
     setNodeExecutionStatus: (nodeId, status) => set((state) => ({
         executionStatuses: { ...state.executionStatuses, [nodeId]: status }
     })),
@@ -379,7 +375,6 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
         nodes: [],
         edges: [],
         selectedNodeId: null,
-        activeTool: 'select'
       });
     },
 

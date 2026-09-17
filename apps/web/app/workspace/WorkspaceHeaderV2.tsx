@@ -31,6 +31,7 @@ export interface WorkspaceHeaderV2Props {
   autoDestroy: boolean;
   onAutoDestroyChange: (val: boolean) => void;
   onDestroy: () => void;
+  onClearCanvas: () => void;
   collaborators?: Collaborator[];
   isSyncConnected?: boolean;
   saveStatus?: 'saved' | 'saving' | 'error' | 'readonly';
@@ -84,6 +85,7 @@ export function WorkspaceHeaderV2({
   autoDestroy,
   onAutoDestroyChange,
   onDestroy,
+  onClearCanvas,
   collaborators = [],
   isSyncConnected = false,
   saveStatus = 'saved',
@@ -97,7 +99,7 @@ export function WorkspaceHeaderV2({
   const tabs: { key: WorkspaceView; label: string }[] = [
     { key: 'canvas', label: 'Canvas' },
     { key: 'variables', label: 'Variables' },
-    { key: 'outputs', label: 'Outputs' },
+    { key: 'outputs', label: 'Code Preview' },
   ];
 
   const saveDot =
@@ -278,6 +280,23 @@ export function WorkspaceHeaderV2({
                 <button
                   type="button"
                   onClick={() => {
+                    if (!isBusy) {
+                      onClearCanvas();
+                      setMenuOpen(false);
+                    }
+                  }}
+                  disabled={isBusy}
+                  title="Delete every node and connection on this canvas"
+                  className="wp-ws-navlink"
+                  style={{ ...menuItemStyle, color: 'var(--danger)', opacity: isBusy ? 0.5 : 1, cursor: isBusy ? 'default' : 'pointer' }}
+                >
+                  <Icon icon="lucide:eraser" width={12} />
+                  Clear canvas
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
                     if (!isBusy && !autoDestroy) {
                       onDestroy();
                       setMenuOpen(false);
@@ -295,6 +314,28 @@ export function WorkspaceHeaderV2({
             </>
           )}
         </div>
+
+        <button
+          type="button"
+          onClick={() => onViewChange('outputs')}
+          title="Review the compiled Terraform/Ansible/Kubernetes before deploying"
+          className="wp-ws-iconbtn"
+          style={{
+            height: 30,
+            padding: '0 13px',
+            fontSize: 13,
+            border: '1px solid var(--line)',
+            background: 'transparent',
+            color: 'var(--ink)',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          <Icon icon="lucide:play" width={12} />
+          Plan
+        </button>
 
         <button
           type="button"
@@ -323,7 +364,7 @@ export function WorkspaceHeaderV2({
           Deploy
         </button>
 
-        <ProfileMenu variant="compact" />
+        <ProfileMenu variant="compact" blueprint />
       </div>
     </div>
   );

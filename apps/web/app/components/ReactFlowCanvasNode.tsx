@@ -25,9 +25,9 @@ interface ReactFlowCanvasNodeProps {
 const TECH_COLOR: Record<ReactFlowCanvasNodeProps['data']['tech'], string> = {
   Terraform: 'var(--accent-ink, #9EA2F9)',
   Ansible: 'var(--amber, #F59E0B)',
-  Kubernetes: '#7DD3FC',
+  Kubernetes: 'var(--k8s-ink, #7DD3FC)',
   Source: 'var(--amber, #F59E0B)',
-  Target: '#5EEAD4',
+  Target: 'var(--target-ink, #5EEAD4)',
 };
 
 // Two hand-drawn border-radius "wobbles" from the design mock, alternated

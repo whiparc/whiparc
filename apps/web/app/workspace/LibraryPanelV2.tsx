@@ -21,9 +21,9 @@ interface LibraryNode {
 const TECH_COLOR: Record<LibraryNode['tech'], string> = {
   Terraform: 'var(--accent-ink)',
   Ansible: '#C4B5FD',
-  Kubernetes: '#7DD3FC',
+  Kubernetes: 'var(--k8s-ink, #7DD3FC)',
   Source: 'var(--amber)',
-  Target: '#5EEAD4',
+  Target: 'var(--target-ink, #5EEAD4)',
 };
 
 interface NodeCardProps {

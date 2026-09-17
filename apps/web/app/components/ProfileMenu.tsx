@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Icon } from '@iconify/react';
@@ -9,9 +9,27 @@ import { useAuthStore } from '../store/useAuthStore';
 
 interface ProfileMenuProps {
   variant?: 'default' | 'compact';
+  /** Blueprint design-system look (hairline borders, square corners, mono
+      labels, theme-aware --panel/--line/--ink colors) instead of the
+      shadcn rounded/dark-only style used elsewhere in the app — for pages
+      that are part of that redesign, currently just the workspace header. */
+  blueprint?: boolean;
 }
 
-export default function ProfileMenu({ variant = 'default' }: ProfileMenuProps) {
+const blueprintMenuItemStyle: CSSProperties = {
+  width: '100%',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  padding: '7px 9px',
+  fontSize: 12.5,
+  color: 'var(--ink)',
+  background: 'none',
+  border: 0,
+  cursor: 'pointer',
+};
+
+export default function ProfileMenu({ variant = 'default', blueprint = false }: ProfileMenuProps) {
   const router = useRouter();
   const { user, hasHydrated, logout } = useAuthStore();
   const [open, setOpen] = useState(false);
@@ -52,13 +70,86 @@ export default function ProfileMenu({ variant = 'default' }: ProfileMenuProps) {
         href="/login"
         className={clsx(
           "text-sm font-medium transition-colors",
-          variant === 'compact'
-            ? "px-3 py-1.5 rounded-lg border border-border bg-card text-foreground hover:bg-secondary"
-            : "px-4 py-2 text-muted-foreground hover:text-foreground"
+          blueprint
+            ? undefined
+            : variant === 'compact'
+              ? "px-3 py-1.5 rounded-lg border border-border bg-card text-foreground hover:bg-secondary"
+              : "px-4 py-2 text-muted-foreground hover:text-foreground"
         )}
+        style={blueprint ? { padding: '5px 12px', border: '1px solid var(--line)', color: 'var(--ink)' } : undefined}
       >
         Sign In
       </Link>
+    );
+  }
+
+  if (blueprint) {
+    return (
+      <div className="relative" ref={containerRef}>
+        <button
+          onClick={() => setOpen((v) => !v)}
+          className="wp-ws-iconbtn"
+          style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 8px 3px 3px', border: '1px solid var(--line)', background: 'transparent', cursor: 'pointer' }}
+          title={user.name}
+        >
+          <div
+            style={{
+              height: 24,
+              width: 24,
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 10,
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              fontFamily: 'var(--font-display, inherit)',
+              background: 'var(--accent)',
+              color: '#fff',
+            }}
+          >
+            {user.name.slice(0, 2)}
+          </div>
+          <Icon
+            icon="lucide:chevron-down"
+            width={11}
+            className={clsx("transition-transform hidden sm:block", open && "rotate-180")}
+            style={{ color: 'var(--ink2)' }}
+          />
+        </button>
+
+        {open && (
+          <>
+            <div style={{ position: 'fixed', inset: 0, zIndex: 40 }} onClick={() => setOpen(false)} />
+            <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, width: 210, background: 'var(--panel)', border: '1px solid var(--line)', zIndex: 50, padding: 4 }}>
+              <div style={{ padding: '9px 9px 10px', borderBottom: '1px solid var(--line)', marginBottom: 4 }}>
+                <p style={{ margin: 0, fontFamily: 'var(--font-display, inherit)', fontWeight: 600, fontSize: 13, color: 'var(--ink)' }} className="truncate">
+                  {user.name}
+                </p>
+                <p style={{ margin: '2px 0 0', fontSize: 11, color: 'var(--ink2)' }} className="truncate">
+                  {user.email}
+                </p>
+              </div>
+
+              <Link href="/" onClick={() => setOpen(false)} className="wp-ws-navlink" style={blueprintMenuItemStyle}>
+                <Icon icon="lucide:home" width={12} style={{ color: 'var(--ink3)' }} />
+                Home
+              </Link>
+              <Link href="/dashboard" onClick={() => setOpen(false)} className="wp-ws-navlink" style={blueprintMenuItemStyle}>
+                <Icon icon="lucide:layout-dashboard" width={12} style={{ color: 'var(--ink3)' }} />
+                Dashboard
+              </Link>
+
+              <div style={{ height: 1, background: 'var(--line)', margin: '4px 0' }} />
+
+              <button onClick={handleLogout} className="wp-ws-navlink" style={{ ...blueprintMenuItemStyle, color: 'var(--danger)' }}>
+                <Icon icon="lucide:log-out" width={12} />
+                Logout
+              </button>
+            </div>
+          </>
+        )}
+      </div>
     );
   }
 

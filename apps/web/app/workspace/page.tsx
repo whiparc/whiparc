@@ -78,68 +78,13 @@ interface Credential {
 
 // Header, NodeCard, and LibraryPanel used to live here — replaced by
 // WorkspaceHeaderV2.tsx and LibraryPanelV2.tsx (the new blueprint-styled
-// chrome). CanvasControls below is unchanged.
-
-
-// CanvasControls Component
-interface CanvasControlsProps {
-  activeTool: string;
-  onToolSelect: (tool: string) => void;
-  onReset: () => void;
-  isReadOnly?: boolean;
-}
-
-const CanvasControls: React.FC<CanvasControlsProps> = ({ activeTool, onToolSelect, onReset, isReadOnly = false }) => {
-  return (
-    <div className={clsx(
-      "absolute bottom-6 left-6 z-20 flex items-center gap-2 bg-card/90 backdrop-blur border border-border p-2 rounded-xl shadow-2xl select-none transition-all duration-200",
-      isReadOnly && "opacity-40 pointer-events-none cursor-not-allowed"
-    )}>
-      <button
-        onClick={() => onToolSelect('select')}
-        disabled={isReadOnly}
-        className={clsx(
-          "p-2 rounded-lg transition-all cursor-pointer",
-          activeTool === 'select' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted"
-        )}
-        title="Select Tool"
-      >
-        <Icon icon="lucide:mouse-pointer" className="text-base" />
-      </button>
-      <button
-        onClick={() => onToolSelect('pan')}
-        disabled={isReadOnly}
-        className={clsx(
-          "p-2 rounded-lg transition-all cursor-pointer",
-          activeTool === 'pan' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted"
-        )}
-        title="Pan Tool"
-      >
-        <Icon icon="lucide:move" className="text-base" />
-      </button>
-      <button
-        onClick={() => onToolSelect('link')}
-        disabled={isReadOnly}
-        className={clsx(
-          "p-2 rounded-lg transition-all cursor-pointer",
-          activeTool === 'link' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted"
-        )}
-        title="Add Connection"
-      >
-        <Icon icon="lucide:link" className="text-base" />
-      </button>
-      <div className="w-[1px] h-6 bg-border"></div>
-      <button
-        onClick={onReset}
-        disabled={isReadOnly}
-        className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all cursor-pointer"
-        title="Reset View"
-      >
-        <Icon icon="lucide:refresh-cw" className="text-base" />
-      </button>
-    </div>
-  );
-};
+// chrome). The floating select/pan/link/reset tool-switcher that used to
+// live here (CanvasControls) is gone too — the canvas now behaves like a
+// standard drawing-canvas tool (Excalidraw-style): drag empty space to
+// pan, scroll to zoom, drag a node to move it, all always-on rather than
+// behind a mode switch. Its "Reset View" icon was actually a destructive
+// clear-the-whole-canvas action; that's now "Clear canvas" in the header's
+// overflow ("...") menu, with a confirmation dialog it never had before.
 
 // YAML Syntax Highlighting Function
 function highlightYAMLCode(code: string): React.ReactNode[] {
@@ -655,16 +600,17 @@ const CanvasSummary: React.FC<{
   );
 };
 
-// InspectorPanel still renders through the app's original shadcn/Tailwind
-// semantic tokens (bg-card, border-border, text-foreground, ...), which are
-// fixed dark-only values in globals.css — not the blueprint design system's
-// theme-aware --panel/--ink/--line tokens the rest of the redesigned
-// workspace chrome now uses. Rather than rewrite every field's className
-// (hundreds of them, across every node-type's parameter form), this remaps
-// the shadcn tokens to point at the blueprint tokens for just this
-// subtree — every existing bg-card/border-border/text-foreground/etc class
-// picks up the correct theme-aware color for free, since CSS custom
-// properties re-resolve through the cascade at each element.
+// InspectorPanel, the Variables view, and the Code Preview view all still
+// render through the app's original shadcn/Tailwind semantic tokens
+// (bg-card, border-border, text-foreground, ...), which are fixed dark-only
+// values in globals.css — not the blueprint design system's theme-aware
+// --panel/--ink/--line tokens the rest of the redesigned workspace chrome
+// now uses. Rather than rewrite every field's className (hundreds of them,
+// across every node-type's parameter form), this remaps the shadcn tokens
+// to point at the blueprint tokens for just these subtrees — every existing
+// bg-card/border-border/text-foreground/etc class picks up the correct
+// theme-aware color for free, since CSS custom properties re-resolve
+// through the cascade at each element.
 //
 // This has to override the `--color-*` tokens (the ones Tailwind v4's
 // `@theme` block actually generates utilities from), not the `--background`
@@ -672,9 +618,9 @@ const CanvasSummary: React.FC<{
 // build step inlines `--color-border: var(--border)` down to a literal hex
 // value, so redeclaring `--border` on a descendant has no effect; the
 // utility classes only ever read `--color-border`. Paired with the
-// `wp-inspector-scope` rules in workspace.css (square corners, mono
+// `wp-legacy-token-scope` rules in workspace.css (square corners, mono
 // uppercase labels) to match the design's field styling.
-const INSPECTOR_SCOPE_STYLE = {
+const LEGACY_TOKEN_SCOPE_STYLE = {
   '--color-background': 'var(--panel)',
   '--color-foreground': 'var(--ink)',
   '--color-card': 'var(--panel)',
@@ -698,13 +644,10 @@ interface InspectorPanelProps {
   onToggle: () => void;
   selectedNode: Node | null;
   selectedEdge: Edge | null;
-  activeTab: string;
-  onTabChange: (tab: string) => void;
   updateNodeData: (nodeId: string, newData: Record<string, unknown>) => void;
   updateEdgeData: (edgeId: string, label: string, animated: boolean, stroke: string, strokeWidth: number) => void;
   deleteEdge: (edgeId: string) => void;
   nodes: Node[];
-  edges: Edge[];
   setSelectedNodeId: (id: string | null) => void;
   isReadOnly?: boolean;
   onStartEditing?: (nodeId: string) => void;
@@ -815,13 +758,10 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
   onToggle,
   selectedNode,
   selectedEdge,
-  activeTab,
-  onTabChange,
   updateNodeData,
   updateEdgeData,
   deleteEdge,
   nodes,
-  edges,
   setSelectedNodeId,
   isReadOnly = false,
   onStartEditing,
@@ -885,81 +825,49 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
   return (
     <aside
       className={clsx(
-        "wp-inspector-scope bg-card/95 backdrop-blur-md flex flex-col shrink-0 z-20 transition-all duration-300 relative overflow-visible",
+        "wp-legacy-token-scope bg-card/95 backdrop-blur-md flex flex-col shrink-0 z-20 transition-all duration-300 relative overflow-visible",
         collapsed ? "w-0 border-l-0" : "w-90 border-l border-border"
       )}
-      style={INSPECTOR_SCOPE_STYLE}
+      style={LEGACY_TOKEN_SCOPE_STYLE}
     >
       {/* Sliding Window Container */}
       <div className="w-full h-full overflow-hidden">
         {/* Fixed Width Content Panel */}
         <div className="w-90 h-full flex flex-col">
-          {/* Inspector Header */}
-          <div className="p-4 border-b border-border flex items-center justify-between select-none">
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded bg-primary/10 border border-primary/20 flex items-center justify-center">
-                <Icon
-                  icon={(selectedNode?.data?.icon as string) || "lucide:globe"}
-                  className={clsx("text-sm", (selectedNode?.data?.tech as string) === 'Terraform' ? 'text-primary' : (selectedNode?.data?.tech as string) === 'Ansible' ? 'text-[#8B5CF6]' : (selectedNode?.data?.tech as string) === 'Source' ? 'text-[#F59E0B]' : (selectedNode?.data?.tech as string) === 'Target' ? 'text-[#14B8A6]' : 'text-[#0EA5E9]')}
-                />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-foreground truncate max-w-[150px]">{selectedNode?.id || "No Selection"}</h3>
-                <p className="text-[10px] text-muted-foreground">{(selectedNode?.data?.tech as string) || 'Global'} Configuration</p>
-              </div>
+          {/* Inspector Header — plain kicker + title, matching the design's
+              "SELECTED NODE / aws_instance.app" treatment. No icon badge:
+              the mock doesn't have one, and a colored rounded icon box was
+              the clearest holdover from the pre-redesign shadcn styling. */}
+          <div className="border-b border-border select-none" style={{ padding: '14px 16px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <div>
+              <p className="uppercase text-muted-foreground" style={{ margin: 0, fontSize: 9.5 }}>
+                {selectedEdge ? 'Selected connection' : selectedNode ? 'Selected node' : 'Global configuration'}
+              </p>
+              <p className="text-foreground truncate" style={{ margin: '6px 0 0', maxWidth: 220, fontFamily: 'var(--font-display, inherit)', fontWeight: 600, fontSize: 17 }}>
+                {selectedNode?.id || (selectedEdge ? (typeof selectedEdge.label === 'string' && selectedEdge.label) || 'Connection' : 'No selection')}
+              </p>
             </div>
-            <button onClick={onToggle} className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-muted transition-all cursor-pointer" title="Close Inspector">
+            <button onClick={onToggle} className="text-muted-foreground hover:text-foreground transition-all cursor-pointer" style={{ background: 'none', border: 0, padding: 4, flexShrink: 0 }} title="Close Inspector">
               <Icon icon="lucide:x" className="text-sm" />
             </button>
           </div>
 
-          {/* Tabs Navigation */}
-          <div className="flex border-b border-border select-none">
-            <button
-              onClick={() => onTabChange('Parameters')}
-              className={clsx(
-                "flex-1 py-2.5 text-xs font-semibold text-center border-b-2 transition-all cursor-pointer",
-                activeTab === 'Parameters' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-            >
-              Parameters
-            </button>
-            {!selectedEdge && (
-              <button
-                onClick={() => onTabChange('Live Code Preview')}
-                className={clsx(
-                  "flex-1 py-2.5 text-xs font-semibold text-center border-b-2 transition-all cursor-pointer",
-                  activeTab === 'Live Code Preview' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Live Code Preview
-              </button>
-            )}
-          </div>
-
-          {/* Tab Content */}
-          <div 
-            className={clsx("flex-1 p-4", activeTab === 'Parameters' ? "overflow-y-auto space-y-4" : "flex flex-col overflow-hidden")}
+          {/* Content — a single always-visible parameters view now that the
+              per-node "Live Code Preview" tab has been dropped in favor of
+              the top-level Code Preview view, which covers the same ground
+              for the whole project rather than duplicating it per-node. */}
+          <div
+            className="flex-1 p-4 overflow-y-auto space-y-4"
             onFocusCapture={() => selectedNode && onStartEditing?.(selectedNode.id)}
             onBlurCapture={() => selectedNode && onEndEditing?.(selectedNode.id)}
           >
-            {activeTab === 'Parameters' ? (
-              selectedEdge ? (() => {
+            {(() => {
+              return selectedEdge ? (() => {
                 const currentLabel = typeof selectedEdge.label === 'string' ? selectedEdge.label : '';
                 const currentStroke = selectedEdge.style?.stroke || '#8B5CF6';
                 const currentStrokeWidth = typeof selectedEdge.style?.strokeWidth === 'number' ? selectedEdge.style.strokeWidth : 2.5;
                 return (
                   <div className="space-y-4 animate-in fade-in duration-200">
-                    <div className="flex items-start gap-2.5 p-3 bg-primary/10 border border-primary/20 rounded-xl select-none">
-                      <Icon icon="lucide:link-2" className="text-primary text-base shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-bold text-foreground">Connection Link Settings</p>
-                        <p className="text-[10px] text-muted-foreground mt-0.5 leading-normal">
-                          Configure the style, animation, and flow properties of this connection.
-                        </p>
-                      </div>
-                    </div>
-
                     <div className="space-y-3.5">
                       {/* Link Label */}
                       <div className="flex flex-col gap-1.5">
@@ -1093,7 +1001,7 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
               })() : !selectedNode ? (
                 nodes.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground text-xs select-none animate-in fade-in duration-200">
-                    <div className="text-2xl mb-2">📋</div>
+                    <Icon icon="lucide:layers" className="text-lg mb-2" style={{ color: 'var(--ink3)' }} />
                     <p className="font-semibold text-foreground text-sm">Canvas is empty</p>
                     <p className="text-[10px] text-muted-foreground mt-1 leading-normal max-w-[200px] mx-auto">
                       Add automation components to the canvas to configure parameters.
@@ -2569,10 +2477,8 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     </div>
                   )}
                 </fieldset>
-              )
-            ) : (
-              <LiveCodePreview selectedNode={selectedNode} nodes={nodes} edges={edges} />
-            )}
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -3046,7 +2952,6 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
     onConnect, 
     addNode,
     setSelectedNodeId,
-    activeTool,
     saveStatus,
     setSelectedEdgeId
   } = useCanvasStore();
@@ -3191,13 +3096,8 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
   }, [screenToFlowPosition, addNode, setSelectedNodeId, deployStatus]);
 
   return (
-    <div 
-      className={clsx(
-        "flex-grow h-full relative overflow-hidden",
-        activeTool === 'select' && "flow-tool-select",
-        activeTool === 'pan' && "flow-tool-pan",
-        activeTool === 'link' && "flow-tool-link"
-      )}
+    <div
+      className="flex-grow h-full relative overflow-hidden"
       onDragOver={onDragOver}
       onDrop={onDrop}
       onMouseMove={handleMouseMove}
@@ -3263,34 +3163,26 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
           setSelectedEdgeId(null);
         }}
         fitView
-        nodesDraggable={!isReadOnly && activeTool === 'select'}
-        nodesConnectable={!isReadOnly && activeTool !== 'pan'}
-        elementsSelectable={!isReadOnly && activeTool !== 'pan'}
-        panOnDrag={activeTool === 'pan' ? true : [1, 2]}
-        selectionOnDrag={activeTool === 'select'}
+        nodesDraggable={!isReadOnly}
+        nodesConnectable={!isReadOnly}
+        elementsSelectable={!isReadOnly}
+        panOnDrag
         deleteKeyCode={isReadOnly ? null : ['Backspace', 'Delete']}
       >
         <Background variant={BackgroundVariant.Lines} gap={28} lineWidth={1} color="var(--line)" />
-        <Controls showInteractive={false} className="!bg-card !border-border !text-foreground" />
+        <Controls showInteractive={false} />
       </ReactFlow>
 
       {nodes.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 p-6 select-none animate-in fade-in zoom-in duration-300">
-          <div className="max-w-md w-full bg-card/80 border border-border backdrop-blur-md rounded-2xl p-6 text-center shadow-2xl flex flex-col items-center gap-4">
-            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-indigo-500 to-amber-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <Icon icon="lucide:layers" className="text-white text-2xl animate-pulse" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-white tracking-tight">Design Your Infrastructure Canvas</h3>
-              <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-                Drag and drop cloud resources or configuration modules from the library panel on the left to begin provisioning (Terraform), configuring (Ansible), or deploying containers (Kubernetes).
-              </p>
-            </div>
-            <div className="flex items-center gap-6 mt-2 text-slate-500 text-[11px] font-semibold uppercase tracking-wider">
-              <span className="flex items-center gap-1.5"><Icon icon="lucide:code" className="text-primary text-xs" /> Terraform</span>
-              <span className="flex items-center gap-1.5"><Icon icon="lucide:zap" className="text-[#8B5CF6] text-xs" /> Ansible</span>
-              <span className="flex items-center gap-1.5"><Icon icon="lucide:layers" className="text-[#0EA5E9] text-xs" /> Kubernetes</span>
-            </div>
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 select-none animate-in fade-in duration-300">
+          <div style={{ textAlign: 'center' }}>
+            <Icon icon="lucide:layers" width={22} height={22} style={{ color: 'var(--ink3)' }} />
+            <p style={{ margin: '10px 0 0', fontFamily: 'var(--font-display, inherit)', fontWeight: 600, fontSize: 14, color: 'var(--ink2)' }}>
+              Your canvas is empty
+            </p>
+            <p style={{ margin: '4px 0 0', fontFamily: 'var(--font-body-marketing, inherit)', fontSize: 12, color: 'var(--ink3)' }}>
+              Drag a node from the library to get started.
+            </p>
           </div>
         </div>
       )}
@@ -3320,10 +3212,8 @@ function WorkspaceContent() {
     edges, 
     selectedNodeId, 
     updateNodeData, 
-    resetCanvas, 
-    setSelectedNodeId, 
-    activeTool, 
-    setActiveTool,
+    resetCanvas,
+    setSelectedNodeId,
     saveStatus,
     setSaveStatus,
     version,
@@ -3372,7 +3262,6 @@ function WorkspaceContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [techFilter, setTechFilter] = useState("All");
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
-  const [inspectorTab, setInspectorTab] = useState("Parameters");
   const [theme, setTheme] = useState<Theme>('dark');
   const [activeView, setActiveView] = useState<WorkspaceView>('canvas');
 
@@ -3975,15 +3864,6 @@ function WorkspaceContent() {
     setRightPanelCollapsed(!rightPanelCollapsed);
   };
 
-  const handleInspectorTabChange = (tab: string) => {
-    setInspectorTab(tab);
-  };
-
-  const handleCanvasToolSelect = (tool: string) => {
-    if (deployStatus === 'PENDING' || deployStatus === 'RUNNING') return;
-    setActiveTool(tool as 'select' | 'pan' | 'link');
-  };
-
   const handleAddNodeToCanvas = (libNode: LibraryNode) => {
     if (deployStatus === 'PENDING' || deployStatus === 'RUNNING') {
       alert("⚠️ Canvas is locked: Cannot add nodes while a pipeline execution is running.");
@@ -4038,12 +3918,14 @@ function WorkspaceContent() {
     router.push(`/export-code?project=${projectId}`);
   };
 
-  const handleResetClick = () => {
+  const handleClearCanvas = () => {
     if (deployStatus === 'PENDING' || deployStatus === 'RUNNING') {
-      alert("⚠️ Canvas is locked: Cannot reset canvas while a pipeline execution is running.");
+      alert("⚠️ Canvas is locked: Cannot clear the canvas while a pipeline execution is running.");
       return;
     }
-    resetCanvas();
+    if (confirm('Delete every node and connection on this canvas? This cannot be undone.')) {
+      resetCanvas();
+    }
   };
 
   // Handle specific format downloads
@@ -4088,13 +3970,6 @@ function WorkspaceContent() {
     return edges.find(e => e.id === selectedEdgeId) || null;
   }, [edges, selectedEdgeId]);
 
-  useEffect(() => {
-    if (selectedEdgeId) {
-       
-      setInspectorTab('Parameters');
-    }
-  }, [selectedEdgeId]);
-
   if (!hasProjectParam) {
     return (
       <div className="flex-1 flex items-center justify-center bg-background text-muted-foreground">
@@ -4129,6 +4004,7 @@ function WorkspaceContent() {
         autoDestroy={autoDestroy}
         onAutoDestroyChange={setAutoDestroy}
         onDestroy={handleDestroyClick}
+        onClearCanvas={handleClearCanvas}
         collaborators={collaborators}
         isSyncConnected={isSyncConnected}
         saveStatus={saveStatus}
@@ -4150,7 +4026,7 @@ function WorkspaceContent() {
             onCreateCustomNode={() => setIsCustomNodeOpen(true)}
           />
 
-          <main className="flex-1 bg-background relative overflow-hidden flex flex-col">
+          <main className="flex-1 relative overflow-hidden flex flex-col" style={{ background: 'var(--ground)' }}>
             <WorkspaceCanvas
               deployStatus={deployStatus}
               peerCursors={peerCursors}
@@ -4183,13 +4059,6 @@ function WorkspaceContent() {
                 {agentStatus === 'ACTIVE' ? 'sandbox online · local_agent' : agentStatus === 'PENDING' ? 'sandbox pairing…' : 'sandbox offline'}
               </span>
             </div>
-
-            <CanvasControls
-              activeTool={activeTool}
-              onToolSelect={handleCanvasToolSelect}
-              onReset={handleResetClick}
-              isReadOnly={deployStatus === 'PENDING' || deployStatus === 'RUNNING' || saveStatus === 'readonly'}
-            />
           </main>
 
           <InspectorPanel
@@ -4197,13 +4066,10 @@ function WorkspaceContent() {
             onToggle={toggleRightPanel}
             selectedNode={selectedNode}
             selectedEdge={selectedEdge}
-            activeTab={inspectorTab}
-            onTabChange={handleInspectorTabChange}
             updateNodeData={updateNodeData}
             updateEdgeData={updateEdgeData}
             deleteEdge={deleteEdge}
             nodes={nodes}
-            edges={edges}
             setSelectedNodeId={setSelectedNodeId}
             isReadOnly={deployStatus === 'PENDING' || deployStatus === 'RUNNING' || saveStatus === 'readonly'}
             onStartEditing={handleStartEditing}
@@ -4214,13 +4080,13 @@ function WorkspaceContent() {
       )}
 
       {activeView === 'variables' && (
-        <div className="flex-1 overflow-hidden" style={{ background: 'var(--ground)' }}>
+        <div className="wp-legacy-token-scope flex-1 overflow-hidden" style={{ ...LEGACY_TOKEN_SCOPE_STYLE, background: 'var(--ground)' }}>
           <ProjectVariablesView nodes={nodes} edges={edges} />
         </div>
       )}
 
       {activeView === 'outputs' && (
-        <div className="flex-1 overflow-hidden bg-background p-4">
+        <div className="wp-legacy-token-scope flex-1 overflow-hidden p-4" style={{ ...LEGACY_TOKEN_SCOPE_STYLE, background: 'var(--ground)' }}>
           <LiveCodePreview selectedNode={null} nodes={nodes} edges={edges} />
         </div>
       )}

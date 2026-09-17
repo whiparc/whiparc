@@ -21,6 +21,8 @@ export const THEME_PALETTES: Record<Theme, Record<string, string>> = {
     '--success': '#10B981',
     '--danger': '#F43F5E',
     '--chip': 'rgba(255,255,255,.04)',
+    '--k8s-ink': '#7DD3FC',
+    '--target-ink': '#5EEAD4',
   },
   light: {
     '--ground': '#FBFBFC',
@@ -37,5 +39,7 @@ export const THEME_PALETTES: Record<Theme, Record<string, string>> = {
     '--success': '#047857',
     '--danger': '#BE123C',
     '--chip': 'rgba(15,18,32,.04)',
+    '--k8s-ink': '#0369A1',
+    '--target-ink': '#0F766E',
   },
 };
