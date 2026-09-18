@@ -11,6 +11,37 @@ const STATUS_COLOR: Record<string, string> = {
   FAILED: 'var(--danger)',
 };
 
+// Standard log-viewer convention (VS Code's terminal, GitHub Actions, Vercel
+// deploy logs, etc.): dim the repeated timestamp so it recedes, and reserve
+// full-contrast/accent color for what actually varies line to line — here
+// the leading `[timestamp]` runner output already has in indigo, plus a
+// severity color for lines that clearly are an error/warning, so failures
+// don't require reading every line to spot.
+const TIMESTAMP_RE = /^(\[\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?\])(.*)$/;
+const ERROR_LINE_RE = /\[error\]|error:|failed=[1-9]|"unreachable":\s*true|exit code [1-9]/i;
+const WARN_LINE_RE = /\[warn(?:ing)?\]|unreachable=[1-9]/i;
+
+function renderLogLine(line: string, key: number) {
+  const match = TIMESTAMP_RE.exec(line);
+  const messageColor = ERROR_LINE_RE.test(line) ? 'var(--danger)' : WARN_LINE_RE.test(line) ? 'var(--amber)' : 'var(--ink2)';
+
+  if (!match) {
+    return (
+      <div key={key} style={{ color: messageColor }}>
+        {line || ' '}
+      </div>
+    );
+  }
+
+  const [, timestamp, rest] = match;
+  return (
+    <div key={key}>
+      <span style={{ color: 'var(--accent-ink)' }}>{timestamp}</span>
+      <span style={{ color: messageColor }}>{rest}</span>
+    </div>
+  );
+}
+
 export interface ConsoleBarProps {
   isOpen: boolean;
   onToggle: () => void;
@@ -66,7 +97,9 @@ export function ConsoleBar({ isOpen, onToggle, logs, onClearLogs, deployStatus, 
             </button>
           </div>
           <div style={{ flex: 1, padding: 12, overflowY: 'auto', fontFamily: 'var(--font-mono-marketing, monospace)', fontSize: 11, lineHeight: 1.6, color: 'var(--ink2)' }}>
-            <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>{logs || 'No active pipeline logs. Press "Deploy" to run visual orchestration…'}</pre>
+            <div style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
+              {logs ? logs.split('\n').map(renderLogLine) : 'No active pipeline logs. Press "Deploy" to run visual orchestration…'}
+            </div>
             <div ref={terminalEndRef} />
           </div>
         </div>

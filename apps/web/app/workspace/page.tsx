@@ -33,6 +33,7 @@ import { DEFAULT_INSTANCE_PARAMS, DEFAULT_SG_PARAMS } from '../lib/terraformDefa
 import type { Project } from '../lib/types';
 import { spaceGroteskFont, barlowFont, jetBrainsMonoFont, kalamFont } from '../fonts';
 import { THEME_PALETTES, type Theme } from '../components/ui/theme-palette';
+import { LEGACY_TOKEN_SCOPE_STYLE, LEGACY_TOKEN_SCOPE_CLASS } from '../components/ui/legacy-token-scope';
 import { WorkspaceHeaderV2, type WorkspaceView } from './WorkspaceHeaderV2';
 import { LibraryPanelV2 } from './LibraryPanelV2';
 import { ConsoleBar } from './ConsoleBar';
@@ -599,44 +600,6 @@ const CanvasSummary: React.FC<{
     </div>
   );
 };
-
-// InspectorPanel, the Variables view, and the Code Preview view all still
-// render through the app's original shadcn/Tailwind semantic tokens
-// (bg-card, border-border, text-foreground, ...), which are fixed dark-only
-// values in globals.css — not the blueprint design system's theme-aware
-// --panel/--ink/--line tokens the rest of the redesigned workspace chrome
-// now uses. Rather than rewrite every field's className (hundreds of them,
-// across every node-type's parameter form), this remaps the shadcn tokens
-// to point at the blueprint tokens for just these subtrees — every existing
-// bg-card/border-border/text-foreground/etc class picks up the correct
-// theme-aware color for free, since CSS custom properties re-resolve
-// through the cascade at each element.
-//
-// This has to override the `--color-*` tokens (the ones Tailwind v4's
-// `@theme` block actually generates utilities from), not the `--background`
-// / `--border` / etc tokens those are aliased to in globals.css — Tailwind's
-// build step inlines `--color-border: var(--border)` down to a literal hex
-// value, so redeclaring `--border` on a descendant has no effect; the
-// utility classes only ever read `--color-border`. Paired with the
-// `wp-legacy-token-scope` rules in workspace.css (square corners, mono
-// uppercase labels) to match the design's field styling.
-const LEGACY_TOKEN_SCOPE_STYLE = {
-  '--color-background': 'var(--panel)',
-  '--color-foreground': 'var(--ink)',
-  '--color-card': 'var(--panel)',
-  '--color-card-foreground': 'var(--ink)',
-  '--color-muted': 'var(--elevated)',
-  '--color-muted-foreground': 'var(--ink2)',
-  '--color-border': 'var(--line)',
-  '--color-input': 'var(--elevated)',
-  '--color-primary': 'var(--accent)',
-  '--color-primary-foreground': '#fff',
-  '--color-secondary': 'var(--elevated)',
-  '--color-secondary-foreground': 'var(--ink)',
-  '--color-destructive': 'var(--danger)',
-  '--color-ring': 'var(--accent-ink)',
-  '--radius-lg': '0px',
-} as unknown as React.CSSProperties;
 
 // InspectorPanel Component
 interface InspectorPanelProps {
@@ -4036,8 +3999,9 @@ function WorkspaceContent() {
             <div
               style={{
                 position: 'absolute',
-                left: 14,
-                bottom: 78,
+                top: 14,
+                left: '50%',
+                transform: 'translateX(-50%)',
                 zIndex: 20,
                 display: 'flex',
                 alignItems: 'center',
