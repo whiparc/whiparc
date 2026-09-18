@@ -90,65 +90,19 @@ body {
   background: var(--input);
 }
 
-/* Canvas interaction mode enhancements */
-/* 1. Pan Mode Styles */
-.flow-tool-pan .react-flow__pane {
-  cursor: grab !important;
+/* Canvas interaction — always-on pan/zoom (Excalidraw-style) rather than a
+   mode switcher: dragging empty canvas space pans (grab cursor affordance
+   below), scrolling zooms (React Flow's own default), and dragging a node
+   moves it. */
+.react-flow__pane {
+  cursor: grab;
 }
 
-.flow-tool-pan .react-flow__pane:active {
-  cursor: grabbing !important;
+.react-flow__pane:active {
+  cursor: grabbing;
 }
 
-.flow-tool-pan .react-flow__node {
-  cursor: grab !important;
-}
-
-.flow-tool-pan .react-flow__node:active {
-  cursor: grabbing !important;
-}
-
-.flow-tool-pan .react-flow__handle {
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
-/* 2. Link Mode Styles */
-.flow-tool-link .react-flow__pane {
-  cursor: crosshair !important;
-}
-
-.flow-tool-link .react-flow__node {
-  cursor: crosshair !important;
-}
-
-@keyframes handle-pulse {
-  from {
-    box-shadow: 0 0 6px var(--primary);
-  }
-  to {
-    box-shadow: 0 0 16px var(--primary), 0 0 6px var(--primary);
-  }
-}
-
-.flow-tool-link .react-flow__handle {
-  width: 14px !important;
-  height: 14px !important;
-  background-color: var(--primary) !important;
-  border: 2px solid white !important;
-  border-radius: 9999px !important;
-  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
-  animation: handle-pulse 1.2s infinite alternate !important;
-  z-index: 50 !important;
-}
-
-.flow-tool-link .react-flow__handle:hover {
-  transform: scale(1.4) translateY(-50%) !important;
-  background-color: var(--tertiary) !important;
-  box-shadow: 0 0 16px var(--tertiary), 0 0 8px var(--tertiary) !important;
-}
-
-/* 3. React Flow Edge Label Theme Styling */
+/* React Flow Edge Label Theme Styling */
 .react-flow__edge-textbg {
   fill: #0D0F16 !important;
   stroke: #1E2233 !important;

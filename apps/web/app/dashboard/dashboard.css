@@ -1,0 +1,52 @@
+/* Interactive states the design's `style-hover` markers describe but a
+   plain inline `style` prop can't express, plus the sandbox-status pulse. */
+
+@keyframes wpBeat {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.wp-dash-navlink:hover {
+  background: var(--chip);
+  color: var(--ink);
+}
+
+.wp-dash-iconbtn:hover {
+  border-color: var(--accent-ink);
+  color: var(--ink);
+}
+
+.wp-dash-ghost:hover {
+  background: var(--chip);
+}
+
+.wp-dash-submit:hover {
+  background: var(--accent-hover);
+}
+
+.wp-dash-project-card:hover {
+  border-color: var(--accent-ink);
+}
+
+.wp-dash-new-project:hover {
+  border-color: var(--accent-ink);
+  color: var(--accent-ink);
+}
+
+.wp-dash-link:hover {
+  text-decoration: underline;
+}
+
+.wp-dash-input {
+  transition: border-color 0.15s ease;
+}
+
+.wp-dash-input:focus-visible {
+  outline: none;
+  border-color: var(--accent-ink);
+}

@@ -1,0 +1,26 @@
+.wp-runs-navlink:hover {
+  background: var(--chip);
+  color: var(--ink);
+}
+
+.wp-runs-iconbtn:hover {
+  border-color: var(--accent-ink);
+  color: var(--ink);
+}
+
+.wp-runs-submit:hover {
+  background: var(--accent-hover);
+}
+
+.wp-runs-row:hover {
+  background: var(--chip);
+}
+
+.wp-runs-input {
+  transition: border-color 0.15s ease;
+}
+
+.wp-runs-input:focus-visible {
+  outline: none;
+  border-color: var(--accent-ink);
+}
