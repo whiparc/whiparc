@@ -51,8 +51,6 @@ type CanvasState = {
     resetCanvas: () => void;
     isExecuting: boolean;
     setIsExecuting: (executing: boolean) => void;
-    activeTool: 'select' | 'pan' | 'link';
-    setActiveTool: (tool: 'select' | 'pan' | 'link') => void;
     executionStatuses: Record<string, NodeExecutionStatus>;
     setNodeExecutionStatus: (nodeId: string, status: NodeExecutionStatus) => void;
     resetExecutionStatuses: () => void;
@@ -158,9 +156,10 @@ export const getInitialEdges = (): Edge[] => [
     style: { stroke: '#6366F1', strokeWidth: 2.5 },
     animated: false,
     markerEnd: {
-      type: MarkerType.ArrowClosed,
+      type: MarkerType.Arrow,
       width: 12,
       height: 12,
+      strokeWidth: 1.6,
       color: '#6366F1',
     },
   },
@@ -172,9 +171,10 @@ export const getInitialEdges = (): Edge[] => [
     className: 'animate-dash-flow',
     animated: true,
     markerEnd: {
-      type: MarkerType.ArrowClosed,
+      type: MarkerType.Arrow,
       width: 12,
       height: 12,
+      strokeWidth: 1.6,
       color: '#8B5CF6',
     },
   },
@@ -185,9 +185,10 @@ export const getInitialEdges = (): Edge[] => [
     style: { stroke: '#8B5CF6', strokeWidth: 2.5 },
     animated: false,
     markerEnd: {
-      type: MarkerType.ArrowClosed,
+      type: MarkerType.Arrow,
       width: 12,
       height: 12,
+      strokeWidth: 1.6,
       color: '#8B5CF6',
     },
   }
@@ -200,7 +201,6 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
     selectedNodeId: null,
     selectedEdgeId: null,
     isExecuting: false,
-    activeTool: 'select',
     executionStatuses: {},
     pipelineAction: null,
     projectId: null,
@@ -208,7 +208,6 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
     version: 1,
 
     setIsExecuting: (executing) => set({ isExecuting: executing }),
-    setActiveTool: (tool) => set({ activeTool: tool }),
     setNodeExecutionStatus: (nodeId, status) => set((state) => ({
         executionStatuses: { ...state.executionStatuses, [nodeId]: status }
     })),
@@ -265,9 +264,10 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
                             strokeWidth
                         },
                         markerEnd: {
-                            type: MarkerType.ArrowClosed,
+                            type: MarkerType.Arrow,
                             width: 12,
                             height: 12,
+                            strokeWidth: 1.6,
                             color: resolveMarkerColor(stroke),
                         },
                     };
@@ -354,9 +354,10 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
           className,
           animated,
           markerEnd: {
-            type: MarkerType.ArrowClosed,
+            type: MarkerType.Arrow,
             width: 12,
             height: 12,
+            strokeWidth: 1.6,
             color: resolveMarkerColor(stroke),
           },
         };
@@ -374,7 +375,6 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
         nodes: [],
         edges: [],
         selectedNodeId: null,
-        activeTool: 'select'
       });
     },
 

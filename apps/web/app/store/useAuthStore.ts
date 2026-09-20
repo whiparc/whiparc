@@ -6,6 +6,7 @@ interface User {
   name: string;
   email: string;
   plan: string;
+  email_verified: boolean;
 }
 
 interface AuthState {
@@ -22,6 +23,9 @@ interface AuthState {
   setHasHydrated: (v: boolean) => void;
   login: (email: string, password: string) => Promise<boolean>;
   signup: (name: string, email: string, password: string) => Promise<boolean>;
+  verifyEmail: (token: string) => Promise<{ success: boolean; message?: string; error?: string }>;
+  resendVerification: () => Promise<{ success: boolean; message?: string; error?: string }>;
+  fetchMe: () => Promise<User | null>;
   setSessionFromToken: (token: string) => boolean;
   logout: () => void;
   clearError: () => void;
@@ -53,7 +57,13 @@ function decodeTokenClaims(token: string): User | null {
         .join('')
     );
     const claims = JSON.parse(json);
-    return { id: claims.id, email: claims.email, name: claims.name, plan: claims.plan };
+    return {
+      id: claims.id,
+      email: claims.email,
+      name: claims.name,
+      plan: claims.plan,
+      email_verified: claims.email_verified ?? false,
+    };
   } catch {
     return null;
   }
@@ -129,6 +139,94 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      verifyEmail: async (token) => {
+        set({ isLoading: true, error: null });
+        try {
+          const res = await fetch(`${API_URL}/api/auth/verify-email`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ token }),
+          });
+
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(errText || 'Verification failed');
+          }
+
+          const data = await res.json();
+          if (data.token && data.user) {
+            set({ token: data.token, user: data.user, isLoading: false });
+          } else {
+            set({ isLoading: false });
+          }
+          return { success: true, message: data.message || 'Email verified successfully' };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Verification failed';
+          set({ isLoading: false, error: msg });
+          return { success: false, error: msg };
+        }
+      },
+
+      resendVerification: async () => {
+        const token = get().token;
+        if (!token) {
+          return { success: false, error: 'Please sign in first to request a verification link.' };
+        }
+        try {
+          const res = await fetch(`${API_URL}/api/auth/resend-verification`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+            },
+          });
+
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(errText || 'Failed to resend verification email');
+          }
+
+          const data = await res.json();
+          return { success: true, message: data.message || 'Verification link sent' };
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Failed to resend verification link';
+          return { success: false, error: msg };
+        }
+      },
+
+      fetchMe: async () => {
+        const token = get().token;
+        if (!token) return null;
+        try {
+          const res = await fetch(`${API_URL}/api/auth/me`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          if (!res.ok) {
+            if (res.status === 401) {
+              get().logout();
+            }
+            return null;
+          }
+          const data = await res.json();
+          const fetchedUser: User = {
+            id: data.id || data.user?.id,
+            email: data.email || data.user?.email,
+            name: data.name || data.user?.name,
+            plan: data.plan || data.user?.plan || 'FREE',
+            email_verified: Boolean(data.email_verified ?? data.user?.email_verified),
+          };
+          set({ user: fetchedUser });
+          return fetchedUser;
+        } catch (err: unknown) {
+          console.error('Failed to fetch user profile:', err);
+          return null;
+        }
+      },
+
       setSessionFromToken: (token) => {
         const user = decodeTokenClaims(token);
         if (!user) return false;
@@ -171,6 +269,9 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({ token: state.token, user: state.user }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
+        if (state?.token) {
+          state.fetchMe();
+        }
       },
     }
   )

@@ -1,0 +1,136 @@
+@keyframes wpBeat {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.wp-ws-navlink:hover {
+  background: var(--chip);
+  color: var(--ink);
+}
+
+.wp-ws-iconbtn:hover {
+  border-color: var(--accent-ink);
+  color: var(--ink);
+}
+
+.wp-ws-ghost:hover {
+  background: var(--chip);
+}
+
+.wp-ws-tab {
+  cursor: pointer;
+}
+
+.wp-ws-tab:hover:not([data-active='true']) {
+  color: var(--ink);
+}
+
+.wp-ws-nodecard {
+  cursor: grab;
+}
+
+.wp-ws-nodecard:hover {
+  border-color: var(--accent-ink);
+}
+
+.wp-ws-nodecard:active {
+  cursor: grabbing;
+}
+
+.wp-ws-input {
+  transition: border-color 0.15s ease;
+}
+
+.wp-ws-input:focus-visible {
+  outline: none;
+  border-color: var(--accent-ink);
+}
+
+.wp-ws-console-toggle:hover {
+  background: var(--chip);
+}
+
+/* The global scrollbar rules in globals.css read the old fixed-dark
+   --background/--border tokens, which never lighten in this page's local
+   light theme (leaving a dark track/thumb on an otherwise white panel).
+   Scoped to .wp-root so it only affects this redesigned page — a subtle,
+   low-contrast thumb that reads as part of the panel, not a focal point. */
+.wp-root {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line) transparent;
+}
+
+.wp-root ::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+.wp-root ::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.wp-root ::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 3px;
+}
+
+.wp-root ::-webkit-scrollbar-thumb:hover {
+  background: var(--ink3);
+}
+
+/* Any view still built from the app's original shadcn/Tailwind classes
+   (bg-card, border-border, text-foreground, ...) — the inspector panel,
+   Variables, Code Preview — gets LEGACY_TOKEN_SCOPE_STYLE from page.tsx for
+   the CSS custom-property remap onto the blueprint design system's colors.
+   These rules cover what variable remapping alone can't: square (not
+   rounded) fields to match the blueprint aesthetic, and monospace uppercase
+   labels/kickers matching the rest of the redesign. */
+.wp-legacy-token-scope [class*="rounded"]:not([class*="rounded-full"]) {
+  border-radius: 0 !important;
+}
+
+.wp-legacy-token-scope .uppercase {
+  font-family: var(--font-mono-marketing, monospace);
+  letter-spacing: 0.08em;
+}
+
+.wp-legacy-token-scope h3 {
+  font-family: var(--font-display, inherit);
+}
+
+/* The blueprint aesthetic highlights focus with a border-color change only
+   (already covered by the existing focus:border-primary classes) — the
+   soft glow from Tailwind's focus:ring-* utilities is a shadcn-era touch
+   that doesn't belong here. */
+.wp-legacy-token-scope input:focus,
+.wp-legacy-token-scope select:focus,
+.wp-legacy-token-scope textarea:focus {
+  box-shadow: none !important;
+}
+
+/* React Flow's own zoom/fit-view widget ships with fixed light-mode
+   colors — repaint it with the workspace's theme-aware tokens so it
+   doesn't go stale (always-light) against the canvas's dark theme. */
+.react-flow__controls {
+  box-shadow: none;
+}
+
+.react-flow__controls-button {
+  background: var(--panel);
+  border-bottom-color: var(--line);
+  color: var(--ink2);
+}
+
+.react-flow__controls-button:hover {
+  background: var(--chip);
+  color: var(--ink);
+}
+
+.react-flow__controls-button svg {
+  fill: currentColor;
+}

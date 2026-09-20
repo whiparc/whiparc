@@ -1,0 +1,23 @@
+/* Interactive states the design's `style-hover` markers describe but a
+   plain inline `style` prop can't express. */
+
+.wp-export-iconbtn:hover {
+  border-color: var(--accent-ink);
+  color: var(--ink);
+}
+
+.wp-export-navlink:hover {
+  background: var(--chip);
+}
+
+.wp-export-submit:hover {
+  background: var(--accent-hover);
+}
+
+.wp-export-filebtn:hover {
+  background: var(--chip);
+}
+
+.wp-export-toclink:hover {
+  text-decoration: underline;
+}

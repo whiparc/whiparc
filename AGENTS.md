@@ -34,3 +34,12 @@ context a maintainer can supply from the private vault.
 
 1. **No Emojis or Casual Icons**: Markdown documentation in this repository must maintain an engineering-grade, professional technical style. Do not use decorative emojis or casual icons in headings or body text.
 2. **Preserve Cross-Links**: Maintain relative markdown file links within this repo (`README.md`, `docs/`, `NOTICE.md`, etc.) so documentation stays traversable.
+
+---
+
+## 3. Tool Execution & Git Permission Protocol
+
+1. **Local Read & Write Operations**: The agent is authorized to perform all local read, file modification, creation, deletion, testing, and local build commands freely within the workspace.
+2. **Local Git Operations**: The agent is authorized to run local Git operations (e.g., `git status`, `git diff`, `git log`, `git add`, `git commit`, `git branch`, `git checkout`, `git stash`, `git merge`, `git pull`, `git fetch`).
+3. **Remote Git Push Protection (Strict)**: The agent MUST NOT execute `git push` (or any command modifying remote branches/tags) autonomously. Before performing any remote push or remote modification, the agent must explicitly stop, ask the user for confirmation, or wait for an explicit command from the user to push.
+
