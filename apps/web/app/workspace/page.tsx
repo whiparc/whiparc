@@ -27,13 +27,14 @@ import ThreadEdge from '../components/ThreadEdge';
 import CustomNodeModal from '../components/CustomNodeModal';
 import { ProjectSettingsModal } from '../components/ProjectSettingsModal';
 import { InputWithVariablePicker } from '../components/VariablePicker';
+import EmailVerificationBanner from '../components/EmailVerificationBanner';
 import { generateAnsibleYAML } from '../lib/exportYaml';
 import { downloadZipBundle, downloadTerraformZip, generateBundleFiles, generateTerraformFiles } from '../lib/bundleGenerator';
 import { DEFAULT_INSTANCE_PARAMS, DEFAULT_SG_PARAMS } from '../lib/terraformDefaults';
 import type { Project } from '../lib/types';
 import { spaceGroteskFont, barlowFont, jetBrainsMonoFont, kalamFont } from '../fonts';
 import { THEME_PALETTES, type Theme } from '../components/ui/theme-palette';
-import { LEGACY_TOKEN_SCOPE_STYLE, LEGACY_TOKEN_SCOPE_CLASS } from '../components/ui/legacy-token-scope';
+import { LEGACY_TOKEN_SCOPE_STYLE } from '../components/ui/legacy-token-scope';
 import { WorkspaceHeaderV2, type WorkspaceView } from './WorkspaceHeaderV2';
 import { LibraryPanelV2 } from './LibraryPanelV2';
 import { ConsoleBar } from './ConsoleBar';
@@ -3221,7 +3222,6 @@ function WorkspaceContent() {
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
   const [migrationStatus, setMigrationStatus] = useState<{ gated: boolean; has_active_agent: boolean; grace_period_end: string } | null>(null);
 
-  const [zoomLevel, setZoomLevel] = useState(100);
   const [searchQuery, setSearchQuery] = useState("");
   const [techFilter, setTechFilter] = useState("All");
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
@@ -3799,22 +3799,6 @@ function WorkspaceContent() {
     }
   };
 
-  // Keep zoom level in header synced with React Flow viewport
-  useEffect(() => {
-    const checkZoom = setInterval(() => {
-      try {
-        const currentZoom = getZoom();
-        if (currentZoom) {
-          setZoomLevel(Math.round(currentZoom * 100));
-        }
-      } catch (e) {
-        console.log("Error fetching zoom level:", e);
-      }
-    }, 500);
-
-    return () => clearInterval(checkZoom);
-  }, [getZoom]);
-
   const handleSearchChange = (query: string) => {
     setSearchQuery(query);
   };
@@ -3975,6 +3959,8 @@ function WorkspaceContent() {
         agentStatus={agentStatus}
         migrationStatus={migrationStatus}
       />
+
+      <EmailVerificationBanner />
 
       {activeView === 'canvas' && (
         <div className="flex-1 flex overflow-hidden relative">
