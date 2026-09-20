@@ -2,13 +2,13 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Link from 'next/link';
 import { useAuthStore } from '../store/useAuthStore';
-import { 
-  ReactFlow, 
-  Background, 
-  Controls, 
-  ReactFlowProvider, 
+import {
+  ReactFlow,
+  Background,
+  BackgroundVariant,
+  Controls,
+  ReactFlowProvider,
   useReactFlow,
   Connection,
   Edge,
@@ -23,8 +23,7 @@ import { clsx } from 'clsx';
 
 import useCanvasStore, { resolveMarkerColor } from '../store/useCanvasStore';
 import ReactFlowCanvasNode from '../components/ReactFlowCanvasNode';
-import ProfileMenu from '../components/ProfileMenu';
-import Tooltip from '../components/Tooltip';
+import ThreadEdge from '../components/ThreadEdge';
 import CustomNodeModal from '../components/CustomNodeModal';
 import { ProjectSettingsModal } from '../components/ProjectSettingsModal';
 import { InputWithVariablePicker } from '../components/VariablePicker';
@@ -33,6 +32,15 @@ import { generateAnsibleYAML } from '../lib/exportYaml';
 import { downloadZipBundle, downloadTerraformZip, generateBundleFiles, generateTerraformFiles } from '../lib/bundleGenerator';
 import { DEFAULT_INSTANCE_PARAMS, DEFAULT_SG_PARAMS } from '../lib/terraformDefaults';
 import type { Project } from '../lib/types';
+import { spaceGroteskFont, barlowFont, jetBrainsMonoFont, kalamFont } from '../fonts';
+import { THEME_PALETTES, type Theme } from '../components/ui/theme-palette';
+import { LEGACY_TOKEN_SCOPE_STYLE, LEGACY_TOKEN_SCOPE_CLASS } from '../components/ui/legacy-token-scope';
+import { WorkspaceHeaderV2, type WorkspaceView } from './WorkspaceHeaderV2';
+import { LibraryPanelV2 } from './LibraryPanelV2';
+import { ConsoleBar } from './ConsoleBar';
+import { ProjectVariablesView } from './ProjectVariablesView';
+import '../components/ui/blueprint.css';
+import './workspace.css';
 
 // Define layout components inside the workspace directory for encapsulation
 
@@ -70,632 +78,15 @@ interface Credential {
 
 // --- HELPER SUB-COMPONENTS ---
 
-// Header Component
-interface HeaderProps {
-  selectedProject: string;
-  zoomLevel: number;
-  onZoomIn: () => void;
-  onZoomOut: () => void;
-  onZoomReset: () => void;
-  onExport: () => void;
-  onExportFormat: (format: string) => void;
-  onDeploy: () => void;
-  deployStatus: string;
-  isTerminalOpen: boolean;
-  onToggleTerminal: () => void;
-  autoDestroy: boolean;
-  onAutoDestroyChange: (val: boolean) => void;
-  onDestroy: () => void;
-  collaborators?: { id: string; name: string; color: string }[];
-  isSyncConnected?: boolean;
-  saveStatus?: 'saved' | 'saving' | 'error' | 'readonly';
-  onOpenSettings?: () => void;
-  projectDetails?: Project | null;
-  agentStatus?: string | null;
-  migrationStatus?: { gated: boolean; has_active_agent: boolean; grace_period_end: string } | null;
-}
-
-const Header: React.FC<HeaderProps> = ({
-  selectedProject,
-  zoomLevel,
-  onZoomIn,
-  onZoomOut,
-  onZoomReset,
-  onExport,
-  onExportFormat,
-  onDeploy,
-  deployStatus,
-  isTerminalOpen,
-  onToggleTerminal,
-  autoDestroy,
-  onAutoDestroyChange,
-  onDestroy,
-  collaborators = [],
-  isSyncConnected = false,
-  saveStatus = 'saved',
-  onOpenSettings,
-  projectDetails,
-  agentStatus = null,
-  migrationStatus = null,
-}) => {
-  const [dropdownOpen, setDropdownOpen] = useState(false);
-
-  return (
-    <header className="h-16 border-b border-border bg-card/85 backdrop-blur-md px-6 flex items-center justify-between z-30 shrink-0 select-none">
-      {/* Left: Workspace breadcrumbs & OS Toggle */}
-      <div className="flex items-center gap-6">
-        <div className="flex items-center gap-2">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-indigo-500 to-amber-600 flex items-center justify-center shadow-md shadow-indigo-500/20">
-            <svg className="h-4 w-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM14 5a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V5zM9 14H5a1 1 0 00-1 1v4a1 1 0 001 1h4a1 1 0 001-1v-4a1 1 0 00-1-1z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M14 15h5M14 19h5" />
-            </svg>
-          </div>
-          <span className="font-heading font-bold text-lg tracking-tight text-white">
-            Whiparc
-          </span>
-        </div>
-
-        <div className="h-4 w-[1px] bg-border"></div>
-
-        <div className="flex items-center gap-2 text-sm">
-          <Link href="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors cursor-pointer flex items-center gap-1 font-semibold">
-            <Icon icon="lucide:arrow-left" className="text-xs" /> Dashboard
-          </Link>
-          <Icon icon="lucide:chevron-right" className="text-muted-foreground text-xs" />
-          <span className="text-foreground font-medium font-heading">{projectDetails?.name || selectedProject}</span>
-          {onOpenSettings && (
-            <Tooltip label="Project Settings">
-              <button
-                onClick={onOpenSettings}
-                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-all cursor-pointer flex items-center justify-center"
-              >
-                <Icon icon="lucide:settings" className="text-sm" />
-              </button>
-            </Tooltip>
-          )}
-          {saveStatus === 'saved' && (
-            <span className="ml-2 px-2 py-0.5 bg-emerald-500/10 text-emerald-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-emerald-500/20 flex items-center gap-1" title="Canvas state auto-saved in database.">
-              <Icon icon="lucide:check-circle" className="text-[10px]" /> Saved
-            </span>
-          )}
-          {saveStatus === 'saving' && (
-            <span className="ml-2 px-2 py-0.5 bg-primary/10 text-primary text-[10px] uppercase tracking-wider font-semibold rounded border border-primary/20 flex items-center gap-1" title="Saving canvas changes...">
-              <Icon icon="lucide:loader-2" className="animate-spin text-[10px]" /> Saving...
-            </span>
-          )}
-          {saveStatus === 'error' && (
-            <span className="ml-2 px-2 py-0.5 bg-rose-500/10 text-rose-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-rose-500/20 flex items-center gap-1" title="Failed to save canvas state. A version conflict might have occurred.">
-              <Icon icon="lucide:alert-circle" className="text-[10px]" /> Save Conflict
-            </span>
-          )}
-          {saveStatus === 'readonly' && (
-            <span className="ml-2 px-2 py-0.5 bg-amber-500/10 text-amber-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-amber-500/20 flex items-center gap-1" title="Read-Only Mode. Node movements and parameters cannot be saved.">
-              <Icon icon="lucide:eye" className="text-[10px]" /> Read-Only
-            </span>
-          )}
-          {agentStatus === 'ACTIVE' && (
-            <span className="ml-2 px-2 py-0.5 bg-emerald-500/10 text-emerald-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-emerald-500/20 flex items-center gap-1" title="Local Sandbox Agent is connected — deploys will route through it.">
-              <Icon icon="lucide:server" className="text-[10px]" /> Agent Connected
-            </span>
-          )}
-          {agentStatus === 'PENDING' && (
-            <span className="ml-2 px-2 py-0.5 bg-amber-500/10 text-amber-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-amber-500/20 flex items-center gap-1" title="Local Sandbox Agent pairing has not been approved yet.">
-              <Icon icon="lucide:loader-2" className="animate-spin text-[10px]" /> Agent Pairing…
-            </span>
-          )}
-          {agentStatus === 'DISCONNECTED' && (
-            <span className="ml-2 px-2 py-0.5 bg-rose-500/10 text-rose-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-rose-500/20 flex items-center gap-1" title="Local Sandbox Agent is disconnected. Deploys targeting it will be rejected until it reconnects — run `whiparc sandbox status` to check, or `whiparc sandbox up` to re-pair.">
-              <Icon icon="lucide:server-off" className="text-[10px]" /> Agent Disconnected
-            </span>
-          )}
-          {migrationStatus && !migrationStatus.has_active_agent && migrationStatus.gated && (
-            <span className="ml-2 px-2 py-0.5 bg-rose-500/10 text-rose-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-rose-500/20 flex items-center gap-1" title="Free-tier sandbox deploys now require a local Sandbox Agent. Run `whiparc sandbox up` to pair one, or upgrade to Pro for a hosted sandbox.">
-              <Icon icon="lucide:server-off" className="text-[10px]" /> Sandbox Requires Agent
-            </span>
-          )}
-          {migrationStatus && !migrationStatus.has_active_agent && !migrationStatus.gated && (
-            <span className="ml-2 px-2 py-0.5 bg-amber-500/10 text-amber-400 text-[10px] uppercase tracking-wider font-semibold rounded border border-amber-500/20 flex items-center gap-1" title={`Free-tier sandbox deploys will require a local Sandbox Agent starting ${migrationStatus.grace_period_end}. Run \`whiparc sandbox up\` to pair one now, or upgrade to Pro for a hosted sandbox.`}>
-              <Icon icon="lucide:clock" className="text-[10px]" /> Sandbox Migration: Pair by {migrationStatus.grace_period_end}
-            </span>
-          )}
-        </div>
-
-      </div>
-
-      {/* Center: Collaboration Stack & Live Sync */}
-      <div className="hidden lg:flex items-center gap-4 ml-6">
-        <div className="flex items-center -space-x-1.5">
-          {collaborators.map((c, idx) => (
-            <div 
-              key={`${c.id}-${idx}`} 
-              className="h-8 w-8 rounded-full border-2 overflow-hidden relative flex items-center justify-center text-[10px] font-bold text-white uppercase select-none cursor-pointer"
-              style={{ backgroundColor: c.color, borderColor: '#07080B' }}
-              title={`${c.name} (Collaborator)`}
-            >
-              {c.name.slice(0, 2)}
-              <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-500 border border-border/80"></span>
-            </div>
-          ))}
-          {collaborators.length === 0 && (
-            <span className="text-xs text-muted-foreground italic select-none whitespace-nowrap">Solo Workspace</span>
-          )}
-        </div>
-        <Tooltip label={isSyncConnected ? "Live Synchronized" : "Sync Offline"}>
-          <div className={clsx(
-            "flex items-center gap-2 px-3 py-1 border rounded-full text-xs font-medium transition-all duration-305 shrink-0",
-            isSyncConnected
-              ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
-              : "bg-red-500/10 border-red-500/20 text-red-400"
-          )}>
-            <Icon icon="lucide:refresh-cw" className={clsx("text-xs shrink-0", isSyncConnected && "animate-spin")} />
-            <span className="whitespace-nowrap">{isSyncConnected ? "Synced" : "Offline"}</span>
-          </div>
-        </Tooltip>
-      </div>
-
-      {/* Right: Zoom Controls & Export Split-Button */}
-      <div className="flex items-center gap-2 xl:gap-3">
-        {/* Zoom controls */}
-        <div className="hidden lg:flex items-center gap-1 bg-muted p-1 rounded-lg border border-border shrink-0">
-          <Tooltip label="Zoom Out">
-            <button onClick={onZoomOut} className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors">
-              <Icon icon="lucide:minus" className="text-sm" />
-            </button>
-          </Tooltip>
-          <span onClick={onZoomReset} className="px-2 text-xs font-mono font-semibold text-foreground select-none cursor-pointer hover:text-primary transition-colors">
-            {zoomLevel}%
-          </span>
-          <Tooltip label="Zoom In">
-            <button onClick={onZoomIn} className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors">
-              <Icon icon="lucide:plus" className="text-sm" />
-            </button>
-          </Tooltip>
-          <div className="w-[1px] h-4 bg-border mx-1"></div>
-          <Tooltip label="Reset Zoom">
-            <button onClick={onZoomReset} className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors">
-              <Icon icon="lucide:maximize" className="text-sm" />
-            </button>
-          </Tooltip>
-        </div>
-
-        {/* Export Split Button */}
-        <div className="flex items-stretch relative shrink-0">
-          <Tooltip label="Export Code">
-            <button
-              onClick={onExport}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-semibold text-sm px-3 xl:px-4 py-2 rounded-l-lg flex items-center gap-2 transition-all shadow-lg shadow-primary/20 shrink-0"
-            >
-              <Icon icon="lucide:download" className="text-base shrink-0" />
-              <span className="hidden xl:inline whitespace-nowrap">Export Code</span>
-            </button>
-          </Tooltip>
-          <div className="relative">
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              className="bg-primary hover:bg-primary/90 text-primary-foreground border-l border-border/20 p-2 rounded-r-lg flex items-center justify-center transition-all shadow-lg shadow-primary/20 h-full"
-            >
-              <Icon icon="lucide:chevron-down" className="text-base" />
-            </button>
-            {dropdownOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setDropdownOpen(false)}></div>
-                <div className="absolute right-0 top-full mt-1 w-48 bg-card border border-border rounded-lg shadow-xl transition-all duration-150 z-50 p-1">
-                  <button
-                    onClick={() => { onExportFormat('tf'); setDropdownOpen(false); }}
-                    className="w-full text-left px-3 py-2 text-xs rounded hover:bg-muted flex items-center gap-2 transition-colors"
-                  >
-                    <Icon icon="lucide:file" className="text-primary text-sm" />
-                    <span>Terraform HCL (.tf)</span>
-                  </button>
-                  <button
-                    onClick={() => { onExportFormat('yml'); setDropdownOpen(false); }}
-                    className="w-full text-left px-3 py-2 text-xs rounded hover:bg-muted flex items-center gap-2 transition-colors"
-                  >
-                    <Icon icon="lucide:clipboard" className="text-[#8B5CF6] text-sm" />
-                    <span>Ansible YAML (.yml)</span>
-                  </button>
-                  <button
-                    onClick={() => { onExportFormat('json'); setDropdownOpen(false); }}
-                    className="w-full text-left px-3 py-2 text-xs rounded hover:bg-muted flex items-center gap-2 transition-colors"
-                  >
-                    <Icon icon="lucide:layers" className="text-[#0EA5E9] text-sm" />
-                    <span>Kubernetes JSON (.json)</span>
-                  </button>
-                  <div className="h-[1px] bg-border my-1"></div>
-                  <button
-                    onClick={() => { onExportFormat('zip'); setDropdownOpen(false); }}
-                    className="w-full text-left px-3 py-2 text-xs rounded hover:bg-muted font-medium text-emerald-400 flex items-center gap-2 transition-colors"
-                  >
-                    <Icon icon="lucide:folder" className="text-emerald-400 text-sm" />
-                    <span>Download Bundle (.zip)</span>
-                  </button>
-                </div>
-              </>
-            )}
-        </div>
-      </div>
-
-      {/* Ephemeral Mode Toggle */}
-        <Tooltip label="Auto-Cleanup: destroy infrastructure automatically after deploy">
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-muted/40 select-none shrink-0">
-            <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-              <Icon icon="lucide:clock" className="text-amber-400 text-xs" />
-              <span className="hidden xl:inline">Auto-Cleanup</span>
-            </span>
-            <button
-              onClick={() => onAutoDestroyChange(!autoDestroy)}
-              className={clsx(
-                "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
-                autoDestroy ? "bg-amber-500" : "bg-muted"
-              )}
-            >
-              <span
-                className={clsx(
-                  "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out",
-                  autoDestroy ? "translate-x-4" : "translate-x-0"
-                )}
-              />
-            </button>
-          </div>
-        </Tooltip>
-
-        {/* Deploy Button */}
-        <Tooltip label="Deploy">
-          <button
-            onClick={onDeploy}
-            disabled={deployStatus === 'RUNNING' || deployStatus === 'PENDING' || deployStatus === 'CLEANUP'}
-            className="bg-emerald-600 hover:bg-emerald-500 disabled:bg-emerald-800 text-white p-2.5 rounded-lg flex items-center justify-center transition-all shadow-lg shadow-emerald-950/20 cursor-pointer disabled:cursor-not-allowed shrink-0"
-          >
-            {deployStatus === 'RUNNING' || deployStatus === 'PENDING' || deployStatus === 'CLEANUP' ? (
-              <Icon icon="lucide:loader-2" className="text-base animate-spin" />
-            ) : (
-              <Icon icon="lucide:play" className="text-base" />
-            )}
-          </button>
-        </Tooltip>
-
-        {/* Destroy Button */}
-        <Tooltip label={autoDestroy ? "Destroy is disabled when Auto-Cleanup is enabled" : "Tear Down All Canvas Provisioned Resources"}>
-          <button
-            onClick={onDestroy}
-            disabled={deployStatus === 'RUNNING' || deployStatus === 'PENDING' || deployStatus === 'CLEANUP' || autoDestroy}
-            className="bg-rose-600 hover:bg-rose-500 disabled:bg-rose-800 text-white p-2.5 rounded-lg flex items-center justify-center transition-all shadow-lg shadow-rose-950/20 cursor-pointer disabled:cursor-not-allowed shrink-0"
-          >
-            <Icon icon="lucide:trash-2" className="text-base" />
-          </button>
-        </Tooltip>
-
-        {/* Toggle Terminal Button */}
-        <Tooltip label="Toggle Terminal Console">
-          <button
-            onClick={onToggleTerminal}
-            className={clsx(
-              "p-2 rounded-lg border border-border flex items-center justify-center transition-all cursor-pointer h-[38px] w-[38px] shrink-0",
-              isTerminalOpen ? "bg-primary/20 text-primary border-primary" : "bg-card text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Icon icon="lucide:terminal" className="text-base" />
-          </button>
-        </Tooltip>
-
-        <div className="w-[1px] h-6 bg-border shrink-0"></div>
-
-        <div className="shrink-0"><ProfileMenu variant="compact" /></div>
-      </div>
-    </header>
-  );
-};
-
-
-
-// NodeCard Component (Library Panel Item)
-interface NodeCardProps {
-  node: LibraryNode;
-  onAddNode: (node: LibraryNode) => void;
-  isReadOnly?: boolean;
-}
-
-const NodeCard: React.FC<NodeCardProps> = ({ node, onAddNode, isReadOnly = false }) => {
-  const techColorClass = {
-    Terraform: 'bg-primary/10 text-primary border-primary/20',
-    Ansible: 'bg-[#8B5CF6]/10 text-[#8B5CF6] border-[#8B5CF6]/20',
-    Kubernetes: 'bg-[#0EA5E9]/10 text-[#0EA5E9] border-[#0EA5E9]/20',
-    Source: 'bg-[#F59E0B]/10 text-[#F59E0B] border-[#F59E0B]/20',
-    Target: 'bg-[#14B8A6]/10 text-[#14B8A6] border-[#14B8A6]/20',
-  }[node.tech];
-
-  const hoverBorderClass = {
-    Terraform: 'hover:border-primary/50 hover:shadow-primary/5',
-    Ansible: 'hover:border-[#8B5CF6]/50 hover:shadow-[#8B5CF6]/5',
-    Kubernetes: 'hover:border-[#0EA5E9]/50 hover:shadow-[#0EA5E9]/5',
-    Source: 'hover:border-[#F59E0B]/50 hover:shadow-[#F59E0B]/5',
-    Target: 'hover:border-[#14B8A6]/50 hover:shadow-[#14B8A6]/5',
-  }[node.tech];
-
-  const onDragStart = (event: React.DragEvent) => {
-    if (isReadOnly) {
-      event.preventDefault();
-      return;
-    }
-    event.dataTransfer.setData('application/reactflow-node-id', node.id);
-    event.dataTransfer.setData('application/reactflow-node-tech', node.tech);
-    event.dataTransfer.setData('application/reactflow-node-icon', node.icon);
-    event.dataTransfer.setData('application/reactflow-node-title', node.title);
-    event.dataTransfer.setData('application/reactflow-node-description', node.description);
-    event.dataTransfer.setData('application/reactflow-node-category', node.category);
-    if (node.isCustom) {
-      event.dataTransfer.setData('application/reactflow-node-iscustom', 'true');
-      event.dataTransfer.setData('application/reactflow-node-rawcode', node.rawCode || '');
-      event.dataTransfer.setData('application/reactflow-node-codetype', node.codeType || '');
-      event.dataTransfer.setData('application/reactflow-node-parameters', JSON.stringify(node.parameters || {}));
-    }
-    event.dataTransfer.effectAllowed = 'move';
-  };
-
-  return (
-    <div
-      onClick={() => !isReadOnly && onAddNode(node)}
-      draggable={!isReadOnly}
-      onDragStart={onDragStart}
-      className={clsx(
-        "group border border-border rounded-xl p-3 transition-all transform select-none",
-        isReadOnly
-          ? "bg-muted/30 opacity-40 cursor-not-allowed border-border"
-          : "bg-muted/60 hover:bg-muted cursor-grab hover:cursor-grabbing hover:shadow-lg hover:-translate-y-0.5",
-        !isReadOnly && hoverBorderClass
-      )}
-    >
-      <div className="flex items-start justify-between mb-1.5">
-        <span className={clsx("px-2 py-0.5 text-[10px] font-bold rounded border uppercase tracking-wide", techColorClass)}>
-          {node.tech}
-        </span>
-        {!isReadOnly && <Icon icon="lucide:plus" className="text-muted-foreground group-hover:text-foreground text-sm transition-colors" />}
-      </div>
-      <h4 className="text-sm font-semibold text-foreground mb-1 flex items-center gap-1.5">
-        <Icon icon={node.icon} className={clsx("text-sm", node.tech === 'Terraform' ? 'text-primary' : node.tech === 'Ansible' ? 'text-[#8B5CF6]' : node.tech === 'Source' ? 'text-[#F59E0B]' : node.tech === 'Target' ? 'text-[#14B8A6]' : 'text-[#0EA5E9]')} />
-        {node.title}
-      </h4>
-      <p className="text-xs text-muted-foreground leading-relaxed">{node.description}</p>
-    </div>
-  );
-};
-
-// LibraryPanel Component
-interface LibraryPanelProps {
-  collapsed: boolean;
-  onToggle: () => void;
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
-  techFilter: string;
-  onTechFilterSelect: (tech: string) => void;
-  libraryNodes: LibraryNode[];
-  onAddNode: (node: LibraryNode) => void;
-  isReadOnly?: boolean;
-  selectedOS: string;
-  onOSChange: (os: string) => void;
-  onCreateCustomNode?: () => void;
-}
-
-const LibraryPanel: React.FC<LibraryPanelProps> = ({
-  collapsed,
-  onToggle,
-  searchQuery,
-  onSearchChange,
-  techFilter,
-  onTechFilterSelect,
-  libraryNodes,
-  onAddNode,
-  isReadOnly = false,
-  selectedOS,
-  onOSChange,
-  onCreateCustomNode,
-}) => {
-  const customLibraryNodes = useCanvasStore((state) => state.customLibraryNodes);
-  const mappedCustomNodes: LibraryNode[] = (customLibraryNodes || []).map((cn) => {
-    let parsedMeta: { parameters?: Record<string, unknown> } = {};
-    try {
-      parsedMeta = JSON.parse(cn.parsed_meta_json || '{}');
-    } catch {}
-    return {
-      id: cn.id,
-      tech: cn.tech,
-      icon: cn.tech === 'Terraform' ? 'devicon:terraform' : cn.tech === 'Ansible' ? 'devicon:ansible' : 'devicon:kubernetes',
-      title: cn.title,
-      description: cn.description,
-      category: cn.category,
-      isCustom: true,
-      rawCode: cn.raw_code,
-      codeType: cn.code_type,
-      parameters: parsedMeta.parameters || {}
-    };
-  });
-
-  const allNodes = [...libraryNodes, ...mappedCustomNodes];
-  const filteredNodes = allNodes.filter((node) => {
-    const matchesSearch = node.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      node.description.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesTech = techFilter === 'All' || node.tech === techFilter;
-    return matchesSearch && matchesTech;
-  });
-
-  const categories = Array.from(new Set(filteredNodes.map((n) => n.category)));
-
-  return (
-    <aside className={clsx(
-      "bg-card/95 backdrop-blur-md flex flex-col shrink-0 z-20 transition-all duration-300 relative select-none overflow-visible",
-      collapsed ? "w-0 border-r-0" : "w-80 border-r border-border"
-    )}>
-      {/* Sliding Window Container */}
-      <div className="w-full h-full overflow-hidden">
-        {/* Fixed Width Content Panel */}
-        <div className="w-80 h-full flex flex-col">
-          {/* Search & Quick Filters */}
-          <div className="p-4 border-b border-border flex flex-col gap-3">
-            <div className="relative">
-              <Icon icon="lucide:search" className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => onSearchChange(e.target.value)}
-                placeholder="Search automation nodes..."
-                className="w-full bg-muted border border-border rounded-lg pl-9 pr-4 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
-              />
-            </div>
-
-            {/* Technology Quick Filters */}
-            <div className="flex flex-wrap gap-1">
-              {['All', 'Target', 'Terraform', 'Ansible', 'Kubernetes'].map((tech) => (
-                <button
-                  key={tech}
-                  onClick={() => onTechFilterSelect(tech)}
-                  className={clsx(
-                    "flex-1 min-w-[48px] py-1.5 px-1 border border-border rounded-md text-[10px] font-medium flex items-center justify-center gap-1 transition-all cursor-pointer",
-                    techFilter === tech
-                      ? "bg-primary text-primary-foreground border-primary"
-                      : "bg-muted hover:bg-muted/80 text-foreground"
-                  )}
-                >
-                  {tech === 'All' ? 'All' : tech === 'Terraform' ? 'TF' : tech === 'Ansible' ? 'Ans' : tech === 'Kubernetes' ? 'K8s' : 'Cloud'}
-                </button>
-              ))}
-            </div>
-
-            {/* TODO: OS Environment Selector is currently visual-only. Toggling this state does not alter the generated Ansible playbooks or Terraform templates. Future engineers should integrate this parameters/OS state into the code generator. */}
-            {/* OS Environment Selector */}
-            <div>
-              <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1.5 select-none">Environment</p>
-              <div className="flex items-center gap-1 bg-muted p-1 rounded-lg border border-border">
-                {['Linux', 'macOS', 'Windows'].map((os) => (
-                  <button
-                    key={os}
-                    onClick={() => onOSChange(os)}
-                    className={clsx(
-                      "flex-1 px-2 py-1 text-xs rounded-md font-medium flex items-center justify-center gap-1 transition-all",
-                      selectedOS === os
-                        ? "bg-card text-foreground shadow-sm"
-                        : "text-muted-foreground hover:text-foreground"
-                    )}
-                    title={os}
-                  >
-                    <Icon icon={os === 'macOS' ? "lucide:smartphone" : "lucide:monitor"} className="text-xs" />
-                    <span className="hidden 2xl:inline">{os}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Draggable/Clickable Nodes List */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-6">
-            {!isReadOnly && onCreateCustomNode && (
-              <div className="mb-4">
-                <button
-                  type="button"
-                  onClick={onCreateCustomNode}
-                  className="w-full py-2.5 px-3 bg-gradient-to-r from-purple-600/10 to-indigo-600/10 border border-purple-500/30 hover:border-purple-500 rounded-lg text-xs font-bold text-purple-300 hover:text-white flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg shadow-purple-950/5 group"
-                >
-                  <Icon icon="lucide:sparkles" className="text-purple-400 group-hover:animate-pulse text-sm shrink-0" />
-                  <span>Create Custom Node</span>
-                  <span className="px-1.5 py-0.5 bg-purple-500 text-white text-[8px] font-bold uppercase rounded-full tracking-wider shrink-0">Pro</span>
-                </button>
-              </div>
-            )}
-            {categories.map((category) => (
-              <div key={category}>
-                <h3 className="text-xs font-heading font-bold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-                  <Icon icon="lucide:layers" className="text-xs" />
-                  {category}
-                </h3>
-                <div className="space-y-2.5">
-                  {filteredNodes
-                    .filter((n) => n.category === category)
-                    .map((node) => (
-                      <NodeCard key={node.id} node={node} onAddNode={onAddNode} isReadOnly={isReadOnly} />
-                    ))}
-                </div>
-              </div>
-            ))}
-            {filteredNodes.length === 0 && (
-              <div className="text-center py-8 text-muted-foreground text-xs">
-                No matching automation blocks found.
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Collapse Trigger Button */}
-      <button
-        onClick={onToggle}
-        className="absolute -right-4 top-1/2 -translate-y-1/2 h-8 w-8 rounded-full border border-border bg-card flex items-center justify-center text-muted-foreground hover:text-foreground shadow-md hover:shadow-primary/10 transition-all z-30 cursor-pointer"
-        title="Toggle Library Panel"
-      >
-        <Icon icon={collapsed ? "lucide:arrow-right" : "lucide:arrow-left"} className="text-xs" />
-      </button>
-    </aside>
-  );
-};
-
-// CanvasControls Component
-interface CanvasControlsProps {
-  activeTool: string;
-  onToolSelect: (tool: string) => void;
-  onReset: () => void;
-  isReadOnly?: boolean;
-}
-
-const CanvasControls: React.FC<CanvasControlsProps> = ({ activeTool, onToolSelect, onReset, isReadOnly = false }) => {
-  return (
-    <div className={clsx(
-      "absolute bottom-6 left-6 z-20 flex items-center gap-2 bg-card/90 backdrop-blur border border-border p-2 rounded-xl shadow-2xl select-none transition-all duration-200",
-      isReadOnly && "opacity-40 pointer-events-none cursor-not-allowed"
-    )}>
-      <button
-        onClick={() => onToolSelect('select')}
-        disabled={isReadOnly}
-        className={clsx(
-          "p-2 rounded-lg transition-all cursor-pointer",
-          activeTool === 'select' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted"
-        )}
-        title="Select Tool"
-      >
-        <Icon icon="lucide:mouse-pointer" className="text-base" />
-      </button>
-      <button
-        onClick={() => onToolSelect('pan')}
-        disabled={isReadOnly}
-        className={clsx(
-          "p-2 rounded-lg transition-all cursor-pointer",
-          activeTool === 'pan' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted"
-        )}
-        title="Pan Tool"
-      >
-        <Icon icon="lucide:move" className="text-base" />
-      </button>
-      <button
-        onClick={() => onToolSelect('link')}
-        disabled={isReadOnly}
-        className={clsx(
-          "p-2 rounded-lg transition-all cursor-pointer",
-          activeTool === 'link' ? "bg-primary/20 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-muted"
-        )}
-        title="Add Connection"
-      >
-        <Icon icon="lucide:link" className="text-base" />
-      </button>
-      <div className="w-[1px] h-6 bg-border"></div>
-      <button
-        onClick={onReset}
-        disabled={isReadOnly}
-        className="p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-all cursor-pointer"
-        title="Reset View"
-      >
-        <Icon icon="lucide:refresh-cw" className="text-base" />
-      </button>
-    </div>
-  );
-};
+// Header, NodeCard, and LibraryPanel used to live here — replaced by
+// WorkspaceHeaderV2.tsx and LibraryPanelV2.tsx (the new blueprint-styled
+// chrome). The floating select/pan/link/reset tool-switcher that used to
+// live here (CanvasControls) is gone too — the canvas now behaves like a
+// standard drawing-canvas tool (Excalidraw-style): drag empty space to
+// pan, scroll to zoom, drag a node to move it, all always-on rather than
+// behind a mode switch. Its "Reset View" icon was actually a destructive
+// clear-the-whole-canvas action; that's now "Clear canvas" in the header's
+// overflow ("...") menu, with a confirmation dialog it never had before.
 
 // YAML Syntax Highlighting Function
 function highlightYAMLCode(code: string): React.ReactNode[] {
@@ -1217,13 +608,10 @@ interface InspectorPanelProps {
   onToggle: () => void;
   selectedNode: Node | null;
   selectedEdge: Edge | null;
-  activeTab: string;
-  onTabChange: (tab: string) => void;
   updateNodeData: (nodeId: string, newData: Record<string, unknown>) => void;
   updateEdgeData: (edgeId: string, label: string, animated: boolean, stroke: string, strokeWidth: number) => void;
   deleteEdge: (edgeId: string) => void;
   nodes: Node[];
-  edges: Edge[];
   setSelectedNodeId: (id: string | null) => void;
   isReadOnly?: boolean;
   onStartEditing?: (nodeId: string) => void;
@@ -1334,13 +722,10 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
   onToggle,
   selectedNode,
   selectedEdge,
-  activeTab,
-  onTabChange,
   updateNodeData,
   updateEdgeData,
   deleteEdge,
   nodes,
-  edges,
   setSelectedNodeId,
   isReadOnly = false,
   onStartEditing,
@@ -1402,84 +787,55 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
   const appPortVal = (selectedNode?.data?.appPort as string) || '';
 
   return (
-    <aside className={clsx(
-      "bg-card/95 backdrop-blur-md flex flex-col shrink-0 z-20 transition-all duration-300 relative overflow-visible",
-      collapsed ? "w-0 border-l-0" : "w-90 border-l border-border"
-    )}>
+    <aside
+      className={clsx(
+        "wp-legacy-token-scope bg-card/95 backdrop-blur-md flex flex-col shrink-0 z-20 transition-all duration-300 relative overflow-visible",
+        collapsed ? "w-0 border-l-0" : "w-90 border-l border-border"
+      )}
+      style={LEGACY_TOKEN_SCOPE_STYLE}
+    >
       {/* Sliding Window Container */}
       <div className="w-full h-full overflow-hidden">
         {/* Fixed Width Content Panel */}
         <div className="w-90 h-full flex flex-col">
-          {/* Inspector Header */}
-          <div className="p-4 border-b border-border flex items-center justify-between select-none">
-            <div className="flex items-center gap-2">
-              <div className="h-6 w-6 rounded bg-primary/10 border border-primary/20 flex items-center justify-center">
-                <Icon
-                  icon={(selectedNode?.data?.icon as string) || "lucide:globe"}
-                  className={clsx("text-sm", (selectedNode?.data?.tech as string) === 'Terraform' ? 'text-primary' : (selectedNode?.data?.tech as string) === 'Ansible' ? 'text-[#8B5CF6]' : (selectedNode?.data?.tech as string) === 'Source' ? 'text-[#F59E0B]' : (selectedNode?.data?.tech as string) === 'Target' ? 'text-[#14B8A6]' : 'text-[#0EA5E9]')}
-                />
-              </div>
-              <div>
-                <h3 className="text-sm font-semibold text-foreground truncate max-w-[150px]">{selectedNode?.id || "No Selection"}</h3>
-                <p className="text-[10px] text-muted-foreground">{(selectedNode?.data?.tech as string) || 'Global'} Configuration</p>
-              </div>
+          {/* Inspector Header — plain kicker + title, matching the design's
+              "SELECTED NODE / aws_instance.app" treatment. No icon badge:
+              the mock doesn't have one, and a colored rounded icon box was
+              the clearest holdover from the pre-redesign shadcn styling. */}
+          <div className="border-b border-border select-none" style={{ padding: '14px 16px', display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <div>
+              <p className="uppercase text-muted-foreground" style={{ margin: 0, fontSize: 9.5 }}>
+                {selectedEdge ? 'Selected connection' : selectedNode ? 'Selected node' : 'Global configuration'}
+              </p>
+              <p className="text-foreground truncate" style={{ margin: '6px 0 0', maxWidth: 220, fontFamily: 'var(--font-display, inherit)', fontWeight: 600, fontSize: 17 }}>
+                {selectedNode?.id || (selectedEdge ? (typeof selectedEdge.label === 'string' && selectedEdge.label) || 'Connection' : 'No selection')}
+              </p>
             </div>
-            <button onClick={onToggle} className="p-1.5 text-muted-foreground hover:text-foreground rounded hover:bg-muted transition-all cursor-pointer" title="Close Inspector">
+            <button onClick={onToggle} className="text-muted-foreground hover:text-foreground transition-all cursor-pointer" style={{ background: 'none', border: 0, padding: 4, flexShrink: 0 }} title="Close Inspector">
               <Icon icon="lucide:x" className="text-sm" />
             </button>
           </div>
 
-          {/* Tabs Navigation */}
-          <div className="flex border-b border-border select-none">
-            <button
-              onClick={() => onTabChange('Parameters')}
-              className={clsx(
-                "flex-1 py-2.5 text-xs font-semibold text-center border-b-2 transition-all cursor-pointer",
-                activeTab === 'Parameters' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
-              )}
-            >
-              Parameters
-            </button>
-            {!selectedEdge && (
-              <button
-                onClick={() => onTabChange('Live Code Preview')}
-                className={clsx(
-                  "flex-1 py-2.5 text-xs font-semibold text-center border-b-2 transition-all cursor-pointer",
-                  activeTab === 'Live Code Preview' ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"
-                )}
-              >
-                Live Code Preview
-              </button>
-            )}
-          </div>
-
-          {/* Tab Content */}
-          <div 
-            className={clsx("flex-1 p-4", activeTab === 'Parameters' ? "overflow-y-auto space-y-4" : "flex flex-col overflow-hidden")}
+          {/* Content — a single always-visible parameters view now that the
+              per-node "Live Code Preview" tab has been dropped in favor of
+              the top-level Code Preview view, which covers the same ground
+              for the whole project rather than duplicating it per-node. */}
+          <div
+            className="flex-1 p-4 overflow-y-auto space-y-4"
             onFocusCapture={() => selectedNode && onStartEditing?.(selectedNode.id)}
             onBlurCapture={() => selectedNode && onEndEditing?.(selectedNode.id)}
           >
-            {activeTab === 'Parameters' ? (
-              selectedEdge ? (() => {
+            {(() => {
+              return selectedEdge ? (() => {
                 const currentLabel = typeof selectedEdge.label === 'string' ? selectedEdge.label : '';
                 const currentStroke = selectedEdge.style?.stroke || '#8B5CF6';
                 const currentStrokeWidth = typeof selectedEdge.style?.strokeWidth === 'number' ? selectedEdge.style.strokeWidth : 2.5;
                 return (
                   <div className="space-y-4 animate-in fade-in duration-200">
-                    <div className="flex items-start gap-2.5 p-3 bg-primary/10 border border-primary/20 rounded-xl select-none">
-                      <Icon icon="lucide:link-2" className="text-primary text-base shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-xs font-bold text-white">Connection Link Settings</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5 leading-normal">
-                          Configure the style, animation, and flow properties of this connection.
-                        </p>
-                      </div>
-                    </div>
-
                     <div className="space-y-3.5">
                       {/* Link Label */}
                       <div className="flex flex-col gap-1.5">
-                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Link Label</label>
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Link Label</label>
                         <input
                           type="text"
                           value={currentLabel}
@@ -1494,15 +850,15 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                             );
                           }}
                           placeholder="e.g. Web Traffic"
-                          className="w-full bg-background border border-border rounded-lg py-2 px-3 text-xs text-white placeholder:text-slate-650 outline-none focus:border-primary transition"
+                          className="w-full bg-background border border-border rounded-lg py-2 px-3 text-xs text-foreground placeholder:text-muted-foreground/50 outline-none focus:border-primary transition"
                         />
                       </div>
 
                       {/* Animation Toggle */}
                       <div className="flex items-center justify-between p-2.5 bg-background/30 border border-border/50 rounded-xl">
                         <div className="flex flex-col">
-                          <span className="text-xs font-semibold text-white">Animate Flow Dash</span>
-                          <span className="text-[9px] text-slate-500 mt-0.5">Show animated pulse lines along the connection</span>
+                          <span className="text-xs font-semibold text-foreground">Animate Flow Dash</span>
+                          <span className="text-[9px] text-muted-foreground mt-0.5">Show animated pulse lines along the connection</span>
                         </div>
                         <input
                           type="checkbox"
@@ -1524,8 +880,8 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       {/* Link Thickness */}
                       <div className="flex flex-col gap-1.5">
                         <div className="flex justify-between items-center">
-                          <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Thickness (Width)</label>
-                          <span className="text-xs font-mono text-slate-400">{currentStrokeWidth}px</span>
+                          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Thickness (Width)</label>
+                          <span className="text-xs font-mono text-muted-foreground">{currentStrokeWidth}px</span>
                         </div>
                         <input
                           type="range"
@@ -1543,13 +899,13 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                               val
                             );
                           }}
-                          className="w-full h-1 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-primary"
+                          className="w-full h-1 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
                         />
                       </div>
 
                       {/* Color Swatches */}
                       <div className="flex flex-col gap-2">
-                        <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Link Color</label>
+                        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Link Color</label>
                         <div className="flex flex-wrap gap-2.5 p-2.5 bg-background/30 border border-border/50 rounded-xl">
                           {[
                             { name: 'Indigo', hex: '#6366F1' },
@@ -1609,9 +965,9 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
               })() : !selectedNode ? (
                 nodes.length === 0 ? (
                   <div className="text-center py-12 text-muted-foreground text-xs select-none animate-in fade-in duration-200">
-                    <div className="text-2xl mb-2">📋</div>
-                    <p className="font-semibold text-white text-sm">Canvas is empty</p>
-                    <p className="text-[10px] text-slate-500 mt-1 leading-normal max-w-[200px] mx-auto">
+                    <Icon icon="lucide:layers" className="text-lg mb-2" style={{ color: 'var(--ink3)' }} />
+                    <p className="font-semibold text-foreground text-sm">Canvas is empty</p>
+                    <p className="text-[10px] text-muted-foreground mt-1 leading-normal max-w-[200px] mx-auto">
                       Add automation components to the canvas to configure parameters.
                     </p>
                   </div>
@@ -1625,7 +981,7 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                       <Icon icon="lucide:alert-circle" className="text-amber-500 text-base shrink-0 mt-0.5 animate-pulse" />
                       <div>
                         <p className="text-xs font-bold text-amber-400">Canvas Locked</p>
-                        <p className="text-[10px] text-slate-400 mt-0.5 leading-normal">
+                        <p className="text-[10px] text-muted-foreground mt-0.5 leading-normal">
                           Parameters are read-only while a pipeline run is active.
                         </p>
                       </div>
@@ -3085,10 +2441,8 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                     </div>
                   )}
                 </fieldset>
-              )
-            ) : (
-              <LiveCodePreview selectedNode={selectedNode} nodes={nodes} edges={edges} />
-            )}
+              );
+            })()}
           </div>
         </div>
       </div>
@@ -3562,7 +2916,6 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
     onConnect, 
     addNode,
     setSelectedNodeId,
-    activeTool,
     saveStatus,
     setSelectedEdgeId
   } = useCanvasStore();
@@ -3612,9 +2965,10 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
         labelBgPadding: edge.labelBgPadding || [8, 4],
         labelBgBorderRadius: edge.labelBgBorderRadius || 6,
         markerEnd: edge.markerEnd || {
-          type: MarkerType.ArrowClosed,
+          type: MarkerType.Arrow,
           width: 12,
           height: 12,
+          strokeWidth: 1.6,
           color: resolveMarkerColor(stroke),
         },
       };
@@ -3622,6 +2976,7 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
   }, [edges]);
 
   const nodeTypes = useMemo(() => ({ customNode: ReactFlowCanvasNode }), []);
+  const edgeTypes = useMemo(() => ({ default: ThreadEdge }), []);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -3705,13 +3060,8 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
   }, [screenToFlowPosition, addNode, setSelectedNodeId, deployStatus]);
 
   return (
-    <div 
-      className={clsx(
-        "flex-grow h-full relative overflow-hidden",
-        activeTool === 'select' && "flow-tool-select",
-        activeTool === 'pan' && "flow-tool-pan",
-        activeTool === 'link' && "flow-tool-link"
-      )}
+    <div
+      className="flex-grow h-full relative overflow-hidden"
       onDragOver={onDragOver}
       onDrop={onDrop}
       onMouseMove={handleMouseMove}
@@ -3741,9 +3091,10 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
         edges={styledEdges}
         defaultEdgeOptions={{
           markerEnd: {
-            type: MarkerType.ArrowClosed,
+            type: MarkerType.Arrow,
             width: 12,
             height: 12,
+            strokeWidth: 1.6,
           },
           labelStyle: {
             fill: '#F1F5F9',
@@ -3762,6 +3113,7 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
         nodeTypes={nodeTypes}
+        edgeTypes={edgeTypes}
         onNodeClick={(_, node) => {
           setSelectedEdgeId(null);
           setSelectedNodeId(node.id);
@@ -3775,34 +3127,26 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
           setSelectedEdgeId(null);
         }}
         fitView
-        nodesDraggable={!isReadOnly && activeTool === 'select'}
-        nodesConnectable={!isReadOnly && activeTool !== 'pan'}
-        elementsSelectable={!isReadOnly && activeTool !== 'pan'}
-        panOnDrag={activeTool === 'pan' ? true : [1, 2]}
-        selectionOnDrag={activeTool === 'select'}
+        nodesDraggable={!isReadOnly}
+        nodesConnectable={!isReadOnly}
+        elementsSelectable={!isReadOnly}
+        panOnDrag
         deleteKeyCode={isReadOnly ? null : ['Backspace', 'Delete']}
       >
-        <Background color="#232A3D" gap={24} size={1} />
-        <Controls showInteractive={false} className="!bg-card !border-border !text-foreground" />
+        <Background variant={BackgroundVariant.Lines} gap={28} lineWidth={1} color="var(--line)" />
+        <Controls showInteractive={false} />
       </ReactFlow>
 
       {nodes.length === 0 && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 p-6 select-none animate-in fade-in zoom-in duration-300">
-          <div className="max-w-md w-full bg-card/80 border border-border backdrop-blur-md rounded-2xl p-6 text-center shadow-2xl flex flex-col items-center gap-4">
-            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-indigo-500 to-amber-600 flex items-center justify-center shadow-lg shadow-indigo-500/20">
-              <Icon icon="lucide:layers" className="text-white text-2xl animate-pulse" />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-white tracking-tight">Design Your Infrastructure Canvas</h3>
-              <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-                Drag and drop cloud resources or configuration modules from the library panel on the left to begin provisioning (Terraform), configuring (Ansible), or deploying containers (Kubernetes).
-              </p>
-            </div>
-            <div className="flex items-center gap-6 mt-2 text-slate-500 text-[11px] font-semibold uppercase tracking-wider">
-              <span className="flex items-center gap-1.5"><Icon icon="lucide:code" className="text-primary text-xs" /> Terraform</span>
-              <span className="flex items-center gap-1.5"><Icon icon="lucide:zap" className="text-[#8B5CF6] text-xs" /> Ansible</span>
-              <span className="flex items-center gap-1.5"><Icon icon="lucide:layers" className="text-[#0EA5E9] text-xs" /> Kubernetes</span>
-            </div>
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10 select-none animate-in fade-in duration-300">
+          <div style={{ textAlign: 'center' }}>
+            <Icon icon="lucide:layers" width={22} height={22} style={{ color: 'var(--ink3)' }} />
+            <p style={{ margin: '10px 0 0', fontFamily: 'var(--font-display, inherit)', fontWeight: 600, fontSize: 14, color: 'var(--ink2)' }}>
+              Your canvas is empty
+            </p>
+            <p style={{ margin: '4px 0 0', fontFamily: 'var(--font-body-marketing, inherit)', fontSize: 12, color: 'var(--ink3)' }}>
+              Drag a node from the library to get started.
+            </p>
           </div>
         </div>
       )}
@@ -3832,10 +3176,8 @@ function WorkspaceContent() {
     edges, 
     selectedNodeId, 
     updateNodeData, 
-    resetCanvas, 
-    setSelectedNodeId, 
-    activeTool, 
-    setActiveTool,
+    resetCanvas,
+    setSelectedNodeId,
     saveStatus,
     setSaveStatus,
     version,
@@ -3848,7 +3190,7 @@ function WorkspaceContent() {
     updateEdgeData,
     deleteEdge
   } = useCanvasStore();
-  const { zoomIn, zoomOut, setViewport, getZoom } = useReactFlow();
+  const { setViewport, getZoom } = useReactFlow();
 
   const searchParams = useSearchParams();
   const hasProjectParam = !!searchParams.get('project');
@@ -3880,13 +3222,12 @@ function WorkspaceContent() {
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
   const [migrationStatus, setMigrationStatus] = useState<{ gated: boolean; has_active_agent: boolean; grace_period_end: string } | null>(null);
 
-  const [selectedOS, setSelectedOS] = useState("Linux");
   const [zoomLevel, setZoomLevel] = useState(100);
   const [searchQuery, setSearchQuery] = useState("");
   const [techFilter, setTechFilter] = useState("All");
-  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
   const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
-  const [inspectorTab, setInspectorTab] = useState("Parameters");
+  const [theme, setTheme] = useState<Theme>('dark');
+  const [activeView, setActiveView] = useState<WorkspaceView>('canvas');
 
   const [deployStatus, setDeployStatus] = useState<"IDLE" | "PENDING" | "RUNNING" | "CLEANUP" | "SUCCESS" | "FAILED">("IDLE");
   const [logs, setLogs] = useState("");
@@ -4475,23 +3816,6 @@ function WorkspaceContent() {
     return () => clearInterval(checkZoom);
   }, [getZoom]);
 
-  const handleOSChange = (os: string) => {
-    setSelectedOS(os);
-  };
-
-  const handleZoomInClick = () => {
-    zoomIn();
-  };
-
-  const handleZoomOutClick = () => {
-    zoomOut();
-  };
-
-  const handleZoomResetClick = () => {
-    setViewport({ x: 0, y: 0, zoom: 1 }, { duration: 300 });
-    setZoomLevel(100);
-  };
-
   const handleSearchChange = (query: string) => {
     setSearchQuery(query);
   };
@@ -4500,21 +3824,8 @@ function WorkspaceContent() {
     setTechFilter(tech);
   };
 
-  const toggleLeftPanel = () => {
-    setLeftPanelCollapsed(!leftPanelCollapsed);
-  };
-
   const toggleRightPanel = () => {
     setRightPanelCollapsed(!rightPanelCollapsed);
-  };
-
-  const handleInspectorTabChange = (tab: string) => {
-    setInspectorTab(tab);
-  };
-
-  const handleCanvasToolSelect = (tool: string) => {
-    if (deployStatus === 'PENDING' || deployStatus === 'RUNNING') return;
-    setActiveTool(tool as 'select' | 'pan' | 'link');
   };
 
   const handleAddNodeToCanvas = (libNode: LibraryNode) => {
@@ -4571,12 +3882,14 @@ function WorkspaceContent() {
     router.push(`/export-code?project=${projectId}`);
   };
 
-  const handleResetClick = () => {
+  const handleClearCanvas = () => {
     if (deployStatus === 'PENDING' || deployStatus === 'RUNNING') {
-      alert("⚠️ Canvas is locked: Cannot reset canvas while a pipeline execution is running.");
+      alert("⚠️ Canvas is locked: Cannot clear the canvas while a pipeline execution is running.");
       return;
     }
-    resetCanvas();
+    if (confirm('Delete every node and connection on this canvas? This cannot be undone.')) {
+      resetCanvas();
+    }
   };
 
   // Handle specific format downloads
@@ -4621,13 +3934,6 @@ function WorkspaceContent() {
     return edges.find(e => e.id === selectedEdgeId) || null;
   }, [edges, selectedEdgeId]);
 
-  useEffect(() => {
-    if (selectedEdgeId) {
-       
-      setInspectorTab('Parameters');
-    }
-  }, [selectedEdgeId]);
-
   if (!hasProjectParam) {
     return (
       <div className="flex-1 flex items-center justify-center bg-background text-muted-foreground">
@@ -4636,136 +3942,130 @@ function WorkspaceContent() {
     );
   }
 
+  const themePalette = THEME_PALETTES[theme];
+  const rootThemeStyle: React.CSSProperties = {
+    ...(themePalette as unknown as React.CSSProperties),
+    background: themePalette['--ground'],
+    color: themePalette['--ink'],
+  };
+
   return (
-    <div className="flex-1 flex flex-col overflow-hidden relative">
-      <Header
+    <div
+      className={`flex-1 flex flex-col overflow-hidden relative wp-root ${spaceGroteskFont.variable} ${barlowFont.variable} ${jetBrainsMonoFont.variable} ${kalamFont.variable}`}
+      style={{ ...rootThemeStyle, fontFamily: 'var(--font-body-marketing, inherit)', transition: 'background .3s ease, color .3s ease' }}
+    >
+      <WorkspaceHeaderV2
         selectedProject={selectedProject}
-        zoomLevel={zoomLevel}
-        onZoomIn={handleZoomInClick}
-        onZoomOut={handleZoomOutClick}
-        onZoomReset={handleZoomResetClick}
+        projectDetails={projectDetails}
+        activeView={activeView}
+        onViewChange={setActiveView}
+        theme={theme}
+        onToggleTheme={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
         onExport={handleExportClick}
         onExportFormat={handleExportFormat}
         onDeploy={handleDeployClick}
         deployStatus={deployStatus}
-        isTerminalOpen={isTerminalOpen}
-        onToggleTerminal={() => setIsTerminalOpen(!isTerminalOpen)}
         autoDestroy={autoDestroy}
         onAutoDestroyChange={setAutoDestroy}
         onDestroy={handleDestroyClick}
+        onClearCanvas={handleClearCanvas}
         collaborators={collaborators}
         isSyncConnected={isSyncConnected}
         saveStatus={saveStatus}
         onOpenSettings={() => setIsSettingsOpen(true)}
-        projectDetails={projectDetails}
         agentStatus={agentStatus}
         migrationStatus={migrationStatus}
       />
 
       <EmailVerificationBanner />
 
-      <div className="flex-1 flex overflow-hidden relative">
-        <LibraryPanel
-          collapsed={leftPanelCollapsed}
-          onToggle={toggleLeftPanel}
-          searchQuery={searchQuery}
-          onSearchChange={handleSearchChange}
-          techFilter={techFilter}
-          onTechFilterSelect={handleTechFilterSelect}
-          libraryNodes={LIBRARY_NODES}
-          onAddNode={handleAddNodeToCanvas}
-          isReadOnly={deployStatus === 'PENDING' || deployStatus === 'RUNNING' || saveStatus === 'readonly'}
-          selectedOS={selectedOS}
-          onOSChange={handleOSChange}
-          onCreateCustomNode={() => setIsCustomNodeOpen(true)}
-        />
-
-        <main className="flex-1 bg-background relative overflow-hidden flex flex-col">
-          <WorkspaceCanvas 
-            deployStatus={deployStatus} 
-            peerCursors={peerCursors}
-            handleMouseMove={handleMouseMove}
-          />
-
-          <CanvasControls
-            activeTool={activeTool}
-            onToolSelect={handleCanvasToolSelect}
-            onReset={handleResetClick}
+      {activeView === 'canvas' && (
+        <div className="flex-1 flex overflow-hidden relative">
+          <LibraryPanelV2
+            searchQuery={searchQuery}
+            onSearchChange={handleSearchChange}
+            techFilter={techFilter}
+            onTechFilterSelect={handleTechFilterSelect}
+            libraryNodes={LIBRARY_NODES}
+            onAddNode={handleAddNodeToCanvas}
             isReadOnly={deployStatus === 'PENDING' || deployStatus === 'RUNNING' || saveStatus === 'readonly'}
+            onCreateCustomNode={() => setIsCustomNodeOpen(true)}
           />
 
-          {/* Terminal Drawer */}
-          {isTerminalOpen && (
-            <div className="absolute bottom-0 left-0 w-full h-72 bg-background/95 border-t border-border z-30 flex flex-col shadow-2xl animate-in slide-in-from-bottom duration-200">
-              {/* Terminal Header */}
-              <div className="h-10 px-4 border-b border-border bg-card/90 flex items-center justify-between select-none">
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                    <Icon icon="lucide:terminal" className="text-primary text-xs" />
-                    Runner Output Log
-                  </span>
-                  {deployStatus !== 'IDLE' && (
-                    <span className={clsx(
-                      "px-2 py-0.5 rounded text-[9px] uppercase tracking-wide font-bold border",
-                      deployStatus === 'PENDING' && "bg-amber-500/10 text-amber-400 border-amber-500/20",
-                      deployStatus === 'RUNNING' && "bg-blue-500/10 text-blue-400 border-blue-500/20",
-                      deployStatus === 'CLEANUP' && "bg-purple-500/10 text-purple-400 border-purple-500/20",
-                      deployStatus === 'SUCCESS' && "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-                      deployStatus === 'FAILED' && "bg-rose-500/10 text-rose-400 border-rose-500/20"
-                    )}>
-                      {deployStatus === 'CLEANUP' ? 'CLEANING UP' : deployStatus}
-                    </span>
-                  )}
-                </div>
-                <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setLogs("")}
-                    className="text-[10px] text-muted-foreground hover:text-foreground font-semibold flex items-center gap-1 cursor-pointer"
-                    title="Clear Log"
-                  >
-                    <Icon icon="lucide:trash-2" className="text-xs" />
-                    Clear
-                  </button>
-                  <button
-                    onClick={() => setIsTerminalOpen(false)}
-                    className="p-1 text-muted-foreground hover:text-foreground rounded hover:bg-muted transition-all cursor-pointer"
-                    title="Close Panel"
-                  >
-                    <Icon icon="lucide:x" className="text-xs" />
-                  </button>
-                </div>
-              </div>
+          <main className="flex-1 relative overflow-hidden flex flex-col" style={{ background: 'var(--ground)' }}>
+            <WorkspaceCanvas
+              deployStatus={deployStatus}
+              peerCursors={peerCursors}
+              handleMouseMove={handleMouseMove}
+            />
 
-              {/* Terminal Body */}
-              <div className="flex-1 p-4 font-mono text-[11px] leading-relaxed text-slate-300 overflow-y-auto select-text scrollbar-thin">
-                <pre className="whitespace-pre-wrap break-all pr-4">
-                  {logs || "No active pipeline logs. Press \"Deploy\" to run visual orchestration..."}
-                </pre>
-                <div ref={terminalEndRef} />
-              </div>
+            <div
+              style={{
+                position: 'absolute',
+                top: 14,
+                left: '50%',
+                transform: 'translateX(-50%)',
+                zIndex: 20,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 8,
+                padding: '6px 10px',
+                border: '1px solid var(--line)',
+                background: 'var(--panel)',
+              }}
+            >
+              <span
+                style={{
+                  width: 6,
+                  height: 6,
+                  background: agentStatus === 'ACTIVE' ? 'var(--accent-ink)' : agentStatus === 'PENDING' ? 'var(--amber)' : 'var(--ink3)',
+                  animation: agentStatus === 'ACTIVE' ? 'wpBeat 2.2s ease-in-out infinite' : undefined,
+                }}
+              />
+              <span style={{ fontFamily: 'var(--font-mono-marketing, monospace)', fontSize: 10.5, color: 'var(--ink2)' }}>
+                {agentStatus === 'ACTIVE' ? 'sandbox online · local_agent' : agentStatus === 'PENDING' ? 'sandbox pairing…' : 'sandbox offline'}
+              </span>
             </div>
-          )}
-        </main>
+          </main>
 
-        <InspectorPanel
-          collapsed={rightPanelCollapsed}
-          onToggle={toggleRightPanel}
-          selectedNode={selectedNode}
-          selectedEdge={selectedEdge}
-          activeTab={inspectorTab}
-          onTabChange={handleInspectorTabChange}
-          updateNodeData={updateNodeData}
-          updateEdgeData={updateEdgeData}
-          deleteEdge={deleteEdge}
-          nodes={nodes}
-          edges={edges}
-          setSelectedNodeId={setSelectedNodeId}
-          isReadOnly={deployStatus === 'PENDING' || deployStatus === 'RUNNING' || saveStatus === 'readonly'}
-          onStartEditing={handleStartEditing}
-          onEndEditing={handleEndEditing}
-          availableCredentials={availableCredentials}
-        />
-      </div>
+          <InspectorPanel
+            collapsed={rightPanelCollapsed}
+            onToggle={toggleRightPanel}
+            selectedNode={selectedNode}
+            selectedEdge={selectedEdge}
+            updateNodeData={updateNodeData}
+            updateEdgeData={updateEdgeData}
+            deleteEdge={deleteEdge}
+            nodes={nodes}
+            setSelectedNodeId={setSelectedNodeId}
+            isReadOnly={deployStatus === 'PENDING' || deployStatus === 'RUNNING' || saveStatus === 'readonly'}
+            onStartEditing={handleStartEditing}
+            onEndEditing={handleEndEditing}
+            availableCredentials={availableCredentials}
+          />
+        </div>
+      )}
+
+      {activeView === 'variables' && (
+        <div className="wp-legacy-token-scope flex-1 overflow-hidden" style={{ ...LEGACY_TOKEN_SCOPE_STYLE, background: 'var(--ground)' }}>
+          <ProjectVariablesView nodes={nodes} edges={edges} />
+        </div>
+      )}
+
+      {activeView === 'outputs' && (
+        <div className="wp-legacy-token-scope flex-1 overflow-hidden p-4" style={{ ...LEGACY_TOKEN_SCOPE_STYLE, background: 'var(--ground)' }}>
+          <LiveCodePreview selectedNode={null} nodes={nodes} edges={edges} />
+        </div>
+      )}
+
+      <ConsoleBar
+        isOpen={isTerminalOpen}
+        onToggle={() => setIsTerminalOpen(!isTerminalOpen)}
+        logs={logs}
+        onClearLogs={() => setLogs('')}
+        deployStatus={deployStatus}
+        terminalEndRef={terminalEndRef}
+      />
 
       <ProjectSettingsModal
         isOpen={isSettingsOpen}

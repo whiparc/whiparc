@@ -72,6 +72,30 @@ var (
 	resendLimiter *RateLimiter
 )
 
+// waitForPostgres retries the initial ping instead of failing on first
+// contact. docker-compose.hosted.yml's `depends_on: condition: service_healthy`
+// only guarantees pg_isready succeeded once — the official postgres image
+// runs a one-time initdb pass through a temporary server and then bounces
+// into the real one, and pg_isready can report ready against that temp
+// server moments before the bounce. A connection landing in that gap sees
+// "the database system is starting up" (SQLSTATE 57P03) even though the
+// container is seconds from being usable, so a single failed attempt here
+// isn't a real failure — it's worth a bounded retry before giving up.
+func waitForPostgres(rawDB *sql.DB) error {
+	const maxAttempts = 30
+	const retryDelay = 2 * time.Second
+
+	var err error
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		if err = rawDB.Ping(); err == nil {
+			return nil
+		}
+		log.Printf("[DB] Postgres not ready yet (attempt %d/%d): %v\n", attempt, maxAttempts, err)
+		time.Sleep(retryDelay)
+	}
+	return err
+}
+
 func main() {
 	log.Println("===================================================")
 	log.Println("  Whiparc Runner Go Backend Initialization   ")
@@ -100,6 +124,9 @@ func main() {
 		// below — Postgres handles concurrent writers natively, so raising
 		// this is what actually buys the throughput this migration is for.
 		rawDB.SetMaxOpenConns(20)
+		if err := waitForPostgres(rawDB); err != nil {
+			log.Fatalf("[DB] Postgres never became ready: %v\n", err)
+		}
 	default:
 		dbBackend = "sqlite"
 		// Ensure the db folder exists
@@ -1721,6 +1748,20 @@ func extractSecretsAndEnvironment(projectID string, canvasStr string) ([]string,
 			extraEnv = append(extraEnv, "TF_VAR_gcp_ssh_pub_key="+pubKeyStr)
 			extraEnv = append(extraEnv, "TF_VAR_azure_ssh_pub_key="+pubKeyStr)
 			sshPubKeyInjected = true
+		} else {
+			// Was silent before: the deploy would proceed straight into
+			// Terraform with bundleGenerator.ts's syntactically-invalid
+			// dummySshKey placeholder still in play, surfacing only as a
+			// confusing "InvalidKeyPair.Format" error deep inside the
+			// provider's ImportKeyPair call, with no link back to the
+			// missing file. Most common cause: a hosted-only deployment
+			// (docker-compose.hosted.yml) whose ./sandbox bind mount is
+			// present but empty, because sandbox/id_rsa[.pub] is
+			// gitignored and nothing generates it there — only the
+			// local-dev `ssh-keygen ... -f sandbox/id_rsa` step (see
+			// docs/DEVELOPMENT.md) or `whiparc sandbox up` do that, and
+			// neither runs against a hosted-only checkout.
+			log.Printf("[SANDBOX] Warning: no SSH public key available for LocalStack deploy of project %s (%v) — falling back to bundleGenerator.ts's placeholder key, which real/LocalStack EC2 key-format validation will reject", projectID, err)
 		}
 	}
 

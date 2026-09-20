@@ -1,0 +1,64 @@
+/* Interactive states the design's `style-hover` markers describe but a
+   plain inline `style` prop can't express, plus the docs layout's
+   responsive fallback below the sidebar+TOC breakpoint. */
+
+.wp-docs-navlink:hover {
+  background: var(--chip);
+  color: var(--ink);
+}
+
+.wp-docs-iconbtn:hover {
+  border-color: var(--accent-ink);
+  color: var(--ink);
+}
+
+.wp-docs-submit:hover {
+  background: var(--accent-hover);
+}
+
+.wp-docs-toclink:hover {
+  color: var(--accent-ink);
+}
+
+.wp-docs-tabbtn:hover {
+  color: var(--ink);
+}
+
+.wp-docs-input {
+  transition: border-color 0.15s ease;
+}
+
+.wp-docs-input:focus-visible {
+  outline: none;
+  border-color: var(--accent-ink);
+}
+
+.wp-docs-copybtn:hover {
+  color: #fff;
+  border-color: #9ea2f9;
+}
+
+.wp-docs-details[open] > summary {
+  color: var(--ink);
+}
+
+@media (max-width: 900px) {
+  .wp-docs-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .wp-docs-sidenav,
+  .wp-docs-toc {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .wp-docs-search {
+    display: none !important;
+  }
+
+  .wp-docs-github-label {
+    display: none;
+  }
+}

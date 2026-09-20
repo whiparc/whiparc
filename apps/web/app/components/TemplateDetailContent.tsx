@@ -4,8 +4,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Icon } from '@iconify/react';
 import type { Node, Edge } from '@xyflow/react';
 import { TemplateCanvasPreview } from './TemplateCanvasPreview';
+import { BlueprintCorners } from './ui/BlueprintCorners';
 import { useAuthStore } from '../store/useAuthStore';
 import type { Template } from '../lib/types';
+import './ui/blueprint.css';
+import '../templates/templates.css';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
@@ -109,23 +112,23 @@ export function TemplateDetailContent({ id, variant }: TemplateDetailContentProp
     }
   };
 
-  const previewHeight = variant === 'modal' ? 'h-[320px]' : 'h-[420px]';
+  const previewHeight = variant === 'modal' ? 300 : 400;
 
   if (isLoading) {
     return (
-      <div className="py-20 flex flex-col items-center justify-center gap-3 text-slate-500">
-        <Icon icon="lucide:loader-2" className="animate-spin text-2xl text-primary" />
-        <p className="text-xs">Loading template...</p>
+      <div style={{ padding: '80px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: 'var(--ink3)' }}>
+        <Icon icon="lucide:loader-2" className="animate-spin" width={26} style={{ color: 'var(--accent)' }} />
+        <p style={{ margin: 0, fontSize: 12 }}>Loading template...</p>
       </div>
     );
   }
 
   if (notFound) {
     return (
-      <div className="py-20 border border-dashed border-border rounded-3xl flex flex-col items-center justify-center text-center p-6 bg-secondary/10">
-        <Icon icon="lucide:file-question" className="text-3xl text-slate-500 mb-3" />
-        <h3 className="font-bold text-white text-sm">Template not found</h3>
-        <p className="text-xs text-slate-500 mt-1 max-w-[280px] leading-normal">
+      <div style={{ padding: '80px 24px', border: '1px dashed var(--line)', background: 'var(--ground)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+        <Icon icon="lucide:file-question" width={30} style={{ color: 'var(--ink3)', marginBottom: 10 }} />
+        <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>Template not found</h3>
+        <p style={{ margin: '4px 0 0', fontSize: 12, color: 'var(--ink3)', maxWidth: 280, lineHeight: 1.5 }}>
           This template may have been unpublished or the link is incorrect.
         </p>
       </div>
@@ -134,9 +137,9 @@ export function TemplateDetailContent({ id, variant }: TemplateDetailContentProp
 
   if (loadError) {
     return (
-      <div className="py-20 border border-dashed border-red-500/20 rounded-3xl flex flex-col items-center justify-center text-center p-6 bg-red-500/5">
-        <Icon icon="lucide:alert-circle" className="text-2xl text-red-400 mb-2" />
-        <p className="text-xs text-red-400">{loadError}</p>
+      <div style={{ padding: '80px 24px', border: '1px dashed var(--danger)', background: 'color-mix(in srgb, var(--danger) 6%, transparent)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+        <Icon icon="lucide:alert-circle" width={26} style={{ color: 'var(--danger)', marginBottom: 8 }} />
+        <p style={{ margin: 0, fontSize: 12, color: 'var(--danger)' }}>{loadError}</p>
       </div>
     );
   }
@@ -144,31 +147,26 @@ export function TemplateDetailContent({ id, variant }: TemplateDetailContentProp
   if (!template) return null;
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex flex-col gap-4 border-b border-border/30 pb-8">
-        <div className="flex items-center gap-3">
-          <span className="text-[10px] font-semibold text-primary uppercase tracking-wider bg-primary/10 border border-primary/20 rounded-full px-3 py-1">
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12, borderBottom: '1px solid var(--line)', paddingBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontFamily: 'var(--font-mono-marketing)', fontSize: 10, fontWeight: 600, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--accent-ink)', border: '1px solid var(--accent-ink)', padding: '3px 10px' }}>
             {template.category}
           </span>
-          <div className="flex items-center gap-1.5 text-slate-500">
-            <Icon icon="lucide:download" className="text-xs" />
-            <span className="text-xs font-medium">{template.install_count} uses</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--ink3)' }}>
+            <Icon icon="lucide:download" width={12} />
+            <span style={{ fontSize: 11.5, fontWeight: 500 }}>{template.install_count} uses</span>
           </div>
         </div>
 
-        <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">{template.title}</h1>
+        <h1 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 'clamp(26px,3vw,34px)', color: 'var(--ink)' }}>{template.title}</h1>
 
-        <p className="text-sm text-slate-400 leading-relaxed max-w-2xl">
-          {template.description || 'No description provided.'}
-        </p>
+        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, color: 'var(--ink2)', maxWidth: '38em' }}>{template.description || 'No description provided.'}</p>
 
         {template.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 mt-1">
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 2 }}>
             {template.tags.map((tag) => (
-              <span
-                key={tag}
-                className="text-[11px] font-medium text-slate-400 bg-card border border-border/80 rounded-md px-2.5 py-1"
-              >
+              <span key={tag} style={{ fontSize: 11, color: 'var(--ink2)', border: '1px solid var(--line)', padding: '4px 10px' }}>
                 {tag}
               </span>
             ))}
@@ -176,66 +174,71 @@ export function TemplateDetailContent({ id, variant }: TemplateDetailContentProp
         )}
       </div>
 
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="text-sm font-bold text-white flex items-center gap-2">
-            <Icon icon="lucide:git-branch" className="text-primary text-sm" />
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <h2 style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 14, color: 'var(--ink)' }}>
+            <Icon icon="lucide:git-branch" width={14} style={{ color: 'var(--accent-ink)' }} />
             Canvas Preview
           </h2>
-          <span className="text-[10px] text-slate-500">Scroll to zoom · Drag to pan · Read-only</span>
+          <span style={{ fontSize: 10.5, color: 'var(--ink3)' }}>Scroll to zoom · Drag to pan · Read-only</span>
         </div>
-        <div className={`${previewHeight} w-full rounded-3xl border border-border bg-secondary/10 overflow-hidden`}>
+        <div style={{ height: previewHeight, width: '100%', border: '1px solid var(--line)', background: 'var(--ground)', overflow: 'hidden' }}>
           <TemplateCanvasPreview nodes={parsedCanvas.nodes} edges={parsedCanvas.edges} viewport={parsedCanvas.viewport} />
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <div className="rounded-2xl border border-border bg-secondary/30 p-4">
-          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Resources</p>
-          <p className="text-lg font-bold text-white mt-1">{parsedCanvas.nodes.length}</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2,1fr)', gap: 12 }} className="wp-templates-stat-grid">
+        <div style={{ border: '1px solid var(--line)', background: 'var(--panel)', padding: 14 }}>
+          <p style={{ margin: 0, fontFamily: 'var(--font-mono-marketing)', fontSize: 9.5, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--ink3)' }}>Resources</p>
+          <p style={{ margin: '5px 0 0', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 18, color: 'var(--ink)' }}>{parsedCanvas.nodes.length}</p>
         </div>
-        <div className="rounded-2xl border border-border bg-secondary/30 p-4">
-          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Connections</p>
-          <p className="text-lg font-bold text-white mt-1">{parsedCanvas.edges.length}</p>
+        <div style={{ border: '1px solid var(--line)', background: 'var(--panel)', padding: 14 }}>
+          <p style={{ margin: 0, fontFamily: 'var(--font-mono-marketing)', fontSize: 9.5, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--ink3)' }}>Connections</p>
+          <p style={{ margin: '5px 0 0', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 18, color: 'var(--ink)' }}>{parsedCanvas.edges.length}</p>
         </div>
-        <div className="rounded-2xl border border-border bg-secondary/30 p-4">
-          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Author</p>
-          <p className="text-sm font-bold text-white mt-1.5 truncate">{template.author_name || 'Whiparc Official'}</p>
+        <div style={{ border: '1px solid var(--line)', background: 'var(--panel)', padding: 14 }}>
+          <p style={{ margin: 0, fontFamily: 'var(--font-mono-marketing)', fontSize: 9.5, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--ink3)' }}>Author</p>
+          <p style={{ margin: '5px 0 0', fontSize: 13, fontWeight: 600, color: 'var(--ink)' }} className="truncate">
+            {template.author_name || 'Whiparc Official'}
+          </p>
         </div>
-        <div className="rounded-2xl border border-border bg-secondary/30 p-4">
-          <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider">Published</p>
-          <p className="text-sm font-bold text-white mt-1.5">
+        <div style={{ border: '1px solid var(--line)', background: 'var(--panel)', padding: 14 }}>
+          <p style={{ margin: 0, fontFamily: 'var(--font-mono-marketing)', fontSize: 9.5, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--ink3)' }}>Published</p>
+          <p style={{ margin: '5px 0 0', fontSize: 13, fontWeight: 600, color: 'var(--ink)' }}>
             {new Date(template.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
           </p>
         </div>
       </div>
 
-      <div className="rounded-3xl border border-border bg-secondary/20 p-8 flex flex-col items-center text-center gap-4">
-        <Icon icon="lucide:rocket" className="text-3xl text-primary" />
+      <div className="wp-blueprint" style={{ position: 'relative', border: '1px solid var(--line)', background: 'var(--panel)', padding: 28, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', gap: 14 }}>
+        <BlueprintCorners />
+        <Icon icon="lucide:rocket" width={26} style={{ color: 'var(--accent-ink)' }} />
         <div>
-          <h3 className="text-lg font-bold text-white">Ready to build on this template?</h3>
-          <p className="text-sm text-slate-400 mt-1 max-w-md">
+          <h3 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 16, color: 'var(--ink)' }}>Ready to build on this template?</h3>
+          <p style={{ margin: '5px 0 0', fontSize: 13, color: 'var(--ink2)', maxWidth: 380 }}>
             {hasHydrated && user
               ? 'Fork this canvas into a new project in your own workspace.'
               : 'Sign in to fork this canvas into a new project in your own workspace.'}
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center justify-center gap-3">
+        <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
           <button
+            type="button"
             onClick={handleGetStarted}
             disabled={isForking}
-            className="rounded-xl bg-gradient-to-r from-indigo-500 to-amber-600 px-6 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/30 transition-all active:scale-95 cursor-pointer flex items-center gap-2 disabled:opacity-60 disabled:pointer-events-none"
+            className="wp-templates-submit"
+            style={{ height: 38, padding: '0 22px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 600, fontFamily: 'var(--font-display)', background: 'var(--accent)', color: '#fff', border: 0, cursor: isForking ? 'not-allowed' : 'pointer', opacity: isForking ? 0.6 : 1 }}
           >
             {isForking ? (
               <>
-                <Icon icon="lucide:loader-2" className="animate-spin text-sm" />
-                <span>Setting up your project...</span>
+                <Icon icon="lucide:loader-2" className="animate-spin" width={14} />
+                <span>Setting up your project…</span>
               </>
             ) : (
               <>
                 <span>Get Started</span>
-                <Icon icon="lucide:arrow-right" className="text-sm" />
+                <Icon icon="lucide:arrow-right" width={14} />
               </>
             )}
           </button>
@@ -247,19 +250,21 @@ export function TemplateDetailContent({ id, variant }: TemplateDetailContentProp
               hidden, same treatment "Get Started" got before Phase 3
               existed. See product-memory 10.1's roadmap for the plan. */}
           <button
+            type="button"
             onClick={() => setShowContributeComingSoon(true)}
-            className="rounded-xl border border-border bg-card px-6 py-3 text-sm font-semibold text-slate-300 hover:bg-secondary hover:text-white transition-all active:scale-95 cursor-pointer flex items-center gap-2"
+            className="wp-templates-navlink"
+            style={{ height: 38, padding: '0 22px', display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, fontWeight: 600, fontFamily: 'var(--font-display)', border: '1px solid var(--line)', color: 'var(--ink)', background: 'transparent', cursor: 'pointer' }}
           >
-            <Icon icon="lucide:git-pull-request" className="text-sm" />
+            <Icon icon="lucide:git-pull-request" width={14} />
             <span>Contribute</span>
           </button>
         </div>
 
         {forkError && (
-          <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">{forkError}</p>
+          <p style={{ margin: 0, fontSize: 11.5, color: 'var(--danger)', background: 'color-mix(in srgb, var(--danger) 10%, transparent)', border: '1px solid var(--danger)', padding: '6px 10px' }}>{forkError}</p>
         )}
         {showContributeComingSoon && (
-          <p className="text-xs text-amber-400 bg-amber-500/10 border border-amber-500/20 rounded-lg px-3 py-2">
+          <p style={{ margin: 0, fontSize: 11.5, color: 'var(--amber)', background: 'color-mix(in srgb, var(--amber) 10%, transparent)', border: '1px solid var(--amber)', padding: '6px 10px' }}>
             Contributing changes back to a template is launching in a future phase — this template will be open for
             community fine-tuning soon.
           </p>

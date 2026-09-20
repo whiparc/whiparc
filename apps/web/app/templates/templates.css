@@ -1,0 +1,40 @@
+/* Interactive states the design's `style-hover` markers describe but a
+   plain inline `style` prop can't express, plus a couple of responsive
+   tweaks shared across the templates catalog, detail, and modal views. */
+
+.wp-templates-navlink:hover {
+  background: var(--chip);
+  border-color: var(--accent-ink);
+}
+
+.wp-templates-iconbtn:hover {
+  border-color: var(--accent-ink);
+  color: var(--ink);
+}
+
+.wp-templates-submit:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.wp-templates-toclink:hover {
+  color: var(--ink);
+}
+
+.wp-templates-unlockbtn:hover {
+  background: color-mix(in srgb, var(--amber) 14%, transparent);
+}
+
+.wp-templates-input {
+  transition: border-color 0.15s ease;
+}
+
+.wp-templates-input:focus-visible {
+  outline: none;
+  border-color: var(--accent-ink);
+}
+
+@media (min-width: 640px) {
+  .wp-templates-stat-grid {
+    grid-template-columns: repeat(4, 1fr) !important;
+  }
+}
