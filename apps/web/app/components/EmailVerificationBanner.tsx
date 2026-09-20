@@ -5,11 +5,25 @@ import { Icon } from '@iconify/react';
 import { useAuthStore } from '../store/useAuthStore';
 
 export default function EmailVerificationBanner() {
-  const { user, resendVerification } = useAuthStore();
+  const { user, resendVerification, fetchMe } = useAuthStore();
   const [isSending, setIsSending] = useState(false);
   const [sentNotice, setSentNotice] = useState<string | null>(null);
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
+
+  useEffect(() => {
+    if (!user || user.email_verified) return;
+
+    // Check verification status with backend on mount
+    fetchMe();
+
+    // Check verification status whenever user switches back to this tab
+    const onFocus = () => {
+      fetchMe();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => window.removeEventListener('focus', onFocus);
+  }, [user?.email_verified, fetchMe]);
 
   useEffect(() => {
     if (cooldown <= 0) return;

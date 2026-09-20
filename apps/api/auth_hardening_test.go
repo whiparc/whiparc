@@ -76,6 +76,7 @@ func TestAuthHardeningFlow(t *testing.T) {
 
 	// 2. Test Successful Signup with Real Email
 	var verificationToken string
+	var initialSignupToken string
 	validEmail := "alice@genuinecorp.com"
 	t.Run("Valid signup generates unverified user and verification token", func(t *testing.T) {
 		payload := map[string]string{
@@ -105,8 +106,24 @@ func TestAuthHardeningFlow(t *testing.T) {
 			t.Fatalf("failed to unmarshal response: %v", err)
 		}
 
+		initialSignupToken = resp.Token
 		if resp.User.EmailVerified {
 			t.Fatalf("expected newly registered user to have email_verified = false")
+		}
+
+		// Verify /api/auth/me returns unverified
+		meReq := httptest.NewRequest("GET", "/api/auth/me", nil)
+		meReq.Header.Set("Authorization", "Bearer "+initialSignupToken)
+		meW := httptest.NewRecorder()
+		AuthMiddleware(http.HandlerFunc(handleMe)).ServeHTTP(meW, meReq)
+		if meW.Code != http.StatusOK {
+			t.Fatalf("expected 200 from handleMe, got %d", meW.Code)
+		}
+		var meResp struct {
+			EmailVerified bool `json:"email_verified"`
+		}
+		if err := json.Unmarshal(meW.Body.Bytes(), &meResp); err != nil || meResp.EmailVerified {
+			t.Fatalf("expected handleMe to return email_verified = false before verification")
 		}
 
 		// Verify token exists in database
@@ -179,6 +196,21 @@ func TestAuthHardeningFlow(t *testing.T) {
 		}
 		if tokenInDB.Valid && tokenInDB.String != "" {
 			t.Fatalf("expected verification_token to be cleared from db after use, got %s", tokenInDB.String)
+		}
+
+		// Verify that handleMe called with the OLD unverified token now returns email_verified = true
+		meReq := httptest.NewRequest("GET", "/api/auth/me", nil)
+		meReq.Header.Set("Authorization", "Bearer "+initialSignupToken)
+		meW := httptest.NewRecorder()
+		AuthMiddleware(http.HandlerFunc(handleMe)).ServeHTTP(meW, meReq)
+		if meW.Code != http.StatusOK {
+			t.Fatalf("expected 200 from handleMe, got %d", meW.Code)
+		}
+		var meResp struct {
+			EmailVerified bool `json:"email_verified"`
+		}
+		if err := json.Unmarshal(meW.Body.Bytes(), &meResp); err != nil || !meResp.EmailVerified {
+			t.Fatalf("expected handleMe with initial token to return live email_verified = true after verification, got %+v", meResp)
 		}
 	})
 

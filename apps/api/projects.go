@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -529,13 +530,30 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	email := user.Email
+	name := user.Name
+	plan := user.Plan
+	emailVerified := user.EmailVerified
+
+	err := db.QueryRow("SELECT email, name, plan, email_verified FROM users WHERE id = ?", user.ID).Scan(&email, &name, &plan, &emailVerified)
+	if err != nil && err != sql.ErrNoRows {
+		log.Printf("[AUTH] Warning: failed to query live user for me endpoint: %v\n", err)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
 		"id":             user.ID,
-		"email":          user.Email,
-		"name":           user.Name,
-		"plan":           user.Plan,
-		"email_verified": user.EmailVerified,
+		"email":          email,
+		"name":           name,
+		"plan":           plan,
+		"email_verified": emailVerified,
+		"user": map[string]interface{}{
+			"id":             user.ID,
+			"email":          email,
+			"name":           name,
+			"plan":           plan,
+			"email_verified": emailVerified,
+		},
 	})
 }
 

@@ -25,6 +25,7 @@ interface AuthState {
   signup: (name: string, email: string, password: string) => Promise<boolean>;
   verifyEmail: (token: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   resendVerification: () => Promise<{ success: boolean; message?: string; error?: string }>;
+  fetchMe: () => Promise<User | null>;
   setSessionFromToken: (token: string) => boolean;
   logout: () => void;
   clearError: () => void;
@@ -195,6 +196,37 @@ export const useAuthStore = create<AuthState>()(
         }
       },
 
+      fetchMe: async () => {
+        const token = get().token;
+        if (!token) return null;
+        try {
+          const res = await fetch(`${API_URL}/api/auth/me`, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
+          if (!res.ok) {
+            if (res.status === 401) {
+              get().logout();
+            }
+            return null;
+          }
+          const data = await res.json();
+          const fetchedUser: User = {
+            id: data.id || data.user?.id,
+            email: data.email || data.user?.email,
+            name: data.name || data.user?.name,
+            plan: data.plan || data.user?.plan || 'FREE',
+            email_verified: Boolean(data.email_verified ?? data.user?.email_verified),
+          };
+          set({ user: fetchedUser });
+          return fetchedUser;
+        } catch (err: unknown) {
+          console.error('Failed to fetch user profile:', err);
+          return null;
+        }
+      },
+
       setSessionFromToken: (token) => {
         const user = decodeTokenClaims(token);
         if (!user) return false;
@@ -237,6 +269,9 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({ token: state.token, user: state.user }),
       onRehydrateStorage: () => (state) => {
         state?.setHasHydrated(true);
+        if (state?.token) {
+          state.fetchMe();
+        }
       },
     }
   )
