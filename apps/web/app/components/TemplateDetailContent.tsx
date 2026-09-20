@@ -89,6 +89,7 @@ export function TemplateDetailContent({ id, variant }: TemplateDetailContentProp
       // entirely. A full navigation forces both the main and @modal slots
       // to resolve fresh for the new URL, which reliably clears the modal.
       // See product-memory 10.1 / 07.2 for the full writeup.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- intentional hard navigation, see comment above
       window.location.href = `/login?redirect=/templates/${id}`;
       return;
     }
@@ -104,6 +105,7 @@ export function TemplateDetailContent({ id, variant }: TemplateDetailContentProp
       const data: { project_id: string } = await res.json();
       // Same reasoning as above — hard navigation so the popup can't get
       // stuck on top of the workspace after a signed-in fork.
+      // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- intentional hard navigation, see comment above
       window.location.href = `/workspace?project=${data.project_id}`;
     } catch (err) {
       setIsForking(false);

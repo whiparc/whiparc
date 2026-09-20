@@ -11,8 +11,10 @@ export default function EmailVerificationBanner() {
   const [errorNotice, setErrorNotice] = useState<string | null>(null);
   const [cooldown, setCooldown] = useState(0);
 
+  const needsVerification = !!user && !user.email_verified;
+
   useEffect(() => {
-    if (!user || user.email_verified) return;
+    if (!needsVerification) return;
 
     // Check verification status with backend on mount
     fetchMe();
@@ -23,7 +25,7 @@ export default function EmailVerificationBanner() {
     };
     window.addEventListener('focus', onFocus);
     return () => window.removeEventListener('focus', onFocus);
-  }, [user?.email_verified, fetchMe]);
+  }, [needsVerification, fetchMe]);
 
   useEffect(() => {
     if (cooldown <= 0) return;
