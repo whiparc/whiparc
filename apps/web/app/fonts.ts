@@ -1,4 +1,4 @@
-import { Geist } from 'next/font/google';
+import { Geist, Space_Grotesk, Barlow, JetBrains_Mono, Kalam } from 'next/font/google';
 
 // Display font for the landing page hero headline only — the rest of the
 // app keeps the Inter/JetBrains Mono stack defined in globals.css.
@@ -7,5 +7,40 @@ import { Geist } from 'next/font/google';
 export const heroDisplayFont = Geist({
   subsets: ['latin'],
   weight: ['500', '600', '700'],
+  display: 'swap',
+});
+
+// Marketing page v2 ("Draw it once. Ship the Terraform.") type system —
+// self-hosted via next/font instead of the design's runtime Google Fonts
+// <link>, so there's no render-blocking request and no CLS on first paint.
+export const spaceGroteskFont = Space_Grotesk({
+  subsets: ['latin'],
+  weight: ['500', '600', '700'],
+  variable: '--font-display',
+  display: 'swap',
+});
+
+export const barlowFont = Barlow({
+  subsets: ['latin'],
+  weight: ['400', '500', '600'],
+  variable: '--font-body-marketing',
+  display: 'swap',
+});
+
+export const jetBrainsMonoFont = JetBrains_Mono({
+  subsets: ['latin'],
+  weight: ['400', '500', '700'],
+  variable: '--font-mono-marketing',
+  display: 'swap',
+});
+
+// Workspace canvas nodes only — the "hand-drawn sticky note" card style
+// (see product-memory: node style B, chosen over the plain/unrotated
+// option) uses Kalam for its title/kicker text so the tilted card reads as
+// actually hand-lettered rather than a rotated system font.
+export const kalamFont = Kalam({
+  subsets: ['latin'],
+  weight: ['400', '700'],
+  variable: '--font-handwriting',
   display: 'swap',
 });

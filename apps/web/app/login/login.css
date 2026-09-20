@@ -1,0 +1,30 @@
+/* Interactive states the design's `style-hover` markers describe but a
+   plain inline `style` prop can't express on its own. */
+
+.wp-login-input {
+  transition: border-color 0.15s ease;
+}
+
+.wp-login-input:focus-visible {
+  outline: none;
+  border-color: var(--accent-ink);
+}
+
+.wp-login-theme-btn:hover {
+  border-color: var(--accent-ink);
+  color: var(--ink);
+}
+
+.wp-login-submit:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.wp-login-oauth:hover {
+  background: var(--chip);
+  border-color: var(--accent-ink);
+}
+
+.wp-login-forgot:hover,
+.wp-login-switch:hover {
+  text-decoration: underline;
+}

@@ -1,0 +1,35 @@
+/* Blueprint styling for the parts of ProjectSettingsModal (and, via
+   .wp-legacy-token-scope, CredentialManagerTab) that still render through
+   the app's original shadcn/Tailwind classes — see legacy-token-scope.ts
+   for why the color remap has to target the `--color-*` tokens. */
+.wp-legacy-token-scope [class*="rounded"]:not([class*="rounded-full"]) {
+  border-radius: 0 !important;
+}
+
+.wp-legacy-token-scope .uppercase {
+  font-family: var(--font-mono-marketing, monospace);
+  letter-spacing: 0.08em;
+}
+
+.wp-legacy-token-scope input:focus,
+.wp-legacy-token-scope select:focus,
+.wp-legacy-token-scope textarea:focus {
+  box-shadow: none !important;
+}
+
+.wp-psm-tab {
+  cursor: pointer;
+}
+
+.wp-psm-tab:hover:not([data-active='true']) {
+  color: var(--ink);
+}
+
+.wp-psm-navlink:hover {
+  background: var(--chip);
+}
+
+.wp-psm-iconbtn:hover {
+  border-color: var(--accent-ink);
+  color: var(--ink);
+}

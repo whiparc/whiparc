@@ -1,33 +1,60 @@
 'use client';
 
+import { useMemo, useState, type CSSProperties } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { Icon } from '@iconify/react';
-import { Navbar } from '../../components/Navbar';
 import { TemplateDetailContent } from '../../components/TemplateDetailContent';
-import { heroDisplayFont } from '../../fonts';
+import { THEME_PALETTES, type Theme } from '../../components/ui/theme-palette';
+import { spaceGroteskFont, barlowFont, jetBrainsMonoFont, kalamFont } from '../../fonts';
+import '../../components/ui/blueprint.css';
+import '../templates.css';
 
-// Standalone, directly-navigable /templates/{id} page — full page chrome
-// (Navbar, background) plus a "Back to Templates" link. Rendered on a hard
-// navigation / shared link / search-engine crawl. Clicking a card from
-// /templates instead intercepts to the popup version at
-// app/@modal/(.)templates/[id]/page.tsx, which renders the exact same
+// Standalone, directly-navigable /templates/{id} page — a minimal single
+// header bar (back-chevron + breadcrumb), matching export-code's standalone
+// page rather than the catalog's full dashboard shell, since this is a
+// deep-link/hard-refresh landing spot, not a primary nav destination.
+// Rendered on a hard navigation / shared link / search-engine crawl.
+// Clicking a card from /templates instead intercepts to the popup version
+// at app/@modal/(.)templates/[id]/page.tsx, which renders the exact same
 // TemplateDetailContent inside TemplateModal. See product-memory 10.1.
 export default function TemplateDetailPage() {
   const params = useParams<{ id: string }>();
+  const [theme, setTheme] = useState<Theme>('dark');
+
+  const palette = THEME_PALETTES[theme];
+  const rootVars = useMemo(
+    () =>
+      ({
+        ...palette,
+        background: palette['--ground'],
+        color: palette['--ink'],
+      }) as CSSProperties,
+    [palette]
+  );
 
   return (
-    <div className={`min-h-screen w-full bg-background flex flex-col relative text-slate-100 overflow-x-hidden ${heroDisplayFont.className}`}>
-      <div className="pointer-events-none fixed inset-0 bg-dot-pattern opacity-30 z-0" />
-
-      <Navbar />
-
-      <main className="flex flex-1 flex-col relative z-10 mx-auto w-full max-w-6xl px-6 pt-36 pb-24 lg:px-10">
-        <Link href="/templates" className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-400 hover:text-white transition mb-8 w-fit">
-          <Icon icon="lucide:arrow-left" className="text-sm" />
-          Back to Templates
+    <div
+      className={`${spaceGroteskFont.variable} ${barlowFont.variable} ${jetBrainsMonoFont.variable} ${kalamFont.variable}`}
+      style={{ ...rootVars, minHeight: '100vh', fontFamily: 'var(--font-body-marketing), system-ui, sans-serif', transition: 'background .3s ease, color .3s ease' }}
+    >
+      <header style={{ height: 56, display: 'flex', alignItems: 'center', gap: 14, padding: '0 clamp(16px,3vw,28px)', borderBottom: '1px solid var(--line)', position: 'sticky', top: 0, background: 'var(--ground)', zIndex: 20 }}>
+        <Link href="/templates" className="wp-templates-iconbtn" style={{ display: 'flex', alignItems: 'center', color: 'var(--ink2)' }} title="Back to Templates">
+          <Icon icon="lucide:arrow-left" width={15} />
         </Link>
+        <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--ink)' }}>Templates</span>
+        <button
+          type="button"
+          onClick={() => setTheme((t) => (t === 'light' ? 'dark' : 'light'))}
+          title="Toggle theme"
+          className="wp-templates-iconbtn"
+          style={{ marginLeft: 'auto', width: 30, height: 30, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--line)', background: 'transparent', color: 'var(--ink2)', cursor: 'pointer' }}
+        >
+          <Icon icon={theme === 'light' ? 'lucide:moon' : 'lucide:sun'} width={14} />
+        </button>
+      </header>
 
+      <main style={{ maxWidth: 900, margin: '0 auto', padding: 'clamp(24px,4vw,40px) clamp(16px,3vw,28px) 64px' }}>
         <TemplateDetailContent id={params.id} variant="page" />
       </main>
     </div>

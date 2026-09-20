@@ -1,0 +1,26 @@
+.wp-projects-navlink:hover {
+  background: var(--chip);
+  color: var(--ink);
+}
+
+.wp-projects-iconbtn:hover {
+  border-color: var(--accent-ink);
+  color: var(--ink);
+}
+
+.wp-projects-submit:hover {
+  background: var(--accent-hover);
+}
+
+.wp-projects-card:hover {
+  border-color: var(--accent-ink);
+}
+
+.wp-projects-input {
+  transition: border-color 0.15s ease;
+}
+
+.wp-projects-input:focus-visible {
+  outline: none;
+  border-color: var(--accent-ink);
+}
