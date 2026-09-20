@@ -12,6 +12,9 @@ export const PALETTES: Record<Band, Record<string, string>> = {
     '--accent': '#6366F1',
     '--amber': '#F59E0B',
     '--chip': 'rgba(255,255,255,.04)',
+    '--ink3': '#64748B',
+    '--k8s-ink': '#7DD3FC',
+    '--target-ink': '#5EEAD4',
   },
   light: {
     '--ground': '#FBFBFC',
@@ -23,6 +26,9 @@ export const PALETTES: Record<Band, Record<string, string>> = {
     '--accent': '#4F46E5',
     '--amber': '#B45309',
     '--chip': 'rgba(15,18,32,.04)',
+    '--ink3': '#8A93A6',
+    '--k8s-ink': '#0369A1',
+    '--target-ink': '#0F766E',
   },
 };
 

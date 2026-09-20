@@ -5,54 +5,39 @@ import Link from 'next/link';
 import { Icon } from '@iconify/react';
 import { BlueprintCorners } from '../ui/BlueprintCorners';
 import { Seam } from './Seam';
+import type { Node, Edge } from '@xyflow/react';
+import { TemplateCanvasPreview } from '../TemplateCanvasPreview';
 import type { Template, TemplateListResponse } from '../../lib/types';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-
-// Three abstract line-diagram shapes, cycled by index across whichever real
-// templates come back — a lightweight decorative marketing visual, not a
-// literal per-node rendering (that's what the real /templates catalog's
-// TemplateCanvasPreview + TemplatePreviewNode hand-drawn cards are for).
-const DIAGRAM_SHAPES = [
-  (
-    <>
-      <line x1="24" y1="30" x2="50" y2="52" stroke="#4F46E5" strokeWidth={1} style={{ vectorEffect: 'non-scaling-stroke' }} />
-      <line x1="50" y1="52" x2="76" y2="30" stroke="#4F46E5" strokeWidth={1} style={{ vectorEffect: 'non-scaling-stroke' }} />
-      <line x1="50" y1="52" x2="50" y2="78" stroke="#4F46E5" strokeWidth={1} style={{ vectorEffect: 'non-scaling-stroke' }} />
-      <circle cx="24" cy="30" r="3.5" fill="#4F46E5" />
-      <circle cx="76" cy="30" r="3.5" fill="#4F46E5" />
-      <circle cx="50" cy="52" r="3.5" fill="#4F46E5" />
-      <circle cx="50" cy="78" r="3.5" fill="#B45309" />
-    </>
-  ),
-  (
-    <>
-      <line x1="26" y1="26" x2="26" y2="72" stroke="#4F46E5" strokeWidth={1} style={{ vectorEffect: 'non-scaling-stroke' }} />
-      <line x1="26" y1="72" x2="74" y2="72" stroke="#4F46E5" strokeWidth={1} style={{ vectorEffect: 'non-scaling-stroke' }} />
-      <line x1="74" y1="72" x2="74" y2="26" stroke="#B45309" strokeWidth={1} style={{ vectorEffect: 'non-scaling-stroke' }} />
-      <circle cx="26" cy="26" r="3.5" fill="#4F46E5" />
-      <circle cx="26" cy="72" r="3.5" fill="#4F46E5" />
-      <circle cx="74" cy="72" r="3.5" fill="#4F46E5" />
-      <circle cx="74" cy="26" r="3.5" fill="#B45309" />
-    </>
-  ),
-  (
-    <>
-      <line x1="20" y1="50" x2="50" y2="50" stroke="#4F46E5" strokeWidth={1} style={{ vectorEffect: 'non-scaling-stroke' }} />
-      <line x1="50" y1="50" x2="80" y2="34" stroke="#4F46E5" strokeWidth={1} style={{ vectorEffect: 'non-scaling-stroke' }} />
-      <line x1="50" y1="50" x2="80" y2="66" stroke="#B45309" strokeWidth={1} style={{ vectorEffect: 'non-scaling-stroke' }} />
-      <circle cx="20" cy="50" r="3.5" fill="#4F46E5" />
-      <circle cx="50" cy="50" r="3.5" fill="#4F46E5" />
-      <circle cx="80" cy="34" r="3.5" fill="#4F46E5" />
-      <circle cx="80" cy="66" r="3.5" fill="#B45309" />
-    </>
-  ),
-];
 
 // Static content from the design mockup. Rendered whenever the templates API
 // is unreachable or returns nothing, so the marketing page never depends on
 // a running backend — the section must always exist because Pricing's Seam
 // expects a light band above it (removing the section leaves a blank strip).
+const fbNode = (id: string, x: number, label: string, tech: string, categoryLabel: string): Node => ({
+  id,
+  type: 'customNode',
+  position: { x, y: 0 },
+  data: { label, tech, categoryLabel },
+});
+const fbEdge = (source: string, target: string): Edge => ({ id: `${source}-${target}`, source, target });
+
+const FALLBACK_GRAPHS: { nodes: Node[]; edges: Edge[] }[] = [
+  {
+    nodes: [fbNode('a', 0, 'Web Server', 'Terraform', 'AWS Resource'), fbNode('b', 260, 'App Server', 'Terraform', 'AWS Resource'), fbNode('c', 520, 'Postgres (RDS)', 'Terraform', 'AWS Resource')],
+    edges: [fbEdge('a', 'b'), fbEdge('b', 'c')],
+  },
+  {
+    nodes: [fbNode('a', 0, 'Target Host', 'Target', 'Cloud Target'), fbNode('b', 260, 'App Provisioning', 'Ansible', 'Ansible Task')],
+    edges: [fbEdge('a', 'b')],
+  },
+  {
+    nodes: [fbNode('a', 0, 'Deployment', 'Kubernetes', 'K8s Resource'), fbNode('b', 260, 'Service', 'Kubernetes', 'K8s Resource')],
+    edges: [fbEdge('a', 'b')],
+  },
+];
+
 const FALLBACK_TEMPLATES = [
   { id: '', title: 'AWS three-tier web', body: 'VPC, two private subnets, ALB, autoscaled app tier, RDS. The one most people start from.', meta: ['14 nodes', '19 edges', 'terraform'] },
   { id: '', title: 'Single-node k8s + Ansible', body: 'One box, k3s, ingress and a playbook that installs it. Cheap staging that behaves like production.', meta: ['8 nodes', '9 edges', 'tf + ansible'] },
@@ -81,17 +66,19 @@ export function Templates() {
 
   const cards = templates.length > 0
     ? templates.map((tpl) => {
-        let nodeCount = 0;
-        let edgeCount = 0;
+        let nodes: Node[] = [];
+        let edges: Edge[] = [];
         try {
-          nodeCount = (JSON.parse(tpl.nodes_json || '[]') as unknown[]).length;
-          edgeCount = (JSON.parse(tpl.edges_json || '[]') as unknown[]).length;
+          const n = JSON.parse(tpl.nodes_json || '[]');
+          const e = JSON.parse(tpl.edges_json || '[]');
+          if (Array.isArray(n)) nodes = n;
+          if (Array.isArray(e)) edges = e;
         } catch {
-          // leave at 0 — a malformed seed shouldn't break the homepage
+          // leave empty — a malformed seed shouldn't break the homepage
         }
-        return { id: tpl.id, title: tpl.title, body: tpl.description || 'No description provided.', meta: [`${nodeCount} nodes`, `${edgeCount} edges`, tpl.category] };
+        return { id: tpl.id, title: tpl.title, body: tpl.description || 'No description provided.', meta: [`${nodes.length} nodes`, `${edges.length} edges`, tpl.category], nodes, edges };
       })
-    : FALLBACK_TEMPLATES;
+    : FALLBACK_TEMPLATES.map((t, i) => ({ ...t, ...FALLBACK_GRAPHS[i % FALLBACK_GRAPHS.length] }));
 
   return (
     <section
@@ -130,22 +117,11 @@ export function Templates() {
         </div>
 
         <div data-reveal style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,270px),1fr))', gap: 'clamp(16px,2vw,26px)', marginTop: 'clamp(28px,4vw,48px)' }}>
-          {cards.map((tpl, i) => (
+          {cards.map((tpl) => (
             <Link key={tpl.id || tpl.title} href={tpl.id ? `/templates/${tpl.id}` : '/templates'} className="wp-blueprint" style={{ position: 'relative', display: 'block', padding: 'clamp(16px,2vw,22px)', background: 'transparent' }}>
               <BlueprintCorners />
-              <div
-                style={{
-                  height: 110,
-                  border: '1px solid var(--line)',
-                  backgroundImage:
-                    'linear-gradient(rgba(15,18,32,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(15,18,32,.05) 1px,transparent 1px)',
-                  backgroundSize: '22px 22px',
-                  position: 'relative',
-                }}
-              >
-                <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-                  {DIAGRAM_SHAPES[i % DIAGRAM_SHAPES.length]}
-                </svg>
+              <div style={{ height: 140, border: '1px solid var(--line)', background: 'var(--ground)', position: 'relative', overflow: 'hidden' }}>
+                <TemplateCanvasPreview nodes={tpl.nodes} edges={tpl.edges} interactive={false} />
               </div>
               <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 19, color: 'var(--ink)', marginTop: 14 }}>{tpl.title}</div>
               <p style={{ margin: '6px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--ink2)' }}>{tpl.body}</p>

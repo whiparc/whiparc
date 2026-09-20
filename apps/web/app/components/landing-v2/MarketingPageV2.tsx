@@ -23,6 +23,9 @@ const rootStyle: CSSProperties = {
   ['--accent' as string]: '#6366F1',
   ['--amber' as string]: '#F59E0B',
   ['--chip' as string]: 'rgba(255,255,255,.04)',
+  ['--ink3' as string]: '#64748B',
+  ['--k8s-ink' as string]: '#7DD3FC',
+  ['--target-ink' as string]: '#5EEAD4',
   background: '#07080B',
   color: '#FFFFFF',
 };
