@@ -49,6 +49,16 @@ const DIAGRAM_SHAPES = [
   ),
 ];
 
+// Static content from the design mockup. Rendered whenever the templates API
+// is unreachable or returns nothing, so the marketing page never depends on
+// a running backend — the section must always exist because Pricing's Seam
+// expects a light band above it (removing the section leaves a blank strip).
+const FALLBACK_TEMPLATES = [
+  { id: '', title: 'AWS three-tier web', body: 'VPC, two private subnets, ALB, autoscaled app tier, RDS. The one most people start from.', meta: ['14 nodes', '19 edges', 'terraform'] },
+  { id: '', title: 'Single-node k8s + Ansible', body: 'One box, k3s, ingress and a playbook that installs it. Cheap staging that behaves like production.', meta: ['8 nodes', '9 edges', 'tf + ansible'] },
+  { id: '', title: 'Static site + CDN', body: "S3, CloudFront, ACM cert and a DNS record. Twelve lines of HCL you'd rather not write again.", meta: ['6 nodes', '7 edges', 'terraform'] },
+];
+
 export function Templates() {
   const [templates, setTemplates] = useState<Template[]>([]);
 
@@ -61,8 +71,7 @@ export function Templates() {
         const data: TemplateListResponse = await res.json();
         if (!cancelled) setTemplates(data.templates || []);
       } catch {
-        // A marketing homepage should never show a broken-looking section
-        // over a feature nobody asked to see fail — quietly render nothing.
+        // API unreachable — keep showing FALLBACK_TEMPLATES below.
       }
     })();
     return () => {
@@ -70,9 +79,19 @@ export function Templates() {
     };
   }, []);
 
-  // Same principle as TemplateDetailContent's error states, taken one step
-  // further: this section isn't the primary reason anyone is on the page.
-  if (templates.length === 0) return null;
+  const cards = templates.length > 0
+    ? templates.map((tpl) => {
+        let nodeCount = 0;
+        let edgeCount = 0;
+        try {
+          nodeCount = (JSON.parse(tpl.nodes_json || '[]') as unknown[]).length;
+          edgeCount = (JSON.parse(tpl.edges_json || '[]') as unknown[]).length;
+        } catch {
+          // leave at 0 — a malformed seed shouldn't break the homepage
+        }
+        return { id: tpl.id, title: tpl.title, body: tpl.description || 'No description provided.', meta: [`${nodeCount} nodes`, `${edgeCount} edges`, tpl.category] };
+      })
+    : FALLBACK_TEMPLATES;
 
   return (
     <section
@@ -111,42 +130,34 @@ export function Templates() {
         </div>
 
         <div data-reveal style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(min(100%,270px),1fr))', gap: 'clamp(16px,2vw,26px)', marginTop: 'clamp(28px,4vw,48px)' }}>
-          {templates.map((tpl, i) => {
-            let nodeCount = 0;
-            let edgeCount = 0;
-            try {
-              nodeCount = (JSON.parse(tpl.nodes_json || '[]') as unknown[]).length;
-              edgeCount = (JSON.parse(tpl.edges_json || '[]') as unknown[]).length;
-            } catch {
-              // leave at 0 — a malformed seed shouldn't break the homepage
-            }
-            return (
-              <Link key={tpl.id} href={`/templates/${tpl.id}`} className="wp-blueprint" style={{ position: 'relative', display: 'block', padding: 'clamp(16px,2vw,22px)', background: 'transparent' }}>
-                <BlueprintCorners />
-                <div
-                  style={{
-                    height: 110,
-                    border: '1px solid var(--line)',
-                    backgroundImage:
-                      'linear-gradient(rgba(15,18,32,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(15,18,32,.05) 1px,transparent 1px)',
-                    backgroundSize: '22px 22px',
-                    position: 'relative',
-                  }}
-                >
-                  <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
-                    {DIAGRAM_SHAPES[i % DIAGRAM_SHAPES.length]}
-                  </svg>
-                </div>
-                <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 19, color: 'var(--ink)', marginTop: 14 }}>{tpl.title}</div>
-                <p style={{ margin: '6px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--ink2)' }}>{tpl.description || 'No description provided.'}</p>
-                <div style={{ display: 'flex', gap: 14, marginTop: 12, fontFamily: 'var(--font-mono-marketing)', fontSize: 11, letterSpacing: '.1em', color: 'var(--ink2)' }}>
-                  <span style={{ whiteSpace: 'nowrap' }}>{nodeCount} nodes</span>
-                  <span style={{ whiteSpace: 'nowrap' }}>{edgeCount} edges</span>
-                  <span style={{ whiteSpace: 'nowrap' }}>{tpl.category}</span>
-                </div>
-              </Link>
-            );
-          })}
+          {cards.map((tpl, i) => (
+            <Link key={tpl.id || tpl.title} href={tpl.id ? `/templates/${tpl.id}` : '/templates'} className="wp-blueprint" style={{ position: 'relative', display: 'block', padding: 'clamp(16px,2vw,22px)', background: 'transparent' }}>
+              <BlueprintCorners />
+              <div
+                style={{
+                  height: 110,
+                  border: '1px solid var(--line)',
+                  backgroundImage:
+                    'linear-gradient(rgba(15,18,32,.05) 1px,transparent 1px),linear-gradient(90deg,rgba(15,18,32,.05) 1px,transparent 1px)',
+                  backgroundSize: '22px 22px',
+                  position: 'relative',
+                }}
+              >
+                <svg viewBox="0 0 100 100" preserveAspectRatio="none" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}>
+                  {DIAGRAM_SHAPES[i % DIAGRAM_SHAPES.length]}
+                </svg>
+              </div>
+              <div style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 19, color: 'var(--ink)', marginTop: 14 }}>{tpl.title}</div>
+              <p style={{ margin: '6px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--ink2)' }}>{tpl.body}</p>
+              <div style={{ display: 'flex', gap: 14, marginTop: 12, fontFamily: 'var(--font-mono-marketing)', fontSize: 11, letterSpacing: '.1em', color: 'var(--ink2)' }}>
+                {tpl.meta.map((m) => (
+                  <span key={m} style={{ whiteSpace: 'nowrap' }}>
+                    {m}
+                  </span>
+                ))}
+              </div>
+            </Link>
+          ))}
         </div>
         <p data-reveal style={{ margin: 'clamp(20px,2.6vw,30px) 0 0', maxWidth: '52em', fontSize: 14, lineHeight: 1.6, color: 'var(--ink2)' }}>
           Every template is a normal project once you fork it. Rename things, delete the RDS node, swap the region — it
