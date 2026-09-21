@@ -52,9 +52,18 @@ services:
   # ubuntu_ssh_1 and ubuntu_ssh_2 build the identical Dockerfile/context, so
   # they share one `image:` name — Compose builds it once and reuses it for
   # both containers instead of building the same image twice.
+  # This image is built locally and never published to any registry: it
+  # bakes in each developer's own sandbox/id_rsa.pub (see docs/DEVELOPMENT.md),
+  # so `pull_policy: never` stops Compose trying to pull the bare
+  # `whiparc/sandbox-ssh:dev` tag from Docker Hub. The published part is the
+  # base layer, pulled by sandbox/Dockerfile.ssh from
+  # ghcr.io/whiparc/whiparc-sandbox-base (see publish-base-image.yml).
+  # Because the key is baked in at build time, re-run with `--build` after
+  # regenerating sandbox/id_rsa*.
   ubuntu_ssh_1:
     container_name: whiparc-ubuntu_ssh_1
     image: whiparc/sandbox-ssh:dev
+    pull_policy: never
     build:
       context: ./sandbox
       dockerfile: Dockerfile.ssh
@@ -64,6 +73,7 @@ services:
   ubuntu_ssh_2:
     container_name: whiparc-ubuntu_ssh_2
     image: whiparc/sandbox-ssh:dev
+    pull_policy: never
     build:
       context: ./sandbox
       dockerfile: Dockerfile.ssh

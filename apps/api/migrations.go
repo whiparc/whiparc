@@ -47,7 +47,15 @@ var migrations = []migration{
 			if _, err := tx.Exec("ALTER TABLE users ADD COLUMN verification_token TEXT"); err != nil {
 				return fmt.Errorf("failed to add verification_token: %w", err)
 			}
-			if _, err := tx.Exec("ALTER TABLE users ADD COLUMN verification_expires_at DATETIME"); err != nil {
+			// Raw migration DDL bypasses the bootstrap schema's pgSchema type
+			// translation, and Postgres has no DATETIME type. SQLite needs
+			// DATETIME (not TIMESTAMPTZ) so its driver parses the column
+			// into time.Time on scan.
+			expiresDDL := "ALTER TABLE users ADD COLUMN verification_expires_at DATETIME"
+			if t, ok := tx.(*dbTx); ok && t.backend == "postgres" {
+				expiresDDL = pgSchema(expiresDDL)
+			}
+			if _, err := tx.Exec(expiresDDL); err != nil {
 				return fmt.Errorf("failed to add verification_expires_at: %w", err)
 			}
 			// Existing accounts are grandfathered as verified
