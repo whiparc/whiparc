@@ -572,6 +572,21 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	agentCtx := resolvePairedAgent(projectID)
+	// extractSecretsAndEnvironment's sandbox/id_rsa.pub fallback has nothing to read on a
+	// hosted-only VM, which leaves bundleGenerator.ts's invalid placeholder key in play and
+	// fails aws_key_pair's ImportKeyPair. A paired agent already carries a real key (the same
+	// one Ansible uses for this run), so derive the public half from it.
+	if agentCtx != nil && runner.IsSandbox(canvasStr) && !hasEnvVar(extraEnv, "TF_VAR_aws_ssh_pub_key") {
+		if pubKeyStr, err := publicKeyFromPrivatePEM(agentCtx.PrivateKeyPEM); err == nil {
+			extraEnv = append(extraEnv,
+				"TF_VAR_aws_ssh_pub_key="+pubKeyStr,
+				"TF_VAR_gcp_ssh_pub_key="+pubKeyStr,
+				"TF_VAR_azure_ssh_pub_key="+pubKeyStr,
+			)
+		} else {
+			log.Printf("[SANDBOX AGENT] Could not derive SSH public key from paired agent key for project %s: %v", projectID, err)
+		}
+	}
 
 	// Phase 3's default flip (obsidian_memory/08.4): a FREE-plan project with
 	// no ACTIVE paired agent would otherwise silently fall through to the
@@ -1766,6 +1781,30 @@ func extractSecretsAndEnvironment(projectID string, canvasStr string) ([]string,
 	}
 
 	return extraEnv, secretsToMask, sshPubKeyInjected
+}
+
+// hasEnvVar reports whether env (KEY=VALUE entries) already sets key.
+func hasEnvVar(env []string, key string) bool {
+	for _, e := range env {
+		if strings.HasPrefix(e, key+"=") {
+			return true
+		}
+	}
+	return false
+}
+
+// publicKeyFromPrivatePEM derives the OpenSSH authorized_keys-format public key
+// from a PEM-encoded private key.
+func publicKeyFromPrivatePEM(pemStr string) (string, error) {
+	parsed, err := ssh.ParseRawPrivateKey([]byte(pemStr))
+	if err != nil {
+		return "", err
+	}
+	signer, err := ssh.NewSignerFromKey(parsed)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(ssh.MarshalAuthorizedKey(signer.PublicKey()))), nil
 }
 
 // readSandboxPublicKey reads the real sandbox SSH public key, mirroring the

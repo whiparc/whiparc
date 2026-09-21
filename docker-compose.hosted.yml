@@ -76,7 +76,7 @@ services:
       - SANDBOX_AGENT_BETA=true
       - GATEWAY_URL=http://agent-gateway:9090
       - GATEWAY_RUNNER_SECRET=${GATEWAY_RUNNER_SECRET:-hosted-dev-secret}
-      - whiparc_GATEWAY_SECRET=${GATEWAY_RUNNER_SECRET:-hosted-dev-secret}
+      - WHIPARC_GATEWAY_SECRET=${GATEWAY_RUNNER_SECRET:-hosted-dev-secret}
       - DB_DRIVER=postgres
       # ${DATABASE_URL:-...} rather than a plain env_file passthrough: a
       # DATABASE_URL set in .env (e.g. a real scratch Supabase project) wins;
