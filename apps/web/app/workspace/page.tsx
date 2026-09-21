@@ -3087,6 +3087,7 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
         </div>
       ))}
       <ReactFlow
+        proOptions={{ hideAttribution: true }}
         nodes={nodes}
         edges={styledEdges}
         defaultEdgeOptions={{
@@ -3665,7 +3666,10 @@ function WorkspaceContent() {
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to deploy. HTTP status: ${response.status}`);
+        // handleDeploy rejects with a plain-text reason (missing SSH credential,
+        // unpaired local agent, free-tier gate, ...); surface it instead of a bare status.
+        const detail = (await response.text().catch(() => '')).trim();
+        throw new Error(`Failed to deploy. HTTP status: ${response.status}${detail ? ` - ${detail}` : ''}`);
       }
 
       const data = await response.json();
