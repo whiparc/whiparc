@@ -16,6 +16,7 @@ import { STATIC_ACTIVITY } from './staticData';
 import { GridIcon, FolderIcon, LayoutIcon, ActivityIcon, LockIcon, UsersIcon, BookIcon, LogoMark } from './NavIcons';
 import type { Project, RunRow } from '../lib/types';
 import { useAggregatedRuns } from '../lib/useAggregatedRuns';
+import { useAnyActiveAgent } from '../lib/useAnyActiveAgent';
 import '../components/ui/blueprint.css';
 import './dashboard.css';
 
@@ -132,7 +133,7 @@ function computeDashboardRunStats(runs: RunRow[]) {
 function DashboardContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { token, user, hasHydrated, logout } = useAuthStore();
+  const { token, user, hasHydrated, logout, dismissOnboarding } = useAuthStore();
 
   const [theme, setTheme] = useState<Theme>('dark');
   const [projects, setProjects] = useState<Project[]>([]);
@@ -143,7 +144,6 @@ function DashboardContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [view, setView] = useState<'mine' | 'discover'>('mine');
   const [runFilter, setRunFilter] = useState<'all' | 'failed'>('all');
-  const [firstRunDismissed, setFirstRunDismissed] = useState(false);
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
@@ -360,6 +360,7 @@ function DashboardContent() {
 
   const { runs: aggregatedRuns, isLoading: isLoadingRuns } = useAggregatedRuns(token);
   const runStats = useMemo(() => computeDashboardRunStats(aggregatedRuns), [aggregatedRuns]);
+  const { hasActiveAgent } = useAnyActiveAgent(token, projects);
 
   if (!user) {
     return (
@@ -376,7 +377,8 @@ function DashboardContent() {
   );
 
   const visibleRuns = runFilter === 'failed' ? runStats.failedRuns : runStats.recentRuns;
-  const isFirstRun = !firstRunDismissed && myProjects.length <= 1;
+  const isFirstRun = !user.onboarding_dismissed && myProjects.length <= 1;
+  const hasAnyRun = aggregatedRuns.length > 0;
   const primaryTeam = teams[0];
   const initials = user.name
     .split(' ')
@@ -515,7 +517,7 @@ function DashboardContent() {
               <BlueprintCorners />
               <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 14, flexWrap: 'wrap' }}>
                 <h2 style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 20, color: 'var(--ink)' }}>Three steps to your first free deploy</h2>
-                <button type="button" onClick={() => setFirstRunDismissed(true)} style={{ height: 28, padding: '0 8px', fontSize: 13, color: 'var(--ink2)', background: 'transparent', border: 0, cursor: 'pointer' }}>
+                <button type="button" onClick={() => dismissOnboarding()} style={{ height: 28, padding: '0 8px', fontSize: 13, color: 'var(--ink2)', background: 'transparent', border: 0, cursor: 'pointer' }}>
                   Dismiss
                 </button>
               </div>
@@ -530,17 +532,21 @@ function DashboardContent() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 11 }}>
-                  <span style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--accent-ink)', color: 'var(--accent-ink)', fontFamily: 'var(--font-mono-marketing)', fontSize: 11 }}>2</span>
+                  <span style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: hasActiveAgent ? 'var(--accent)' : 'transparent', border: hasActiveAgent ? undefined : '1px solid var(--accent-ink)', color: hasActiveAgent ? '#fff' : 'var(--accent-ink)', fontFamily: 'var(--font-mono-marketing)', fontSize: 11 }}>
+                    {hasActiveAgent ? '✓' : '2'}
+                  </span>
                   <div>
                     <p style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 16, color: 'var(--ink)' }}>Start the sandbox</p>
-                    <p style={{ margin: '1px 0 0', fontFamily: 'var(--font-mono-marketing)', fontSize: 12, color: 'var(--ink2)' }}>whiparc sandbox up</p>
+                    <p style={{ margin: '1px 0 0', fontFamily: 'var(--font-mono-marketing)', fontSize: 12, color: 'var(--ink2)' }}>{hasActiveAgent ? 'Done — connected.' : 'whiparc sandbox up'}</p>
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 11 }}>
-                  <span style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--line)', color: 'var(--ink2)', fontFamily: 'var(--font-mono-marketing)', fontSize: 11 }}>3</span>
+                  <span style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: hasAnyRun ? 'var(--accent)' : 'transparent', border: hasAnyRun ? undefined : '1px solid var(--line)', color: hasAnyRun ? '#fff' : 'var(--ink2)', fontFamily: 'var(--font-mono-marketing)', fontSize: 11 }}>
+                    {hasAnyRun ? '✓' : '3'}
+                  </span>
                   <div>
                     <p style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 16, color: 'var(--ink)' }}>Deploy it</p>
-                    <p style={{ margin: '1px 0 0', fontSize: 13.5, color: 'var(--ink2)' }}>Local target. Costs nothing.</p>
+                    <p style={{ margin: '1px 0 0', fontSize: 13.5, color: 'var(--ink2)' }}>{hasAnyRun ? 'Done — see Recent runs below.' : 'Local target. Costs nothing.'}</p>
                   </div>
                 </div>
               </div>

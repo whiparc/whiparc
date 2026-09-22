@@ -534,27 +534,54 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 	name := user.Name
 	plan := user.Plan
 	emailVerified := user.EmailVerified
+	var onboardingDismissedAt sql.NullTime
 
-	err := db.QueryRow("SELECT email, name, plan, email_verified FROM users WHERE id = ?", user.ID).Scan(&email, &name, &plan, &emailVerified)
+	err := db.QueryRow("SELECT email, name, plan, email_verified, onboarding_dismissed_at FROM users WHERE id = ?", user.ID).
+		Scan(&email, &name, &plan, &emailVerified, &onboardingDismissedAt)
 	if err != nil && err != sql.ErrNoRows {
 		log.Printf("[AUTH] Warning: failed to query live user for me endpoint: %v\n", err)
 	}
+	onboardingDismissed := onboardingDismissedAt.Valid
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
-		"id":             user.ID,
-		"email":          email,
-		"name":           name,
-		"plan":           plan,
-		"email_verified": emailVerified,
+		"id":                   user.ID,
+		"email":                email,
+		"name":                 name,
+		"plan":                 plan,
+		"email_verified":       emailVerified,
+		"onboarding_dismissed": onboardingDismissed,
 		"user": map[string]interface{}{
-			"id":             user.ID,
-			"email":          email,
-			"name":           name,
-			"plan":           plan,
-			"email_verified": emailVerified,
+			"id":                   user.ID,
+			"email":                email,
+			"name":                 name,
+			"plan":                 plan,
+			"email_verified":       emailVerified,
+			"onboarding_dismissed": onboardingDismissed,
 		},
 	})
+}
+
+// PATCH /api/auth/onboarding
+// Persists dismissal of the dashboard's "Three steps to your first free
+// deploy" checklist (product-memory 08.5 item A6) so it stays dismissed
+// across reloads/devices instead of resetting on every page load. One-way:
+// there's no "un-dismiss" — matches the checklist's own behavior of
+// auto-hiding once a real fact (more than one project) makes it moot.
+func handleDismissOnboarding(w http.ResponseWriter, r *http.Request) {
+	user, ok := GetUserFromContext(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	if _, err := db.Exec("UPDATE users SET onboarding_dismissed_at = datetime('now') WHERE id = ?", user.ID); err != nil {
+		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]bool{"onboarding_dismissed": true})
 }
 
 // CanvasState models & handlers

@@ -297,6 +297,7 @@ func main() {
 	mux.Handle("POST /api/auth/resend-verification", AuthMiddleware(http.HandlerFunc(handleResendVerification)))
 	mux.Handle("POST /api/auth/upgrade", AuthMiddleware(http.HandlerFunc(handleUpgradePlan)))
 	mux.Handle("GET /api/auth/me", AuthMiddleware(http.HandlerFunc(handleMe)))
+	mux.Handle("PATCH /api/auth/onboarding", AuthMiddleware(http.HandlerFunc(handleDismissOnboarding)))
 	mux.HandleFunc("GET /api/auth/{provider}/login", handleOAuthLogin)
 	mux.HandleFunc("GET /api/auth/{provider}/callback", handleOAuthCallback)
 	mux.HandleFunc("GET /api/workspace/{projectId}/sync", handleWorkspaceWebSocketSync)

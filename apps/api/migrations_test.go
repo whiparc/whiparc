@@ -93,4 +93,31 @@ func TestRunMigrationsAppliesOnceAndIsIdempotent(t *testing.T) {
 	if !runType.Valid || runType.String != "apply" || !target.Valid || target.String != "AWS · us-east-1" {
 		t.Fatalf("expected run_type=apply target='AWS · us-east-1', got runType=%v target=%v", runType, target)
 	}
+
+	var count4 int
+	if err := testDB.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version = 4").Scan(&count4); err != nil {
+		t.Fatalf("query schema_migrations v4: %v", err)
+	}
+	if count4 != 1 {
+		t.Fatalf("expected migration 4 to be recorded once, got count=%d", count4)
+	}
+
+	// onboarding_dismissed_at must default to NULL (checklist still shows)
+	// and accept a real timestamp once dismissed.
+	var dismissedAt sql.NullString
+	if err := testDB.QueryRow("SELECT onboarding_dismissed_at FROM users WHERE id = 'u_test'").Scan(&dismissedAt); err != nil {
+		t.Fatalf("failed to query onboarding_dismissed_at: %v", err)
+	}
+	if dismissedAt.Valid {
+		t.Fatalf("expected onboarding_dismissed_at to default to NULL, got %v", dismissedAt)
+	}
+	if _, err := testDB.Exec("UPDATE users SET onboarding_dismissed_at = datetime('now') WHERE id = 'u_test'"); err != nil {
+		t.Fatalf("failed to set onboarding_dismissed_at: %v", err)
+	}
+	if err := testDB.QueryRow("SELECT onboarding_dismissed_at FROM users WHERE id = 'u_test'").Scan(&dismissedAt); err != nil {
+		t.Fatalf("failed to query onboarding_dismissed_at after update: %v", err)
+	}
+	if !dismissedAt.Valid {
+		t.Fatalf("expected onboarding_dismissed_at to be set after dismissal")
+	}
 }

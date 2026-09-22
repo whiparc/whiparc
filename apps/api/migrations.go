@@ -84,6 +84,24 @@ var migrations = []migration{
 			return nil
 		},
 	},
+	{
+		version:     4,
+		description: "add_onboarding_dismissed_to_users",
+		up: func(tx sqlExecer) error {
+			// Nullable, no default: NULL means "never dismissed" (the
+			// dashboard's onboarding checklist still shows), non-NULL is the
+			// dismissal timestamp. Same DATETIME/pgSchema dance as migration
+			// 2's verification_expires_at — see its comment for why.
+			ddl := "ALTER TABLE users ADD COLUMN onboarding_dismissed_at DATETIME"
+			if t, ok := tx.(*dbTx); ok && t.backend == "postgres" {
+				ddl = pgSchema(ddl)
+			}
+			if _, err := tx.Exec(ddl); err != nil {
+				return fmt.Errorf("failed to add onboarding_dismissed_at: %w", err)
+			}
+			return nil
+		},
+	},
 }
 
 // runMigrations applies, in version order, any migration above not yet
