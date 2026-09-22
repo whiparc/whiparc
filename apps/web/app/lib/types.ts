@@ -14,6 +14,14 @@ export interface Project {
   user_role: string;
 }
 
+export interface Team {
+  id: string;
+  name: string;
+  slug: string;
+  owner_id: string;
+  created_at: string;
+}
+
 // Mirrors apps/api/templates.go's Template struct. nodes_json/edges_json/
 // viewport_json are only populated on the single-template detail response
 // (GET /api/templates/{id}), never on the list response.

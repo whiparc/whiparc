@@ -8,27 +8,20 @@ import { useAuthStore } from '../store/useAuthStore';
 import { ProjectSettingsModal } from '../components/ProjectSettingsModal';
 import { PublishTemplateModal } from '../components/PublishTemplateModal';
 import { CommandPalette } from '../components/CommandPalette';
+import { TeamSwitcher } from '../components/TeamSwitcher';
 import EmailVerificationBanner from '../components/EmailVerificationBanner';
 import { BlueprintCorners } from '../components/ui/BlueprintCorners';
 import { THEME_PALETTES, type Theme } from '../components/ui/theme-palette';
 import { spaceGroteskFont, barlowFont, jetBrainsMonoFont } from '../fonts';
 import { STATIC_ACTIVITY } from './staticData';
 import { GridIcon, FolderIcon, LayoutIcon, ActivityIcon, LockIcon, UsersIcon, BookIcon, LogoMark } from './NavIcons';
-import type { Project, RunRow } from '../lib/types';
+import type { Project, RunRow, Team } from '../lib/types';
 import { useAggregatedRuns } from '../lib/useAggregatedRuns';
 import { useAnyActiveAgent } from '../lib/useAnyActiveAgent';
 import '../components/ui/blueprint.css';
 import './dashboard.css';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
-
-interface Team {
-  id: string;
-  name: string;
-  slug: string;
-  owner_id: string;
-  created_at: string;
-}
 
 interface JoinRequest {
   id: string;
@@ -140,6 +133,21 @@ function DashboardContent() {
   const [teams, setTeams] = useState<Team[]>([]);
   const [joinRequests, setJoinRequests] = useState<JoinRequest[]>([]);
   const [isLoadingData, setIsLoadingData] = useState(true);
+
+  // Which team's projects to show (product-memory 08.5 item A7). Persisted
+  // per-browser, not per-account server-side — switching teams is a view
+  // preference, not data every device needs to agree on. Falls back to the
+  // user's first team whenever the stored id doesn't match any real team
+  // (first visit, or the stored team was since left/deleted).
+  const [currentTeamId, setCurrentTeamId] = useState<string | null>(null);
+  useEffect(() => {
+    const stored = localStorage.getItem('whiparc-current-team');
+    if (stored) setCurrentTeamId(stored);
+  }, []);
+  const selectTeam = (teamId: string) => {
+    setCurrentTeamId(teamId);
+    localStorage.setItem('whiparc-current-team', teamId);
+  };
 
   const [searchQuery, setSearchQuery] = useState('');
   const [view, setView] = useState<'mine' | 'discover'>('mine');
@@ -370,7 +378,10 @@ function DashboardContent() {
     );
   }
 
-  const myProjects = projects.filter((p) => p.user_role !== '');
+  const activeTeam = teams.find((t) => t.id === currentTeamId) ?? teams[0];
+  // Team-scoped only for "mine" — "Discover" is cross-team public projects
+  // by design, switching teams shouldn't hide those.
+  const myProjects = projects.filter((p) => p.user_role !== '' && (!activeTeam || p.team_id === activeTeam.id));
   const discoverProjects = projects.filter((p) => p.user_role === '');
   const visibleProjects = (view === 'mine' ? myProjects : discoverProjects).filter(
     (p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase())
@@ -379,7 +390,6 @@ function DashboardContent() {
   const visibleRuns = runFilter === 'failed' ? runStats.failedRuns : runStats.recentRuns;
   const isFirstRun = !user.onboarding_dismissed && myProjects.length <= 1;
   const hasAnyRun = aggregatedRuns.length > 0;
-  const primaryTeam = teams[0];
   const initials = user.name
     .split(' ')
     .map((p) => p[0])
@@ -439,7 +449,7 @@ function DashboardContent() {
               <p style={{ margin: 0, fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--ink)' }}>{user.name}</p>
               <p style={{ margin: 0, fontSize: 11, color: 'var(--ink2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {user.plan || 'Member'}
-                {primaryTeam ? ` · ${primaryTeam.name}` : ''}
+                {activeTeam ? ` · ${activeTeam.name}` : ''}
               </p>
             </div>
             <button
@@ -457,9 +467,13 @@ function DashboardContent() {
 
       <main style={{ flex: 1, minWidth: 0 }}>
         <header style={{ height: 56, display: 'flex', alignItems: 'center', gap: 14, padding: '0 clamp(16px,2.5vw,28px)', borderBottom: '1px solid var(--line)', background: 'var(--ground)', position: 'sticky', top: 0, zIndex: 20 }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 8, height: 32, padding: '0 10px', fontSize: 14, border: '1px solid var(--line)', color: 'var(--ink)', whiteSpace: 'nowrap' }}>
-            {primaryTeam?.name || 'personal'}
-          </span>
+          <TeamSwitcher
+            teams={teams}
+            currentTeamId={activeTeam?.id ?? null}
+            onSelectTeam={selectTeam}
+            onTeamCreated={(team) => setTeams((prev) => [...prev, team])}
+            token={token || ''}
+          />
           <div style={{ flex: 1, maxWidth: 340, display: 'flex', alignItems: 'center', gap: 8, padding: '0 10px', height: 32, border: '1px solid var(--line)', background: 'transparent' }}>
             <Icon icon="lucide:search" width={14} style={{ color: 'var(--ink3)', flexShrink: 0 }} />
             <input
