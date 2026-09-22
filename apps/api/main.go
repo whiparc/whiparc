@@ -477,10 +477,18 @@ LEFT JOIN users u ON pr.user_id = u.id`
 
 func scanPipelineRun(scanner interface{ Scan(...any) error }) (PipelineRun, error) {
 	var run PipelineRun
-	var createdStr, updatedStr string
 	var runType, target, userID, userName, userEmail sql.NullString
+	// Scanned directly into time.Time rather than a string re-parsed with a
+	// fixed layout: modernc.org/sqlite returns a DATETIME column's value
+	// already as RFC3339 ("2026-09-22T11:40:14Z") when the destination is a
+	// string, which the previous "2006-01-02 15:04:05" layout (matched to
+	// SQLite's own datetime('now') text format) couldn't parse — it failed
+	// silently (error discarded) on every row, leaving CreatedAt/UpdatedAt
+	// at Go's zero value and rendering as "739880d ago" client-side. Both
+	// database/sql drivers used here (modernc.org/sqlite, pgx/v5/stdlib)
+	// natively support scanning a timestamp column straight into time.Time.
 	err := scanner.Scan(&run.ID, &run.Status, &run.Logs, &run.Canvas, &runType, &target,
-		&userID, &userName, &userEmail, &createdStr, &updatedStr)
+		&userID, &userName, &userEmail, &run.CreatedAt, &run.UpdatedAt)
 	if err != nil {
 		return run, err
 	}
@@ -493,8 +501,6 @@ func scanPipelineRun(scanner interface{ Scan(...any) error }) (PipelineRun, erro
 	if userID.Valid {
 		run.TriggeredBy = &TriggeredByInfo{ID: userID.String, Name: userName.String, Email: userEmail.String}
 	}
-	run.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", strings.Replace(createdStr, "T", " ", 1))
-	run.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", strings.Replace(updatedStr, "T", " ", 1))
 	return run, nil
 }
 

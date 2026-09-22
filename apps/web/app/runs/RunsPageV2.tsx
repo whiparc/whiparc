@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useMemo, useState, type CSSProperties } from 'react';
 import Link from 'next/link';
 import { Icon } from '@iconify/react';
 import { useAuthStore } from '../store/useAuthStore';
@@ -9,11 +9,10 @@ import { BlueprintCorners } from '../components/ui/BlueprintCorners';
 import { THEME_PALETTES, type Theme } from '../components/ui/theme-palette';
 import { spaceGroteskFont, barlowFont, jetBrainsMonoFont } from '../fonts';
 import { GridIcon, FolderIcon, LayoutIcon, ActivityIcon, LockIcon, UsersIcon, BookIcon, LogoMark } from '../dashboard/NavIcons';
-import type { Project } from '../lib/types';
+import type { PipelineRun, RunRow } from '../lib/types';
+import { useAggregatedRuns } from '../lib/useAggregatedRuns';
 import '../components/ui/blueprint.css';
 import './runs.css';
-
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
 
 const NAV_ITEMS: { key: string; label: string; href: string; icon: React.ReactNode }[] = [
   { key: 'overview', label: 'Overview', href: '/dashboard', icon: <GridIcon /> },
@@ -24,26 +23,6 @@ const NAV_ITEMS: { key: string; label: string; href: string; icon: React.ReactNo
   { key: 'team', label: 'Team', href: '/team', icon: <UsersIcon /> },
   { key: 'docs', label: 'Docs', href: '/docs', icon: <BookIcon /> },
 ];
-
-// Mirrors apps/api/main.go's PipelineRun struct. runType/target/triggeredBy
-// are null for runs that predate the migration adding them (see
-// obsidian_memory/08.6) — those render "—" rather than inventing
-// plausible-looking values.
-interface PipelineRun {
-  id: string;
-  status: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
-  logs: string;
-  canvas: string;
-  runType: string | null;
-  target: string | null;
-  triggeredBy: { id: string; name: string; email: string } | null;
-  createdAt: string;
-  updatedAt: string;
-}
-interface RunRow extends PipelineRun {
-  projectId: string;
-  projectName: string;
-}
 
 type StatusFilter = 'all' | 'SUCCESS' | 'FAILED' | 'RUNNING';
 
@@ -84,52 +63,11 @@ export default function RunsPageV2() {
   const isLoggedIn = hasHydrated && !!user;
 
   const [theme, setTheme] = useState<Theme>('dark');
-  const [runs, setRuns] = useState<RunRow[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  const { runs, isLoading, error: loadError } = useAggregatedRuns(token);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [logsRun, setLogsRun] = useState<RunRow | null>(null);
   const [showTriggerNote, setShowTriggerNote] = useState(false);
-
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    (async () => {
-      setIsLoading(true);
-      try {
-        const projRes = await fetch(`${API_URL}/api/projects`, { headers: { Authorization: `Bearer ${token}` } });
-        if (!projRes.ok) throw new Error(`Request failed with status ${projRes.status}`);
-        const projects: Project[] = await projRes.json();
-
-        const perProject = await Promise.all(
-          projects.map(async (p) => {
-            try {
-              const res = await fetch(`${API_URL}/api/projects/${p.id}/runs`, { headers: { Authorization: `Bearer ${token}` } });
-              if (!res.ok) return [] as RunRow[];
-              const projectRuns: PipelineRun[] = await res.json();
-              return projectRuns.map((r) => ({ ...r, projectId: p.id, projectName: p.name }));
-            } catch {
-              return [] as RunRow[];
-            }
-          })
-        );
-        if (cancelled) return;
-        const merged = perProject.flat().sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setRuns(merged);
-      } catch (err) {
-        if (!cancelled) {
-          const msg = err instanceof Error ? err.message : 'Failed to load runs.';
-          setLoadError(msg.includes('fetch') ? 'Cannot connect to the backend server. Please try again shortly.' : msg);
-        }
-      } finally {
-        if (!cancelled) setIsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
 
   // Captured once (not read fresh inside the memo below, which must stay a
   // pure function of its dependency array) — good enough for a stats panel

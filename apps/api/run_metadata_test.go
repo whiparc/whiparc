@@ -104,4 +104,16 @@ func TestRunsWithTriggeredByJoin(t *testing.T) {
 		newRun.TriggeredBy == nil || newRun.TriggeredBy.Name != "Ada" || newRun.TriggeredBy.Email != "a@b.com" {
 		t.Errorf("unexpected new run fields: %+v", newRun)
 	}
+
+	// Regression guard: scanPipelineRun used to scan created_at/updated_at
+	// into a string and re-parse it with a fixed "2006-01-02 15:04:05"
+	// layout, but modernc.org/sqlite returns a DATETIME column's value
+	// already as RFC3339 ("...Z") when the destination is a string — the
+	// parse failed silently (error discarded) on every row, leaving
+	// CreatedAt/UpdatedAt at time.Time's zero value (year 1), which the
+	// dashboard/runs pages then rendered as "739880d ago". Scanning
+	// straight into time.Time (current code) avoids the mismatch entirely.
+	if newRun.CreatedAt.Year() < 2000 {
+		t.Errorf("expected a real CreatedAt, got zero-ish value: %v", newRun.CreatedAt)
+	}
 }

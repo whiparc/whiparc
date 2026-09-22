@@ -11,9 +11,10 @@ import EmailVerificationBanner from '../components/EmailVerificationBanner';
 import { BlueprintCorners } from '../components/ui/BlueprintCorners';
 import { THEME_PALETTES, type Theme } from '../components/ui/theme-palette';
 import { spaceGroteskFont, barlowFont, jetBrainsMonoFont } from '../fonts';
-import { STATIC_RUNS, STATIC_ACTIVITY } from './staticData';
+import { STATIC_ACTIVITY } from './staticData';
 import { GridIcon, FolderIcon, LayoutIcon, ActivityIcon, LockIcon, UsersIcon, BookIcon, LogoMark } from './NavIcons';
-import type { Project } from '../lib/types';
+import type { Project, RunRow } from '../lib/types';
+import { useAggregatedRuns } from '../lib/useAggregatedRuns';
 import '../components/ui/blueprint.css';
 import './dashboard.css';
 
@@ -61,6 +62,70 @@ function greeting(hour: number) {
   if (hour < 12) return 'Morning';
   if (hour < 18) return 'Afternoon';
   return 'Evening';
+}
+
+function timeAgo(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const mins = Math.floor((Date.now() - then) / 60000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return days === 1 ? 'yesterday' : `${days}d ago`;
+}
+
+function formatDuration(startIso: string, endIso: string): string {
+  const ms = new Date(endIso).getTime() - new Date(startIso).getTime();
+  if (!Number.isFinite(ms) || ms <= 0) return '—';
+  const secs = Math.round(ms / 1000);
+  if (secs < 60) return `${secs}s`;
+  return `${Math.floor(secs / 60)}m ${secs % 60}s`;
+}
+
+// Latest ~5 runs, most-failed-projects for the "Needs a look" tile, and a
+// 7-bucket (one per day) sparkline — all derived from the same aggregated
+// run list per product-memory 08.5 items A1/A2, so this stays a single
+// pass over `runs` rather than several independent filters.
+function computeDashboardRunStats(runs: RunRow[]) {
+  const now = Date.now();
+  const dayMs = 24 * 60 * 60 * 1000;
+  const sevenDaysAgo = now - 7 * dayMs;
+  const last7d = runs.filter((r) => new Date(r.createdAt).getTime() >= sevenDaysAgo);
+
+  const sparkBuckets = [0, 0, 0, 0, 0, 0, 0];
+  for (const r of last7d) {
+    const ageDays = Math.floor((now - new Date(r.createdAt).getTime()) / dayMs);
+    const bucket = 6 - Math.min(6, Math.max(0, ageDays));
+    sparkBuckets[bucket] += 1;
+  }
+  const maxBucket = Math.max(1, ...sparkBuckets);
+  const sparkline = sparkBuckets.map((count) => Math.max(6, Math.round((count / maxBucket) * 100)));
+
+  // "Deploy" excludes explicit destroy runs; legacy rows with no runType
+  // (pre-migration) still count, matching this app's "honest gap, not an
+  // invented value" convention elsewhere — we just can't rule destroys out
+  // for them.
+  const lastDeploy = runs.find((r) => r.status === 'SUCCESS' && r.runType !== 'destroy') ?? null;
+
+  // A project "needs a look" if its own most recent run failed — not a raw
+  // count of failed runs, which would double-count a project that's been
+  // retried several times.
+  const latestByProject = new Map<string, RunRow>();
+  for (const r of runs) {
+    if (!latestByProject.has(r.projectId)) latestByProject.set(r.projectId, r);
+  }
+  const failingProjects = [...latestByProject.values()].filter((r) => r.status === 'FAILED');
+
+  return {
+    recentRuns: runs.slice(0, 5),
+    failedRuns: runs.filter((r) => r.status === 'FAILED').slice(0, 5),
+    count7d: last7d.length,
+    sparkline,
+    lastDeploy,
+    failingProjects,
+  };
 }
 
 function DashboardContent() {
@@ -276,6 +341,9 @@ function DashboardContent() {
     [now]
   );
 
+  const { runs: aggregatedRuns, isLoading: isLoadingRuns } = useAggregatedRuns(token);
+  const runStats = useMemo(() => computeDashboardRunStats(aggregatedRuns), [aggregatedRuns]);
+
   if (!user) {
     return (
       <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#07080B', color: '#94A3B8' }}>
@@ -290,7 +358,7 @@ function DashboardContent() {
     (p) => p.name.toLowerCase().includes(searchQuery.toLowerCase()) || p.description.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const runs = runFilter === 'failed' ? STATIC_RUNS.filter((r) => r.status === 'failed') : STATIC_RUNS;
+  const visibleRuns = runFilter === 'failed' ? runStats.failedRuns : runStats.recentRuns;
   const isFirstRun = !firstRunDismissed && myProjects.length <= 1;
   const primaryTeam = teams[0];
   const initials = user.name
@@ -461,25 +529,39 @@ function DashboardContent() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 14 }}>
             <div style={{ border: '1px solid var(--line)', padding: '14px 16px' }}>
               <p style={labelStyle}>Last deploy</p>
-              <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 26, lineHeight: 1, color: 'var(--ink)' }}>2h ago</p>
-              <p style={{ margin: '5px 0 0', fontSize: 13, color: 'var(--ink2)' }}>platform-infra · success</p>
+              <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 26, lineHeight: 1, color: 'var(--ink)' }}>
+                {isLoadingRuns ? '—' : runStats.lastDeploy ? timeAgo(runStats.lastDeploy.updatedAt) : 'None yet'}
+              </p>
+              <p style={{ margin: '5px 0 0', fontSize: 13, color: 'var(--ink2)' }}>
+                {runStats.lastDeploy ? `${runStats.lastDeploy.projectName} · ${runStats.lastDeploy.status.toLowerCase()}` : isLoadingRuns ? 'Loading…' : 'Deploy a project to see it here.'}
+              </p>
             </div>
             <div style={{ border: '1px solid var(--line)', padding: '14px 16px' }}>
               <p style={labelStyle}>Runs, last 7 days</p>
-              <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 26, lineHeight: 1, color: 'var(--ink)' }}>23</p>
+              <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 26, lineHeight: 1, color: 'var(--ink)' }}>{isLoadingRuns ? '—' : runStats.count7d}</p>
               <div style={{ marginTop: 8, display: 'flex', alignItems: 'flex-end', gap: 3, height: 22 }}>
-                {[70, 100, 45, 85, 60, 95, 75].map((h, i) => (
-                  <span key={i} style={{ flex: 1, height: `${h}%`, background: i === 2 ? 'var(--line)' : i === 6 ? 'var(--accent)' : 'color-mix(in srgb, var(--accent) 45%, transparent)' }} />
+                {runStats.sparkline.map((h, i) => (
+                  <span key={i} style={{ flex: 1, height: `${h}%`, background: i === 6 ? 'var(--accent)' : 'color-mix(in srgb, var(--accent) 45%, transparent)' }} />
                 ))}
               </div>
             </div>
             <div style={{ border: '1px solid var(--line)', padding: '14px 16px' }}>
               <p style={labelStyle}>Needs a look</p>
-              <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 26, lineHeight: 1, color: 'var(--danger)' }}>2 failed</p>
+              <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 26, lineHeight: 1, color: runStats.failingProjects.length > 0 ? 'var(--danger)' : 'var(--ink)' }}>
+                {isLoadingRuns ? '—' : runStats.failingProjects.length > 0 ? `${runStats.failingProjects.length} failed` : 'All clear'}
+              </p>
               <p style={{ margin: '5px 0 0', fontSize: 13 }}>
-                <a href="#" className="wp-dash-link" style={{ color: 'var(--accent-ink)' }}>
-                  edge-cache, both on apply
-                </a>
+                {runStats.failingProjects.length > 0 ? (
+                  <Link href="/runs" className="wp-dash-link" style={{ color: 'var(--accent-ink)' }}>
+                    {runStats.failingProjects
+                      .slice(0, 2)
+                      .map((r) => r.projectName)
+                      .join(', ')}
+                    {runStats.failingProjects.length > 2 ? ` +${runStats.failingProjects.length - 2} more` : ''}
+                  </Link>
+                ) : (
+                  <span style={{ color: 'var(--ink2)' }}>{isLoadingRuns ? 'Loading…' : 'No projects need attention.'}</span>
+                )}
               </p>
             </div>
             <div style={{ border: '1px solid var(--line)', padding: '14px 16px' }}>
@@ -646,24 +728,43 @@ function DashboardContent() {
                       </tr>
                     </thead>
                     <tbody>
-                      {runs.map((run) => (
-                        <tr key={run.id} className="wp-dash-navlink">
-                          <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--font-mono-marketing)', fontSize: 12, color: 'var(--ink)' }}>{run.id}</td>
-                          <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', color: 'var(--ink)' }}>{run.project}</td>
-                          <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--font-mono-marketing)', fontSize: 12, color: 'var(--ink2)' }}>{run.target}</td>
-                          <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--font-mono-marketing)', fontSize: 12, color: 'var(--ink2)' }}>{run.dur}</td>
-                          <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', color: 'var(--ink2)' }}>{run.when}</td>
-                          <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)' }}>
-                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--ink)' }}>
-                              <span style={{ width: 6, height: 6, background: run.status === 'failed' ? 'var(--danger)' : 'var(--accent-ink)' }} />
-                              {run.status}
-                            </span>
+                      {isLoadingRuns ? (
+                        <tr>
+                          <td colSpan={6} style={{ padding: '18px 12px', color: 'var(--ink2)', fontSize: 13.5 }}>
+                            Loading runs…
                           </td>
                         </tr>
-                      ))}
+                      ) : visibleRuns.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} style={{ padding: '18px 12px', color: 'var(--ink2)', fontSize: 13.5 }}>
+                            {runFilter === 'failed' ? 'No failed runs.' : 'No runs yet — deploy a project to see it here.'}
+                          </td>
+                        </tr>
+                      ) : (
+                        visibleRuns.map((run) => (
+                          <tr key={run.id} className="wp-dash-navlink" onClick={() => handleOpenWorkspace(run.projectId)} style={{ cursor: 'pointer' }}>
+                            <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--font-mono-marketing)', fontSize: 12, color: 'var(--ink)' }}>{run.id.slice(0, 8)}</td>
+                            <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', color: 'var(--ink)' }}>{run.projectName}</td>
+                            <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--font-mono-marketing)', fontSize: 12, color: 'var(--ink2)' }}>{run.target ?? '—'}</td>
+                            <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--font-mono-marketing)', fontSize: 12, color: 'var(--ink2)' }}>{formatDuration(run.createdAt, run.updatedAt)}</td>
+                            <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', color: 'var(--ink2)' }}>{timeAgo(run.createdAt)}</td>
+                            <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)' }}>
+                              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 13, color: 'var(--ink)' }}>
+                                <span style={{ width: 6, height: 6, background: run.status === 'FAILED' ? 'var(--danger)' : 'var(--accent-ink)' }} />
+                                {run.status.toLowerCase()}
+                              </span>
+                            </td>
+                          </tr>
+                        ))
+                      )}
                     </tbody>
                   </table>
                 </div>
+                <p style={{ margin: '8px 0 0', fontSize: 12.5 }}>
+                  <Link href="/runs" className="wp-dash-link" style={{ color: 'var(--accent-ink)' }}>
+                    View all runs →
+                  </Link>
+                </p>
               </section>
             </div>
 

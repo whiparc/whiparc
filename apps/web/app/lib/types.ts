@@ -40,3 +40,27 @@ export interface TemplateListResponse {
   limit: number;
   offset: number;
 }
+
+// Mirrors apps/api/main.go's PipelineRun struct. runType/target/triggeredBy
+// are null for runs that predate the migration adding them (see
+// obsidian_memory/08.6) — those render "—" rather than inventing
+// plausible-looking values.
+export interface PipelineRun {
+  id: string;
+  status: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
+  logs: string;
+  canvas: string;
+  runType: string | null;
+  target: string | null;
+  triggeredBy: { id: string; name: string; email: string } | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// A PipelineRun annotated with the project it belongs to — the shape
+// useAggregatedRuns (lib/useAggregatedRuns.ts) returns after fanning out
+// GET /api/projects/{id}/runs across every project.
+export interface RunRow extends PipelineRun {
+  projectId: string;
+  projectName: string;
+}
