@@ -44,12 +44,74 @@ func truncateLogs(logs string) string {
 }
 
 type PipelineRun struct {
-	ID        string    `json:"id"`
-	Status    string    `json:"status"` // PENDING, RUNNING, SUCCESS, FAILED
-	Logs      string    `json:"logs"`
-	Canvas    string    `json:"canvas"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	ID          string           `json:"id"`
+	Status      string           `json:"status"` // PENDING, RUNNING, SUCCESS, FAILED
+	Logs        string           `json:"logs"`
+	Canvas      string           `json:"canvas"`
+	RunType     *string          `json:"runType"`
+	Target      *string          `json:"target"`
+	TriggeredBy *TriggeredByInfo `json:"triggeredBy"`
+	CreatedAt   time.Time        `json:"createdAt"`
+	UpdatedAt   time.Time        `json:"updatedAt"`
+}
+
+// TriggeredByInfo is populated from a LEFT JOIN against users at read time
+// rather than a denormalized column on pipeline_runs — see
+// obsidian_memory/08.6 section 2.3. Nil (serializes as JSON null) when
+// user_id is NULL, either because the run predates that column or because
+// its user was later removed.
+type TriggeredByInfo struct {
+	ID    string `json:"id"`
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+// deriveRunTarget scans a run's canvas for the first node with a non-empty
+// Data.Environment and formats a short human-readable target string. Kept
+// deliberately simple (first match wins, no multi-cloud/"mixed" labels) per
+// obsidian_memory/08.6 section 2.4 — no mockup or backlog item asks for
+// more, and it adds real complexity for a case that doesn't exist in current
+// seed data or templates. Returns "" (stored as NULL) when no node declares
+// an environment.
+func deriveRunTarget(canvasStr string) string {
+	var canvas struct {
+		Nodes []importer.CanvasNode `json:"nodes"`
+	}
+	if err := json.Unmarshal([]byte(canvasStr), &canvas); err != nil {
+		return ""
+	}
+	for _, node := range canvas.Nodes {
+		env := node.Data.Environment
+		if env == "" {
+			continue
+		}
+		switch env {
+		case "aws":
+			if node.Data.Region != "" {
+				return "AWS · " + node.Data.Region
+			}
+			return "AWS"
+		case "gcp":
+			if node.Data.GcpZone != "" {
+				return "GCP · " + node.Data.GcpZone
+			}
+			return "GCP"
+		default:
+			return strings.ToUpper(env)
+		}
+	}
+	return ""
+}
+
+// nullIfEmpty lets an empty derived target be stored as SQL NULL (renders
+// "—" client-side) instead of an empty string, matching the "no node had an
+// environment set" case to "not implemented yet" rather than a distinct
+// empty-but-present value — see obsidian_memory/08.6 section 2.4.
+func nullIfEmpty(s string) interface{} {
+	if s == "" {
+		return nil
+	}
+	return s
 }
 
 type RunTracker struct {
@@ -403,9 +465,42 @@ func handleHealthz(w http.ResponseWriter, r *http.Request) {
 	_, _ = w.Write([]byte("ok"))
 }
 
+// runsWithTriggeredByQuery is shared by handleGetRuns and handleGetRunByID.
+// LEFT JOIN (not INNER) so rows with user_id IS NULL — pre-existing rows
+// from before the user_id column even existed — still return, with
+// name/email as SQL NULL, surfaced as triggeredBy: null client-side. See
+// obsidian_memory/08.6 section 2.3.
+const runsWithTriggeredByQuery = `SELECT pr.id, pr.status, pr.logs, pr.canvas, pr.run_type, pr.target,
+       pr.user_id, u.name, u.email, pr.created_at, pr.updated_at
+FROM pipeline_runs pr
+LEFT JOIN users u ON pr.user_id = u.id`
+
+func scanPipelineRun(scanner interface{ Scan(...any) error }) (PipelineRun, error) {
+	var run PipelineRun
+	var createdStr, updatedStr string
+	var runType, target, userID, userName, userEmail sql.NullString
+	err := scanner.Scan(&run.ID, &run.Status, &run.Logs, &run.Canvas, &runType, &target,
+		&userID, &userName, &userEmail, &createdStr, &updatedStr)
+	if err != nil {
+		return run, err
+	}
+	if runType.Valid {
+		run.RunType = &runType.String
+	}
+	if target.Valid {
+		run.Target = &target.String
+	}
+	if userID.Valid {
+		run.TriggeredBy = &TriggeredByInfo{ID: userID.String, Name: userName.String, Email: userEmail.String}
+	}
+	run.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", strings.Replace(createdStr, "T", " ", 1))
+	run.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", strings.Replace(updatedStr, "T", " ", 1))
+	return run, nil
+}
+
 func handleGetRuns(w http.ResponseWriter, r *http.Request) {
 	projectID := r.PathValue("id")
-	rows, err := db.Query("SELECT id, status, logs, canvas, created_at, updated_at FROM pipeline_runs WHERE project_id = ? ORDER BY created_at DESC", projectID)
+	rows, err := db.Query(runsWithTriggeredByQuery+" WHERE pr.project_id = ? ORDER BY pr.created_at DESC", projectID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -414,15 +509,11 @@ func handleGetRuns(w http.ResponseWriter, r *http.Request) {
 
 	runs := []PipelineRun{}
 	for rows.Next() {
-		var run PipelineRun
-		var createdStr, updatedStr string
-		err := rows.Scan(&run.ID, &run.Status, &run.Logs, &run.Canvas, &createdStr, &updatedStr)
+		run, err := scanPipelineRun(rows)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		run.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", strings.Replace(createdStr, "T", " ", 1))
-		run.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", strings.Replace(updatedStr, "T", " ", 1))
 		runs = append(runs, run)
 	}
 	if err = rows.Err(); err != nil {
@@ -441,10 +532,8 @@ func handleGetRunByID(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	row := db.QueryRow("SELECT id, status, logs, canvas, created_at, updated_at FROM pipeline_runs WHERE id = ?", id)
-	var run PipelineRun
-	var createdStr, updatedStr string
-	err := row.Scan(&run.ID, &run.Status, &run.Logs, &run.Canvas, &createdStr, &updatedStr)
+	row := db.QueryRow(runsWithTriggeredByQuery+" WHERE pr.id = ?", id)
+	run, err := scanPipelineRun(row)
 	if err == sql.ErrNoRows {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotFound)
@@ -454,9 +543,6 @@ func handleGetRunByID(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-
-	run.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", strings.Replace(createdStr, "T", " ", 1))
-	run.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", strings.Replace(updatedStr, "T", " ", 1))
 
 	trackersMutex.Lock()
 	tracker, active := trackers[id]
@@ -601,10 +687,11 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	runID := generateUUID()
+	target := deriveRunTarget(canvasStr)
 
 	// Insert into DB as PENDING
-	insertQuery := "INSERT INTO pipeline_runs (id, project_id, user_id, status, logs, canvas, created_at, updated_at) VALUES (?, ?, ?, 'PENDING', '', ?, datetime('now'), datetime('now'))"
-	_, err = db.Exec(insertQuery, runID, projectID, user.ID, canvasStr)
+	insertQuery := "INSERT INTO pipeline_runs (id, project_id, user_id, status, logs, canvas, run_type, target, created_at, updated_at) VALUES (?, ?, ?, 'PENDING', '', ?, 'apply', ?, datetime('now'), datetime('now'))"
+	_, err = db.Exec(insertQuery, runID, projectID, user.ID, canvasStr, nullIfEmpty(target))
 	if err != nil {
 		log.Printf("[DB] Error inserting new run %s: %v\n", runID, err)
 		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
@@ -877,10 +964,11 @@ func handleDestroy(w http.ResponseWriter, r *http.Request) {
 	}
 
 	runID := generateUUID()
+	target := deriveRunTarget(canvasStr)
 
 	// Insert into DB as PENDING
-	insertQuery := "INSERT INTO pipeline_runs (id, project_id, user_id, status, logs, canvas, created_at, updated_at) VALUES (?, ?, ?, 'PENDING', '', ?, datetime('now'), datetime('now'))"
-	_, err = db.Exec(insertQuery, runID, projectID, user.ID, canvasStr)
+	insertQuery := "INSERT INTO pipeline_runs (id, project_id, user_id, status, logs, canvas, run_type, target, created_at, updated_at) VALUES (?, ?, ?, 'PENDING', '', ?, 'destroy', ?, datetime('now'), datetime('now'))"
+	_, err = db.Exec(insertQuery, runID, projectID, user.ID, canvasStr, nullIfEmpty(target))
 	if err != nil {
 		log.Printf("[DB] Error inserting destroy run %s: %v\n", runID, err)
 		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)

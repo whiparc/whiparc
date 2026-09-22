@@ -65,6 +65,25 @@ var migrations = []migration{
 			return nil
 		},
 	},
+	{
+		version:     3,
+		description: "add_run_metadata_columns",
+		up: func(tx sqlExecer) error {
+			// Deliberately nullable, no default, no backfill: rows created
+			// before this migration ran a mix of deploy and destroy with no
+			// reliable way to recover which after the fact. Legacy rows stay
+			// NULL and render "—" client-side, exactly as they do today —
+			// only new rows going forward get a real value (see
+			// obsidian_memory/08.6 section 2.1/2.2).
+			if _, err := tx.Exec("ALTER TABLE pipeline_runs ADD COLUMN run_type TEXT"); err != nil {
+				return fmt.Errorf("failed to add run_type: %w", err)
+			}
+			if _, err := tx.Exec("ALTER TABLE pipeline_runs ADD COLUMN target TEXT"); err != nil {
+				return fmt.Errorf("failed to add target: %w", err)
+			}
+			return nil
+		},
+	},
 }
 
 // runMigrations applies, in version order, any migration above not yet

@@ -60,4 +60,37 @@ func TestRunMigrationsAppliesOnceAndIsIdempotent(t *testing.T) {
 	if count2 != 1 {
 		t.Fatalf("expected migration 2 still recorded exactly once after rerun, got count=%d", count2)
 	}
+
+	var count3 int
+	if err := testDB.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version = 3").Scan(&count3); err != nil {
+		t.Fatalf("query schema_migrations v3: %v", err)
+	}
+	if count3 != 1 {
+		t.Fatalf("expected migration 3 to be recorded once, got count=%d", count3)
+	}
+
+	// run_type/target must exist and accept NULL for a pre-migration-style
+	// insert (only the columns that existed before version 3 shipped) —
+	// legacy rows must keep deserializing rather than erroring.
+	if _, err := testDB.Exec("INSERT INTO pipeline_runs (id, status, logs, canvas) VALUES ('r_legacy', 'SUCCESS', '', '{}')"); err != nil {
+		t.Fatalf("failed to insert legacy-shaped pipeline_runs row: %v", err)
+	}
+	var runType, target sql.NullString
+	if err := testDB.QueryRow("SELECT run_type, target FROM pipeline_runs WHERE id = 'r_legacy'").Scan(&runType, &target); err != nil {
+		t.Fatalf("failed to query run_type/target for legacy row: %v", err)
+	}
+	if runType.Valid || target.Valid {
+		t.Fatalf("expected legacy row's run_type/target to be NULL, got runType=%v target=%v", runType, target)
+	}
+
+	// A new-shaped insert must round-trip real values.
+	if _, err := testDB.Exec("INSERT INTO pipeline_runs (id, status, logs, canvas, run_type, target) VALUES ('r_new', 'SUCCESS', '', '{}', 'apply', 'AWS · us-east-1')"); err != nil {
+		t.Fatalf("failed to insert new-shaped pipeline_runs row: %v", err)
+	}
+	if err := testDB.QueryRow("SELECT run_type, target FROM pipeline_runs WHERE id = 'r_new'").Scan(&runType, &target); err != nil {
+		t.Fatalf("failed to query run_type/target for new row: %v", err)
+	}
+	if !runType.Valid || runType.String != "apply" || !target.Valid || target.String != "AWS · us-east-1" {
+		t.Fatalf("expected run_type=apply target='AWS · us-east-1', got runType=%v target=%v", runType, target)
+	}
 }

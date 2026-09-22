@@ -25,16 +25,18 @@ const NAV_ITEMS: { key: string; label: string; href: string; icon: React.ReactNo
   { key: 'docs', label: 'Docs', href: '/docs', icon: <BookIcon /> },
 ];
 
-// Mirrors apps/api/main.go's PipelineRun struct exactly — id/status/logs/
-// canvas/createdAt/updatedAt is genuinely all that's stored per run today.
-// No run_type, target, or triggered_by columns exist yet (see the
-// product-memory TODO added alongside this page), so those columns render
-// "—" rather than inventing plausible-looking values.
+// Mirrors apps/api/main.go's PipelineRun struct. runType/target/triggeredBy
+// are null for runs that predate the migration adding them (see
+// obsidian_memory/08.6) — those render "—" rather than inventing
+// plausible-looking values.
 interface PipelineRun {
   id: string;
   status: 'PENDING' | 'RUNNING' | 'SUCCESS' | 'FAILED';
   logs: string;
   canvas: string;
+  runType: string | null;
+  target: string | null;
+  triggeredBy: { id: string; name: string; email: string } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -332,8 +334,8 @@ export default function RunsPageV2() {
                     <tr key={run.id} className="wp-runs-row">
                       <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--font-mono-marketing)', fontSize: 12, color: 'var(--ink)' }}>{run.id.slice(0, 10)}</td>
                       <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', color: 'var(--ink)' }}>{run.projectName}</td>
-                      <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--font-mono-marketing)', fontSize: 12, color: 'var(--ink3)' }}>—</td>
-                      <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--font-mono-marketing)', fontSize: 12, color: 'var(--ink3)' }}>—</td>
+                      <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--font-mono-marketing)', fontSize: 12, color: 'var(--ink3)' }}>{run.runType?.toLowerCase() ?? '—'}</td>
+                      <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--font-mono-marketing)', fontSize: 12, color: 'var(--ink3)' }}>{run.target ?? '—'}</td>
                       <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', fontFamily: 'var(--font-mono-marketing)', fontSize: 12, color: 'var(--ink2)' }}>{formatDuration(run.createdAt, run.updatedAt)}</td>
                       <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)', color: 'var(--ink2)' }}>{timeAgo(run.createdAt)}</td>
                       <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)' }}>
@@ -367,9 +369,16 @@ export default function RunsPageV2() {
           >
             <BlueprintCorners />
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-              <p style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, color: 'var(--ink)' }}>
-                {logsRun.projectName} · {logsRun.id.slice(0, 10)}
-              </p>
+              <div>
+                <p style={{ margin: 0, fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 15, color: 'var(--ink)' }}>
+                  {logsRun.projectName} · {logsRun.id.slice(0, 10)}
+                </p>
+                {logsRun.triggeredBy && (
+                  <p style={{ margin: '2px 0 0', fontSize: 11.5, color: 'var(--ink3)' }}>
+                    Triggered by {logsRun.triggeredBy.name}
+                  </p>
+                )}
+              </div>
               <button type="button" onClick={() => setLogsRun(null)} className="wp-runs-iconbtn" style={{ width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--line)', background: 'transparent', color: 'var(--ink2)', cursor: 'pointer' }}>
                 <Icon icon="lucide:x" width={14} />
               </button>
