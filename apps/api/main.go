@@ -298,6 +298,7 @@ func main() {
 	mux.Handle("POST /api/auth/upgrade", AuthMiddleware(http.HandlerFunc(handleUpgradePlan)))
 	mux.Handle("GET /api/auth/me", AuthMiddleware(http.HandlerFunc(handleMe)))
 	mux.Handle("PATCH /api/auth/onboarding", AuthMiddleware(http.HandlerFunc(handleDismissOnboarding)))
+	mux.Handle("GET /api/activity", AuthMiddleware(http.HandlerFunc(handleGetActivity)))
 	mux.HandleFunc("GET /api/auth/{provider}/login", handleOAuthLogin)
 	mux.HandleFunc("GET /api/auth/{provider}/callback", handleOAuthCallback)
 	mux.HandleFunc("GET /api/workspace/{projectId}/sync", handleWorkspaceWebSocketSync)
@@ -759,6 +760,12 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 				log.Printf("[DB] Error updating run %s: %v\n", runID, err)
 			}
 
+			if finalStatus == "SUCCESS" {
+				insertActivityEvent(projectID, user.ID, "deploy.succeeded", map[string]interface{}{"target": target})
+			} else if finalStatus == "FAILED" {
+				insertActivityEvent(projectID, user.ID, "deploy.failed", map[string]interface{}{"target": target})
+			}
+
 			// Broadcast status change
 			tracker.Lock()
 			tracker.status = finalStatus
@@ -1031,6 +1038,12 @@ func handleDestroy(w http.ResponseWriter, r *http.Request) {
 			_, err = db.Exec("UPDATE pipeline_runs SET status = ?, logs = ?, updated_at = datetime('now') WHERE id = ?", finalStatus, finalLogs, runID)
 			if err != nil {
 				log.Printf("[DB] Error updating destroy run %s: %v\n", runID, err)
+			}
+
+			if finalStatus == "SUCCESS" {
+				insertActivityEvent(projectID, user.ID, "destroy.succeeded", map[string]interface{}{"target": target})
+			} else if finalStatus == "FAILED" {
+				insertActivityEvent(projectID, user.ID, "destroy.failed", map[string]interface{}{"target": target})
 			}
 
 			tracker.Lock()

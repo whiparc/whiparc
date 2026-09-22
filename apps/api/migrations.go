@@ -102,6 +102,41 @@ var migrations = []migration{
 			return nil
 		},
 	},
+	{
+		version:     5,
+		description: "add_activity_events_table",
+		up: func(tx sqlExecer) error {
+			// No FK constraints, deliberately: this is an append-only audit
+			// log, not a referential-integrity-checked table — a deleted
+			// project or user shouldn't either block the deletion (as a
+			// RESTRICT FK would) or silently erase its own history (as a
+			// CASCADE FK would). team_id is a convenience denormalization
+			// (see insertActivityEvent) so team-scoped reads don't need a
+			// JOIN through projects; it's looked up once at insert time and
+			// never updated afterward, so a project moved to a different
+			// team later keeps its old events' original team_id — that's the
+			// honest historical record, not a bug.
+			ddl := `CREATE TABLE activity_events (
+				id TEXT PRIMARY KEY,
+				team_id TEXT,
+				project_id TEXT,
+				actor_id TEXT,
+				kind TEXT NOT NULL,
+				payload_json TEXT NOT NULL DEFAULT '{}',
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			)`
+			if t, ok := tx.(*dbTx); ok && t.backend == "postgres" {
+				ddl = pgSchema(ddl)
+			}
+			if _, err := tx.Exec(ddl); err != nil {
+				return fmt.Errorf("failed to create activity_events: %w", err)
+			}
+			if _, err := tx.Exec("CREATE INDEX idx_activity_events_team_id ON activity_events(team_id, created_at)"); err != nil {
+				return fmt.Errorf("failed to create activity_events team index: %w", err)
+			}
+			return nil
+		},
+	},
 }
 
 // runMigrations applies, in version order, any migration above not yet

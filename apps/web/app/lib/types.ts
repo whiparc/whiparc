@@ -72,3 +72,18 @@ export interface RunRow extends PipelineRun {
   projectId: string;
   projectName: string;
 }
+
+// Mirrors apps/api/activity.go's ActivityEvent struct (GET /api/activity).
+// projectId/projectName/actorId/actorName are all nullable because the
+// underlying project or user may have been deleted since the event was
+// recorded — the event itself still renders, just without that detail.
+export interface ActivityEvent {
+  id: string;
+  projectId: string | null;
+  projectName: string | null;
+  actorId: string | null;
+  actorName: string | null;
+  kind: string;
+  payload: Record<string, string>;
+  createdAt: string;
+}

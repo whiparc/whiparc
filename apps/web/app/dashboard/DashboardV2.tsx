@@ -13,11 +13,11 @@ import EmailVerificationBanner from '../components/EmailVerificationBanner';
 import { BlueprintCorners } from '../components/ui/BlueprintCorners';
 import { THEME_PALETTES, type Theme } from '../components/ui/theme-palette';
 import { spaceGroteskFont, barlowFont, jetBrainsMonoFont } from '../fonts';
-import { STATIC_ACTIVITY } from './staticData';
 import { GridIcon, FolderIcon, LayoutIcon, ActivityIcon, LockIcon, UsersIcon, BookIcon, LogoMark } from './NavIcons';
-import type { Project, RunRow, Team } from '../lib/types';
+import type { ActivityEvent, Project, RunRow, Team } from '../lib/types';
 import { useAggregatedRuns } from '../lib/useAggregatedRuns';
 import { useAnyActiveAgent } from '../lib/useAnyActiveAgent';
+import { useActivity } from '../lib/useActivity';
 import '../components/ui/blueprint.css';
 import './dashboard.css';
 
@@ -121,6 +121,42 @@ function computeDashboardRunStats(runs: RunRow[]) {
     lastDeploy,
     failingProjects,
   };
+}
+
+// Turns an ActivityEvent into the one-line sentence the mockup's static
+// STATIC_ACTIVITY used to hardcode. Only describes what the payload
+// actually says — no invented detail (e.g. deploy.failed has no captured
+// error message today, so it doesn't claim one) per this app's "honest gap"
+// convention (see obsidian_memory/08.6). Unrecognized/future `kind` values
+// fall back to a generic line built from the kind string itself, so a new
+// event type instrumented server-side without a matching frontend case
+// still renders something reasonable instead of nothing.
+function formatActivityEvent(event: ActivityEvent, currentUserId: string): string {
+  const actor = event.actorId === currentUserId ? 'You' : event.actorName || 'Someone';
+  const project = event.projectName || 'a project';
+  const p = event.payload || {};
+  switch (event.kind) {
+    case 'project.created':
+      return `${actor} created ${project}.`;
+    case 'credential.created':
+      return `${actor} added a ${p.provider ? `${p.provider} ` : ''}credential to ${project}.`;
+    case 'credential.revoked':
+      return `${actor} revoked a ${p.provider ? `${p.provider} ` : ''}credential from ${project}.`;
+    case 'member.added':
+      return `${actor} added ${p.member_name || 'someone'} to ${project}.`;
+    case 'template.published':
+      return `${actor} published ${project} as a template.`;
+    case 'deploy.succeeded':
+      return `${actor} deployed ${project}${p.target ? ` to ${p.target}` : ''}.`;
+    case 'deploy.failed':
+      return `Apply failed on ${project}.`;
+    case 'destroy.succeeded':
+      return `${actor} destroyed ${project}.`;
+    case 'destroy.failed':
+      return `Destroy failed on ${project}.`;
+    default:
+      return `${actor}: ${event.kind.replace(/[._]/g, ' ')} on ${project}.`;
+  }
 }
 
 function DashboardContent() {
@@ -369,6 +405,7 @@ function DashboardContent() {
   const { runs: aggregatedRuns, isLoading: isLoadingRuns } = useAggregatedRuns(token);
   const runStats = useMemo(() => computeDashboardRunStats(aggregatedRuns), [aggregatedRuns]);
   const { hasActiveAgent } = useAnyActiveAgent(token, projects);
+  const { events: activityEvents, isLoading: isLoadingActivity } = useActivity(token, 10);
 
   if (!user) {
     return (
@@ -842,12 +879,18 @@ function DashboardContent() {
               <section style={{ borderTop: '1px solid var(--line)', paddingTop: 14 }}>
                 <p style={labelStyle}>Activity</p>
                 <div style={{ marginTop: 10, display: 'grid', gap: 10, fontSize: 13.5, color: 'var(--ink)' }}>
-                  {STATIC_ACTIVITY.map((a, i) => (
-                    <div key={i} style={{ display: 'flex', gap: 9 }}>
-                      <span style={{ fontFamily: 'var(--font-mono-marketing)', fontSize: 11, color: 'var(--ink3)', width: 34, flexShrink: 0 }}>{a.when}</span>
-                      <p style={{ margin: 0 }}>{a.text}</p>
-                    </div>
-                  ))}
+                  {isLoadingActivity ? (
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--ink2)' }}>Loading…</p>
+                  ) : activityEvents.length === 0 ? (
+                    <p style={{ margin: 0, fontSize: 13, color: 'var(--ink2)' }}>No activity yet.</p>
+                  ) : (
+                    activityEvents.map((event) => (
+                      <div key={event.id} style={{ display: 'flex', gap: 9 }}>
+                        <span style={{ fontFamily: 'var(--font-mono-marketing)', fontSize: 11, color: 'var(--ink3)', width: 34, flexShrink: 0 }}>{timeAgo(event.createdAt).replace(' ago', '')}</span>
+                        <p style={{ margin: 0 }}>{formatActivityEvent(event, user.id)}</p>
+                      </div>
+                    ))
+                  )}
                 </div>
               </section>
             </div>

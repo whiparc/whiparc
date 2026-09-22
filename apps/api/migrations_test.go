@@ -120,4 +120,27 @@ func TestRunMigrationsAppliesOnceAndIsIdempotent(t *testing.T) {
 	if !dismissedAt.Valid {
 		t.Fatalf("expected onboarding_dismissed_at to be set after dismissal")
 	}
+
+	var count5 int
+	if err := testDB.QueryRow("SELECT COUNT(*) FROM schema_migrations WHERE version = 5").Scan(&count5); err != nil {
+		t.Fatalf("query schema_migrations v5: %v", err)
+	}
+	if count5 != 1 {
+		t.Fatalf("expected migration 5 to be recorded once, got count=%d", count5)
+	}
+
+	// activity_events must accept a full row and round-trip it.
+	if _, err := testDB.Exec(
+		"INSERT INTO activity_events (id, team_id, project_id, actor_id, kind, payload_json) VALUES (?, ?, ?, ?, ?, ?)",
+		"evt_test", "team_1", "proj_1", "u_test", "project.created", `{"name":"demo"}`,
+	); err != nil {
+		t.Fatalf("failed to insert activity_events row: %v", err)
+	}
+	var kind, payload string
+	if err := testDB.QueryRow("SELECT kind, payload_json FROM activity_events WHERE id = 'evt_test'").Scan(&kind, &payload); err != nil {
+		t.Fatalf("failed to query activity_events: %v", err)
+	}
+	if kind != "project.created" || payload != `{"name":"demo"}` {
+		t.Fatalf("unexpected activity_events round-trip: kind=%q payload=%q", kind, payload)
+	}
 }

@@ -288,6 +288,8 @@ func handleCreateProject(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	insertActivityEvent(projectID, user.ID, "project.created", map[string]interface{}{"name": name})
+
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"id":   projectID,
@@ -495,6 +497,10 @@ func handleApproveJoinRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to commit transaction: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	var memberName string
+	_ = db.QueryRow("SELECT name FROM users WHERE id = ?", reqUserID).Scan(&memberName)
+	insertActivityEvent(projectID, user.ID, "member.added", map[string]interface{}{"member_name": memberName, "role": "EDITOR"})
 
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Request approved successfully"})
@@ -830,6 +836,8 @@ func handleAddProjectMember(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	insertActivityEvent(projectID, user.ID, "member.added", map[string]interface{}{"member_name": payload.Email, "role": payload.Role})
+
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Member added successfully"})
 }
@@ -1095,6 +1103,8 @@ func handleCreateProjectCredential(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	insertActivityEvent(projectID, user.ID, "credential.created", map[string]interface{}{"name": payload.Name, "provider": payload.Provider})
+
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
 	_ = json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1108,12 +1118,25 @@ func handleCreateProjectCredential(w http.ResponseWriter, r *http.Request) {
 func handleDeleteProjectCredential(w http.ResponseWriter, r *http.Request) {
 	projectID := r.PathValue("id")
 	credID := r.PathValue("credId")
+	user, ok := GetUserFromContext(r)
+	if !ok {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	// Looked up before the DELETE — the blind delete below leaves nothing to
+	// read these from afterward, and the activity event is more useful with
+	// a real name/provider than just the (soon deleted) credential id.
+	var credName, credProvider string
+	_ = db.QueryRow("SELECT name, provider FROM cloud_credentials WHERE id = ? AND project_id = ?", credID, projectID).Scan(&credName, &credProvider)
 
 	_, err := db.Exec("DELETE FROM cloud_credentials WHERE id = ? AND project_id = ?", credID, projectID)
 	if err != nil {
 		http.Error(w, "Failed to delete credential: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	insertActivityEvent(projectID, user.ID, "credential.revoked", map[string]interface{}{"name": credName, "provider": credProvider})
 
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]string{"message": "Credential deleted successfully"})
