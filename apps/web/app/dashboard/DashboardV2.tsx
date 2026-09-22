@@ -7,6 +7,7 @@ import { Icon } from '@iconify/react';
 import { useAuthStore } from '../store/useAuthStore';
 import { ProjectSettingsModal } from '../components/ProjectSettingsModal';
 import { PublishTemplateModal } from '../components/PublishTemplateModal';
+import { CommandPalette } from '../components/CommandPalette';
 import EmailVerificationBanner from '../components/EmailVerificationBanner';
 import { BlueprintCorners } from '../components/ui/BlueprintCorners';
 import { THEME_PALETTES, type Theme } from '../components/ui/theme-palette';
@@ -146,6 +147,7 @@ function DashboardContent() {
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isJoinModalOpen, setIsJoinModalOpen] = useState(false);
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedProjectForSettings, setSelectedProjectForSettings] = useState<Project | null>(null);
   const [isPublishOpen, setIsPublishOpen] = useState(false);
@@ -178,6 +180,21 @@ function DashboardContent() {
       router.replace('/dashboard');
     }
   }, [searchParams, router]);
+
+  // Global command palette shortcut (product-memory 08.5 item A8) — Cmd/Ctrl+K
+  // from anywhere on the page, matching the convention this shortcut carries
+  // in most other apps rather than requiring the header search box to be
+  // focused first.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        setIsPaletteOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   const fetchData = useCallback(async () => {
     const activeToken = token;
@@ -412,11 +429,7 @@ function DashboardContent() {
         </nav>
 
         <div style={{ marginTop: 'auto', padding: 12, borderTop: '1px solid var(--line)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', border: '1px solid var(--accent)', background: 'color-mix(in srgb, var(--accent) 12%, transparent)' }}>
-            <span style={{ width: 7, height: 7, flexShrink: 0, background: 'var(--accent-ink)', animation: 'wpBeat 2.2s ease-in-out infinite' }} />
-            <span style={{ fontFamily: 'var(--font-mono-marketing)', fontSize: 10.5, color: 'var(--accent-ink)' }}>sandbox online</span>
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, marginTop: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
             <span style={{ width: 26, height: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-hover)', color: '#fff', fontFamily: 'var(--font-display)', fontSize: 12 }}>
               {initials || 'U'}
             </span>
@@ -454,6 +467,14 @@ function DashboardContent() {
               className="wp-dash-input"
               style={{ flex: 1, minWidth: 0, border: 0, outline: 'none', background: 'transparent', fontSize: 13.5, color: 'var(--ink)', fontFamily: 'var(--font-body-marketing), sans-serif' }}
             />
+            <button
+              type="button"
+              onClick={() => setIsPaletteOpen(true)}
+              title="Jump to anything (⌘K)"
+              style={{ flexShrink: 0, fontFamily: 'var(--font-mono-marketing)', fontSize: 10, color: 'var(--ink3)', border: '1px solid var(--line)', padding: '2px 6px', background: 'transparent', cursor: 'pointer' }}
+            >
+              ⌘K
+            </button>
           </div>
           <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 10 }}>
             <button
@@ -769,26 +790,6 @@ function DashboardContent() {
             </div>
 
             <div style={{ display: 'grid', gap: 'clamp(18px,2vw,24px)', minWidth: 0 }}>
-              <section className="wp-blueprint" style={{ position: 'relative', background: 'var(--panel)', padding: 16 }}>
-                <BlueprintCorners />
-                <p style={labelStyle}>Local sandbox agent</p>
-                <p style={{ margin: '10px 0 0', display: 'flex', alignItems: 'center', gap: 8, fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 19, color: 'var(--ink)' }}>
-                  <span style={{ width: 8, height: 8, background: 'var(--accent-ink)', animation: 'wpBeat 2.2s ease-in-out infinite' }} />
-                  Connected
-                </p>
-                <p style={{ margin: '6px 0 0', fontFamily: 'var(--font-mono-marketing)', fontSize: 11.5, color: 'var(--ink2)', lineHeight: 1.6 }}>
-                  heartbeat 22s ago · cli 1.0.0
-                  <br />
-                  localstack + 3 ssh targets up
-                </p>
-                <p style={{ margin: '12px 0 0', fontSize: 13.5, color: 'var(--ink2)' }}>
-                  Deploys aimed at <span style={{ fontFamily: 'var(--font-mono-marketing)', fontSize: 12, color: 'var(--ink)' }}>local_agent</span> will run here.
-                </p>
-                <a href="#" className="wp-dash-ghost" style={{ marginTop: 12, width: '100%', height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13.5, border: '1px solid var(--line)', color: 'var(--ink)' }}>
-                  Open sandbox logs
-                </a>
-              </section>
-
               {joinRequests.length > 0 && (
                 <section style={{ border: '1px solid var(--accent)', background: 'color-mix(in srgb, var(--accent) 9%, transparent)', padding: 16 }}>
                   <p style={{ margin: 0, fontFamily: 'var(--font-mono-marketing)', fontSize: 9.5, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--accent-ink)' }}>Waiting on you</p>
@@ -1008,6 +1009,8 @@ function DashboardContent() {
           project={selectedProjectForPublish}
         />
       )}
+
+      <CommandPalette isOpen={isPaletteOpen} onClose={() => setIsPaletteOpen(false)} projects={projects} navItems={NAV_ITEMS} />
     </div>
   );
 }
