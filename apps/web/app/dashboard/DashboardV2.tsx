@@ -180,11 +180,9 @@ function DashboardContent() {
   // preference, not data every device needs to agree on. Falls back to the
   // user's first team whenever the stored id doesn't match any real team
   // (first visit, or the stored team was since left/deleted).
-  const [currentTeamId, setCurrentTeamId] = useState<string | null>(null);
-  useEffect(() => {
-    const stored = localStorage.getItem('whiparc-current-team');
-    if (stored) setCurrentTeamId(stored);
-  }, []);
+  const [currentTeamId, setCurrentTeamId] = useState<string | null>(() =>
+    typeof window === 'undefined' ? null : localStorage.getItem('whiparc-current-team')
+  );
   const selectTeam = (teamId: string) => {
     setCurrentTeamId(teamId);
     localStorage.setItem('whiparc-current-team', teamId);
@@ -1078,7 +1076,7 @@ function DashboardContent() {
         />
       )}
 
-      <CommandPalette isOpen={isPaletteOpen} onClose={() => setIsPaletteOpen(false)} projects={projects} navItems={NAV_ITEMS} />
+      {isPaletteOpen && <CommandPalette onClose={() => setIsPaletteOpen(false)} projects={projects} navItems={NAV_ITEMS} />}
     </div>
   );
 }

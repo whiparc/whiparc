@@ -15,7 +15,6 @@ interface NavEntry {
 }
 
 interface CommandPaletteProps {
-  isOpen: boolean;
   onClose: () => void;
   projects: Project[];
   navItems: NavEntry[];
@@ -34,26 +33,27 @@ interface PaletteItem {
 // loaded/fetched), per product-memory 08.5 item A8. A server-side
 // GET /api/search?q= is explicitly deferred there until it's actually
 // needed — this covers the same ground at current project/template counts.
-export function CommandPalette({ isOpen, onClose, projects, navItems }: CommandPaletteProps) {
+export function CommandPalette({ onClose, projects, navItems }: CommandPaletteProps) {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [templates, setTemplates] = useState<Template[]>([]);
   const [activeIndex, setActiveIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Palette is only ever mounted while open (see DashboardV2), so a fresh
+  // mount already starts query/activeIndex at their initial values — no
+  // reset-on-open effect needed. This effect is left with only the one
+  // genuine external-system side effect: focusing the input.
   useEffect(() => {
-    if (!isOpen) return;
-    setQuery('');
-    setActiveIndex(0);
     const t = setTimeout(() => inputRef.current?.focus(), 0);
     return () => clearTimeout(t);
-  }, [isOpen]);
+  }, []);
 
   // Templates are public and small in number — fetched once per session
   // (kept in state, not re-fetched on every open) rather than wiring
   // through a shared cache for a palette that's opened occasionally.
   useEffect(() => {
-    if (!isOpen || templates.length > 0) return;
+    if (templates.length > 0) return;
     let cancelled = false;
     fetch(`${API_URL}/api/templates?limit=100`)
       .then((res) => (res.ok ? res.json() : null))
@@ -64,7 +64,7 @@ export function CommandPalette({ isOpen, onClose, projects, navItems }: CommandP
     return () => {
       cancelled = true;
     };
-  }, [isOpen, templates.length]);
+  }, [templates.length]);
 
   const items = useMemo<PaletteItem[]>(() => {
     const navResults: PaletteItem[] = navItems.map((n) => ({
@@ -98,9 +98,15 @@ export function CommandPalette({ isOpen, onClose, projects, navItems }: CommandP
     return all.filter((it) => it.label.toLowerCase().includes(q) || it.sublabel?.toLowerCase().includes(q));
   }, [navItems, projects, templates, query]);
 
-  useEffect(() => {
+  // Reset the highlighted row whenever the query changes, computed during
+  // render rather than in an effect (react-hooks/set-state-in-effect) —
+  // this is the "adjusting state when a prop changes" pattern from
+  // https://react.dev/learn/you-might-not-need-an-effect.
+  const [prevQuery, setPrevQuery] = useState(query);
+  if (query !== prevQuery) {
+    setPrevQuery(query);
     setActiveIndex(0);
-  }, [query]);
+  }
 
   const activate = (item: PaletteItem) => {
     onClose();
@@ -127,8 +133,6 @@ export function CommandPalette({ isOpen, onClose, projects, navItems }: CommandP
       if (items[activeIndex]) activate(items[activeIndex]);
     }
   };
-
-  if (!isOpen) return null;
 
   let lastGroup = '';
 
