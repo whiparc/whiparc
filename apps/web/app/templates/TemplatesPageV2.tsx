@@ -20,11 +20,11 @@ type PricingFilter = 'all' | 'free' | 'pro';
 
 const NAV_ITEMS: { key: string; label: string; href: string; icon: React.ReactNode }[] = [
   { key: 'overview', label: 'Overview', href: '/dashboard', icon: <GridIcon /> },
-  { key: 'projects', label: 'Projects', href: '/dashboard#projects', icon: <FolderIcon /> },
+  { key: 'projects', label: 'Projects', href: '/projects', icon: <FolderIcon /> },
   { key: 'templates', label: 'Templates', href: '/templates', icon: <LayoutIcon /> },
-  { key: 'runs', label: 'Runs', href: '/dashboard#runs', icon: <ActivityIcon /> },
-  { key: 'credentials', label: 'Credentials', href: '/dashboard#credentials', icon: <LockIcon /> },
-  { key: 'team', label: 'Team', href: '/dashboard#team', icon: <UsersIcon /> },
+  { key: 'runs', label: 'Runs', href: '/runs', icon: <ActivityIcon /> },
+  { key: 'credentials', label: 'Credentials', href: '/credentials', icon: <LockIcon /> },
+  { key: 'team', label: 'Team', href: '/team', icon: <UsersIcon /> },
   { key: 'docs', label: 'Docs', href: '/docs', icon: <BookIcon /> },
 ];
 
