@@ -98,11 +98,12 @@ function computeDashboardRunStats(runs: RunRow[]) {
   const maxBucket = Math.max(1, ...sparkBuckets);
   const sparkline = sparkBuckets.map((count) => Math.max(6, Math.round((count / maxBucket) * 100)));
 
-  // "Deploy" excludes explicit destroy runs; legacy rows with no runType
-  // (pre-migration) still count, matching this app's "honest gap, not an
-  // invented value" convention elsewhere — we just can't rule destroys out
-  // for them.
-  const lastDeploy = runs.find((r) => r.status === 'SUCCESS' && r.runType !== 'destroy') ?? null;
+  // "Deploy" excludes explicit destroy and plan runs (a dry run changes
+  // nothing, so it isn't a deploy either — added alongside A9); legacy rows
+  // with no runType (pre-migration) still count, matching this app's
+  // "honest gap, not an invented value" convention elsewhere — we just
+  // can't rule destroys/plans out for them.
+  const lastDeploy = runs.find((r) => r.status === 'SUCCESS' && r.runType !== 'destroy' && r.runType !== 'plan') ?? null;
 
   // A project "needs a look" if its own most recent run failed — not a raw
   // count of failed runs, which would double-count a project that's been
@@ -154,6 +155,10 @@ function formatActivityEvent(event: ActivityEvent, currentUserId: string): strin
       return `${actor} destroyed ${project}.`;
     case 'destroy.failed':
       return `Destroy failed on ${project}.`;
+    case 'plan.succeeded':
+      return `${actor} ran a plan on ${project}${p.target ? ` (${p.target})` : ''}.`;
+    case 'plan.failed':
+      return `Plan failed on ${project}.`;
     default:
       return `${actor}: ${event.kind.replace(/[._]/g, ' ')} on ${project}.`;
   }

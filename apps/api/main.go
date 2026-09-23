@@ -287,6 +287,7 @@ func main() {
 	mux.HandleFunc("GET /api/runs/{id}", enableCORS(handleGetRunByID))
 	mux.Handle("POST /api/projects/{id}/deploy", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleDeploy))))
 	mux.Handle("POST /api/projects/{id}/destroy", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleDestroy))))
+	mux.Handle("POST /api/projects/{id}/plan", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handlePlan))))
 	mux.HandleFunc("/api/ws/runs/{id}", handleWebSocket)
 
 	// Auth & Workspace Sync Routes
@@ -788,6 +789,178 @@ func handleDeploy(w http.ResponseWriter, r *http.Request) {
 			})
 
 			log.Printf("[RUNNER] Pipeline run %s completed with status: %s\n", runID, finalStatus)
+		})
+	}()
+}
+
+// POST /api/projects/{id}/plan
+// A real `terraform plan` dry run (product-memory 08.5 item A9) — not the
+// workspace's pre-existing "Plan" button, which was actually just a
+// view-switcher to the compiled-output tab (renamed to "Preview" alongside
+// this shipping). Deliberately skips every pre-flight check that only
+// exists for handleDeploy's Ansible/local_agent path: no SSH-credential
+// requirement (plan never runs Ansible), no paired-agent
+// PENDING/DISCONNECTED gate (same reason), and no FREE-tier sandbox gating
+// (a plan is cheap/read-only, not the cost-bearing hosted sandbox that gate
+// exists to protect). See runner.RunPipeline's "ACTION: PLAN" branch for
+// what actually runs.
+func handlePlan(w http.ResponseWriter, r *http.Request) {
+	projectID := r.PathValue("id")
+	user, _ := GetUserFromContext(r)
+
+	var payload DeployPayload
+	err := json.NewDecoder(r.Body).Decode(&payload)
+	if err != nil {
+		http.Error(w, "Invalid request payload: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	var canvasStr string
+	var canvasNodesJSON, canvasEdgesJSON string
+
+	if payload.Canvas == nil {
+		err = db.QueryRow("SELECT nodes_json, edges_json FROM canvas_states WHERE project_id = ?", projectID).Scan(&canvasNodesJSON, &canvasEdgesJSON)
+		if err == sql.ErrNoRows {
+			canvasNodesJSON = "[]"
+			canvasEdgesJSON = "[]"
+		} else if err != nil {
+			http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		canvasStr = fmt.Sprintf(`{"nodes":%s,"edges":%s}`, canvasNodesJSON, canvasEdgesJSON)
+	} else {
+		canvasBytes, err := json.Marshal(payload.Canvas)
+		if err != nil {
+			http.Error(w, "Invalid canvas format", http.StatusBadRequest)
+			return
+		}
+		canvasStr = string(canvasBytes)
+
+		var canvasStruct struct {
+			Nodes []importer.CanvasNode `json:"nodes"`
+			Edges []importer.CanvasEdge `json:"edges"`
+		}
+		_ = json.Unmarshal(canvasBytes, &canvasStruct)
+
+		if len(payload.Files) == 0 {
+			compiledFiles, err := importer.CompileCanvas(canvasStruct.Nodes, canvasStruct.Edges)
+			if err == nil {
+				for _, f := range compiledFiles {
+					payload.Files = append(payload.Files, runner.FileItem{
+						Path:    f.Path,
+						Content: f.Content,
+					})
+				}
+			}
+		}
+	}
+
+	if len(payload.Files) == 0 && canvasNodesJSON != "" {
+		var nodes []importer.CanvasNode
+		var edges []importer.CanvasEdge
+		_ = json.Unmarshal([]byte(canvasNodesJSON), &nodes)
+		_ = json.Unmarshal([]byte(canvasEdgesJSON), &edges)
+
+		compiledFiles, err := importer.CompileCanvas(nodes, edges)
+		if err == nil {
+			for _, f := range compiledFiles {
+				payload.Files = append(payload.Files, runner.FileItem{
+					Path:    f.Path,
+					Content: f.Content,
+				})
+			}
+		}
+	}
+
+	// Still resolved (not skipped) so a live-AWS/GCP plan can actually reach
+	// the real provider with real credentials, exactly like deploy — just
+	// without deploy's SSH-credential requirement, since plan never reaches
+	// the Ansible phase that needs one.
+	extraEnv, secretsToMask, _ := extractSecretsAndEnvironment(projectID, canvasStr)
+
+	runID := generateUUID()
+	target := deriveRunTarget(canvasStr)
+
+	insertQuery := "INSERT INTO pipeline_runs (id, project_id, user_id, status, logs, canvas, run_type, target, created_at, updated_at) VALUES (?, ?, ?, 'PENDING', '', ?, 'plan', ?, datetime('now'), datetime('now'))"
+	_, err = db.Exec(insertQuery, runID, projectID, user.ID, canvasStr, nullIfEmpty(target))
+	if err != nil {
+		log.Printf("[DB] Error inserting new plan run %s: %v\n", runID, err)
+		http.Error(w, "Database error: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	tracker := &RunTracker{
+		clients:      make(map[*websocket.Conn]bool),
+		status:       "PENDING",
+		nodeStatuses: make(map[string]string),
+	}
+	trackersMutex.Lock()
+	trackers[runID] = tracker
+	trackersMutex.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"runId":  runID,
+		"status": "PENDING",
+	})
+
+	go func() {
+		_, _ = db.Exec("UPDATE pipeline_runs SET status = 'RUNNING', updated_at = datetime('now') WHERE id = ?", runID)
+		tracker.Lock()
+		tracker.status = "RUNNING"
+		tracker.Unlock()
+		broadcastToTracker(runID, "status_change", "RUNNING")
+
+		logChan := make(chan string, 100)
+		go func() {
+			for msg := range logChan {
+				tracker.Lock()
+				tracker.logs += msg
+				tracker.Unlock()
+				broadcastToTracker(runID, "log", msg)
+			}
+		}()
+
+		runner.RunPipeline(runID, canvasStr, payload.Files, "plan", false, extraEnv, secretsToMask, nil, logChan, func(nodeId, status string) {
+			broadcastNodeStatus(runID, nodeId, status)
+		}, func(status string) {
+			broadcastToTracker(runID, "status_change", status)
+		}, func(finalStatus string, logs string) {
+			tracker.Lock()
+			finalLogs := truncateLogs(tracker.logs)
+			tracker.Unlock()
+
+			_, err = db.Exec("UPDATE pipeline_runs SET status = ?, logs = ?, updated_at = datetime('now') WHERE id = ?", finalStatus, finalLogs, runID)
+			if err != nil {
+				log.Printf("[DB] Error updating plan run %s: %v\n", runID, err)
+			}
+
+			if finalStatus == "SUCCESS" {
+				insertActivityEvent(projectID, user.ID, "plan.succeeded", map[string]interface{}{"target": target})
+			} else if finalStatus == "FAILED" {
+				insertActivityEvent(projectID, user.ID, "plan.failed", map[string]interface{}{"target": target})
+			}
+
+			tracker.Lock()
+			tracker.status = finalStatus
+			tracker.Unlock()
+			broadcastToTracker(runID, "status_change", finalStatus)
+
+			time.AfterFunc(2*time.Second, func() {
+				trackersMutex.Lock()
+				t, exists := trackers[runID]
+				if exists {
+					t.Lock()
+					for client := range t.clients {
+						_ = client.Close()
+					}
+					t.Unlock()
+					delete(trackers, runID)
+				}
+				trackersMutex.Unlock()
+			})
+
+			log.Printf("[RUNNER] Plan run %s completed with status: %s\n", runID, finalStatus)
 		})
 	}()
 }
