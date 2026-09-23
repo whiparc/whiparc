@@ -2903,17 +2903,18 @@ const LIBRARY_NODES: LibraryNode[] = [
 // --- FLOW EDITOR AREA CANVAS ---
 interface WorkspaceCanvasProps {
   deployStatus: string;
+  planStatus: string;
   peerCursors: Record<string, { x: number; y: number; name: string; color: string }>;
   handleMouseMove: (e: React.MouseEvent) => void;
 }
 
-function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: WorkspaceCanvasProps) {
-  const { 
-    nodes, 
-    edges, 
-    onNodesChange, 
-    onEdgesChange, 
-    onConnect, 
+function WorkspaceCanvas({ deployStatus, planStatus, peerCursors = {}, handleMouseMove }: WorkspaceCanvasProps) {
+  const {
+    nodes,
+    edges,
+    onNodesChange,
+    onEdgesChange,
+    onConnect,
     addNode,
     setSelectedNodeId,
     saveStatus,
@@ -2922,7 +2923,8 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
 
   const { screenToFlowPosition } = useReactFlow();
 
-  const isReadOnly = deployStatus === 'PENDING' || deployStatus === 'RUNNING' || saveStatus === 'readonly';
+  const isPipelineRunning = deployStatus === 'PENDING' || deployStatus === 'RUNNING' || planStatus === 'PENDING' || planStatus === 'RUNNING';
+  const isReadOnly = isPipelineRunning || saveStatus === 'readonly';
 
   const handleNodesChange = useCallback((changes: NodeChange[]) => {
     if (isReadOnly) {
@@ -2986,7 +2988,7 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
   const onDrop = useCallback((event: React.DragEvent) => {
     event.preventDefault();
 
-    if (deployStatus === 'PENDING' || deployStatus === 'RUNNING') {
+    if (isPipelineRunning) {
       alert("⚠️ Canvas is locked: Cannot drop nodes while a pipeline execution is running.");
       return;
     }
@@ -3057,7 +3059,7 @@ function WorkspaceCanvas({ deployStatus, peerCursors = {}, handleMouseMove }: Wo
 
     addNode(newNode);
     setSelectedNodeId(newNodeId);
-  }, [screenToFlowPosition, addNode, setSelectedNodeId, deployStatus]);
+  }, [screenToFlowPosition, addNode, setSelectedNodeId, isPipelineRunning]);
 
   return (
     <div
@@ -3230,10 +3232,19 @@ function WorkspaceContent() {
   const [activeView, setActiveView] = useState<WorkspaceView>('canvas');
 
   const [deployStatus, setDeployStatus] = useState<"IDLE" | "PENDING" | "RUNNING" | "CLEANUP" | "SUCCESS" | "FAILED">("IDLE");
+  // Separate from deployStatus, deliberately: a plan is a read-only dry run,
+  // not a deploy/destroy, and other code keys off deployStatus reaching
+  // SUCCESS/FAILED to mean "resources are now live/gone" — conflating the
+  // two would make a mere preview look like it deployed or tore down
+  // something. Each of handleDeployClick/handlePlanClick/handleDestroyClick
+  // resets the *other* machine to IDLE on start, so at most one is ever
+  // non-IDLE at a time (see planOrDeployStatus below).
+  const [planStatus, setPlanStatus] = useState<"IDLE" | "PENDING" | "RUNNING" | "SUCCESS" | "FAILED">("IDLE");
   const [logs, setLogs] = useState("");
   const [isTerminalOpen, setIsTerminalOpen] = useState(false);
   const [, setActiveRunId] = useState<string | null>(null);
   const [autoDestroy, setAutoDestroy] = useState(true);
+  const isPipelineBusy = deployStatus === 'PENDING' || deployStatus === 'RUNNING' || planStatus === 'PENDING' || planStatus === 'RUNNING';
 
   const wsRef = useRef<WebSocket | null>(null);
   const terminalEndRef = useRef<HTMLDivElement | null>(null);
@@ -3623,9 +3634,9 @@ function WorkspaceContent() {
 
   // Sync execution status to the canvas store
   useEffect(() => {
-    const isExecuting = deployStatus === 'PENDING' || deployStatus === 'RUNNING';
+    const isExecuting = deployStatus === 'PENDING' || deployStatus === 'RUNNING' || planStatus === 'PENDING' || planStatus === 'RUNNING';
     useCanvasStore.getState().setIsExecuting(isExecuting);
-  }, [deployStatus]);
+  }, [deployStatus, planStatus]);
 
   const handleDeployClick = async () => {
     if (nodes.length === 0) {
@@ -3634,6 +3645,7 @@ function WorkspaceContent() {
     }
 
     setDeployStatus("PENDING");
+    setPlanStatus("IDLE");
     setLogs("[CLIENT] Compiling canvas files and preparing payload...\n");
     setIsTerminalOpen(true);
     setActiveRunId(null);
@@ -3722,8 +3734,102 @@ function WorkspaceContent() {
     }
   };
 
+  // A real `terraform plan` dry run (product-memory 08.5 item A9) — mirrors
+  // handleDeployClick's shape (same compile-and-POST-then-stream-over-WS
+  // flow, since log streaming is action-agnostic server-side) but posts to
+  // /plan and tracks planStatus instead of deployStatus, so this never
+  // reads as "deployed" to any code keying off deployStatus.
+  const handlePlanClick = async () => {
+    if (nodes.length === 0) {
+      alert("⚠️ Cannot plan: Canvas is empty.");
+      return;
+    }
+
+    setPlanStatus("PENDING");
+    setDeployStatus("IDLE");
+    setLogs("[CLIENT] Compiling canvas files and preparing payload for plan...\n");
+    setIsTerminalOpen(true);
+    setActiveRunId(null);
+
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    try {
+      const compiledFiles = generateBundleFiles(nodes, edges);
+
+      const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080';
+      const activeToken = token;
+      const response = await fetch(`${API_URL}/api/projects/${projectId}/plan`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${activeToken}`
+        },
+        body: JSON.stringify({
+          canvas: { nodes, edges },
+          files: compiledFiles.map(f => ({ path: f.path, content: f.content }))
+        })
+      });
+
+      if (!response.ok) {
+        const detail = (await response.text().catch(() => '')).trim();
+        throw new Error(`Failed to plan. HTTP status: ${response.status}${detail ? ` - ${detail}` : ''}`);
+      }
+
+      const data = await response.json();
+      const runId = data.runId;
+      setActiveRunId(runId);
+      setPlanStatus(data.status);
+      setLogs(prev => prev + `[CLIENT] Plan registered with runID: ${runId}\n[CLIENT] Establishing log streaming WebSocket connection...\n`);
+
+      const apiHost = process.env.NEXT_PUBLIC_API_URL
+        ? process.env.NEXT_PUBLIC_API_URL.replace(/^http/, 'ws')
+        : 'ws://localhost:8080';
+      const wsUrl = `${apiHost}/api/ws/runs/${runId}`;
+      const ws = new WebSocket(wsUrl);
+      wsRef.current = ws;
+
+      ws.onopen = () => {
+        setLogs(prev => prev + "[CLIENT] WebSocket connection established. Streaming pipeline runner logs...\n");
+      };
+
+      ws.onmessage = (event) => {
+        try {
+          const wsData = JSON.parse(event.data);
+          if (wsData.type === "status_change") {
+            setPlanStatus(wsData.status);
+          } else if (wsData.type === "log") {
+            setLogs(prev => prev + wsData.message);
+          }
+          // No node_status handling: RunPipeline's plan branch never emits
+          // one (see its comment — a node isn't "completed" just because a
+          // plan mentioned it).
+        } catch (e) {
+          setLogs(prev => prev + event.data + '\n' + e);
+        }
+      };
+
+      ws.onerror = (err) => {
+        setLogs(prev => prev + `\n[CLIENT] WebSocket encountered an error.\n`);
+        console.warn("WS error:", err);
+      };
+
+      ws.onclose = (event) => {
+        setLogs(prev => prev + `\n[CLIENT] Log stream closed (code: ${event.code}).\n`);
+      };
+
+    } catch (err: unknown) {
+      setPlanStatus("FAILED");
+      const errMessage = err instanceof Error ? err.message : String(err);
+      setLogs(prev => prev + `\n[CLIENT_ERROR] Failed to execute plan: ${errMessage}\n`);
+    }
+  };
+
   const handleDestroyClick = async () => {
     setDeployStatus("PENDING");
+    setPlanStatus("IDLE");
     setLogs("[CLIENT] Triggering infrastructure tear-down (terraform destroy)...\n");
     setIsTerminalOpen(true);
     setActiveRunId(null);
@@ -3816,7 +3922,7 @@ function WorkspaceContent() {
   };
 
   const handleAddNodeToCanvas = (libNode: LibraryNode) => {
-    if (deployStatus === 'PENDING' || deployStatus === 'RUNNING') {
+    if (isPipelineBusy) {
       alert("⚠️ Canvas is locked: Cannot add nodes while a pipeline execution is running.");
       return;
     }
@@ -3870,7 +3976,7 @@ function WorkspaceContent() {
   };
 
   const handleClearCanvas = () => {
-    if (deployStatus === 'PENDING' || deployStatus === 'RUNNING') {
+    if (isPipelineBusy) {
       alert("⚠️ Canvas is locked: Cannot clear the canvas while a pipeline execution is running.");
       return;
     }
@@ -3952,6 +4058,8 @@ function WorkspaceContent() {
         onExportFormat={handleExportFormat}
         onDeploy={handleDeployClick}
         deployStatus={deployStatus}
+        onPlan={handlePlanClick}
+        planStatus={planStatus}
         autoDestroy={autoDestroy}
         onAutoDestroyChange={setAutoDestroy}
         onDestroy={handleDestroyClick}
@@ -3975,13 +4083,14 @@ function WorkspaceContent() {
             onTechFilterSelect={handleTechFilterSelect}
             libraryNodes={LIBRARY_NODES}
             onAddNode={handleAddNodeToCanvas}
-            isReadOnly={deployStatus === 'PENDING' || deployStatus === 'RUNNING' || saveStatus === 'readonly'}
+            isReadOnly={isPipelineBusy || saveStatus === 'readonly'}
             onCreateCustomNode={() => setIsCustomNodeOpen(true)}
           />
 
           <main className="flex-1 relative overflow-hidden flex flex-col" style={{ background: 'var(--ground)' }}>
             <WorkspaceCanvas
               deployStatus={deployStatus}
+              planStatus={planStatus}
               peerCursors={peerCursors}
               handleMouseMove={handleMouseMove}
             />
@@ -4025,7 +4134,7 @@ function WorkspaceContent() {
             deleteEdge={deleteEdge}
             nodes={nodes}
             setSelectedNodeId={setSelectedNodeId}
-            isReadOnly={deployStatus === 'PENDING' || deployStatus === 'RUNNING' || saveStatus === 'readonly'}
+            isReadOnly={isPipelineBusy || saveStatus === 'readonly'}
             onStartEditing={handleStartEditing}
             onEndEditing={handleEndEditing}
             availableCredentials={availableCredentials}
@@ -4050,7 +4159,7 @@ function WorkspaceContent() {
         onToggle={() => setIsTerminalOpen(!isTerminalOpen)}
         logs={logs}
         onClearLogs={() => setLogs('')}
-        deployStatus={deployStatus}
+        deployStatus={planStatus !== 'IDLE' ? planStatus : deployStatus}
         terminalEndRef={terminalEndRef}
       />
 
