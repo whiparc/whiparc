@@ -12,7 +12,7 @@ import {
   useReactFlow,
   Connection,
   Edge,
-  MarkerType,
+  ConnectionLineType,
   Node,
   NodeChange,
   EdgeChange
@@ -21,9 +21,9 @@ import '@xyflow/react/dist/style.css';
 import { Icon } from '@iconify/react';
 import { clsx } from 'clsx';
 
-import useCanvasStore, { resolveMarkerColor } from '../store/useCanvasStore';
+import useCanvasStore from '../store/useCanvasStore';
 import ReactFlowCanvasNode from '../components/ReactFlowCanvasNode';
-import ThreadEdge from '../components/ThreadEdge';
+import BlueprintEdge from '../components/canvas/BlueprintEdge';
 import CustomNodeModal from '../components/CustomNodeModal';
 import { ProjectSettingsModal } from '../components/ProjectSettingsModal';
 import { InputWithVariablePicker } from '../components/VariablePicker';
@@ -32,7 +32,8 @@ import { generateAnsibleYAML } from '../lib/exportYaml';
 import { downloadZipBundle, downloadTerraformZip, generateBundleFiles, generateTerraformFiles } from '../lib/bundleGenerator';
 import { DEFAULT_INSTANCE_PARAMS, DEFAULT_SG_PARAMS } from '../lib/terraformDefaults';
 import type { Project } from '../lib/types';
-import { spaceGroteskFont, barlowFont, jetBrainsMonoFont, kalamFont } from '../fonts';
+import { edgeCustomStroke, edgeStrokeWidth } from '../lib/canvasDesign';
+import { spaceGroteskFont, barlowFont, jetBrainsMonoFont } from '../fonts';
 import { THEME_PALETTES, type Theme } from '../components/ui/theme-palette';
 import { LEGACY_TOKEN_SCOPE_STYLE } from '../components/ui/legacy-token-scope';
 import { WorkspaceHeaderV2, type WorkspaceView } from './WorkspaceHeaderV2';
@@ -828,8 +829,9 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
             {(() => {
               return selectedEdge ? (() => {
                 const currentLabel = typeof selectedEdge.label === 'string' ? selectedEdge.label : '';
-                const currentStroke = selectedEdge.style?.stroke || '#8B5CF6';
-                const currentStrokeWidth = typeof selectedEdge.style?.strokeWidth === 'number' ? selectedEdge.style.strokeWidth : 2.5;
+                // '' = auto: the connector takes its color from its target node.
+                const currentStroke = edgeCustomStroke(selectedEdge) ?? '';
+                const currentStrokeWidth = edgeStrokeWidth(selectedEdge);
                 return (
                   <div className="space-y-4 animate-in fade-in duration-200">
                     <div className="space-y-3.5">
@@ -2949,36 +2951,8 @@ function WorkspaceCanvas({ deployStatus, planStatus, peerCursors = {}, handleMou
     onConnect(params);
   }, [onConnect, isReadOnly]);
 
-  const styledEdges = useMemo(() => {
-    return edges.map((edge) => {
-      const stroke = (edge.style?.stroke as string) || '#8B5CF6';
-      return {
-        ...edge,
-        labelStyle: edge.labelStyle || {
-          fill: '#F5F5F6',
-          fontSize: 11,
-          fontWeight: 600,
-        },
-        labelBgStyle: edge.labelBgStyle || {
-          fill: '#17181C',
-          stroke: '#2A2C33',
-          strokeWidth: 1,
-        },
-        labelBgPadding: edge.labelBgPadding || [8, 4],
-        labelBgBorderRadius: edge.labelBgBorderRadius || 6,
-        markerEnd: edge.markerEnd || {
-          type: MarkerType.Arrow,
-          width: 12,
-          height: 12,
-          strokeWidth: 1.6,
-          color: resolveMarkerColor(stroke),
-        },
-      };
-    });
-  }, [edges]);
-
   const nodeTypes = useMemo(() => ({ customNode: ReactFlowCanvasNode }), []);
-  const edgeTypes = useMemo(() => ({ default: ThreadEdge }), []);
+  const edgeTypes = useMemo(() => ({ default: BlueprintEdge }), []);
 
   const onDragOver = useCallback((event: React.DragEvent) => {
     event.preventDefault();
@@ -3091,27 +3065,9 @@ function WorkspaceCanvas({ deployStatus, planStatus, peerCursors = {}, handleMou
       <ReactFlow
         proOptions={{ hideAttribution: true }}
         nodes={nodes}
-        edges={styledEdges}
-        defaultEdgeOptions={{
-          markerEnd: {
-            type: MarkerType.Arrow,
-            width: 12,
-            height: 12,
-            strokeWidth: 1.6,
-          },
-          labelStyle: {
-            fill: '#F5F5F6',
-            fontSize: 11,
-            fontWeight: 600,
-          },
-          labelBgStyle: {
-            fill: '#17181C',
-            stroke: '#2A2C33',
-            strokeWidth: 1,
-          },
-          labelBgPadding: [8, 4],
-          labelBgBorderRadius: 6,
-        }}
+        edges={edges}
+        connectionLineType={ConnectionLineType.Step}
+        connectionLineStyle={{ stroke: 'var(--accent-ink)', strokeWidth: 1.5, strokeDasharray: '5 4' }}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onConnect={handleConnect}
@@ -3154,19 +3110,6 @@ function WorkspaceCanvas({ deployStatus, planStatus, peerCursors = {}, handleMou
         </div>
       )}
 
-      {/* SVG linear gradients definitions for connections */}
-      <svg style={{ position: 'absolute', width: 0, height: 0 }}>
-        <defs>
-          <linearGradient id="grad-tf-ansible" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#FF6A3D" />
-            <stop offset="100%" stopColor="#8B5CF6" />
-          </linearGradient>
-          <linearGradient id="grad-ansible-k8s" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#8B5CF6" />
-            <stop offset="100%" stopColor="#0EA5E9" />
-          </linearGradient>
-        </defs>
-      </svg>
     </div>
   );
 }
@@ -4044,7 +3987,7 @@ function WorkspaceContent() {
 
   return (
     <div
-      className={`flex-1 flex flex-col overflow-hidden relative wp-root ${spaceGroteskFont.variable} ${barlowFont.variable} ${jetBrainsMonoFont.variable} ${kalamFont.variable}`}
+      className={`flex-1 flex flex-col overflow-hidden relative wp-root ${spaceGroteskFont.variable} ${barlowFont.variable} ${jetBrainsMonoFont.variable}`}
       style={{ ...rootThemeStyle, fontFamily: 'var(--font-body-marketing, inherit)', transition: 'background .3s ease, color .3s ease' }}
     >
       <WorkspaceHeaderV2

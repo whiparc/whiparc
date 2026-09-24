@@ -7,7 +7,7 @@ import { useAuthStore } from '../store/useAuthStore';
 import ProfileMenu from '../components/ProfileMenu';
 import { TemplateCard, deriveProStatus } from '../components/TemplateCard';
 import { THEME_PALETTES, type Theme } from '../components/ui/theme-palette';
-import { spaceGroteskFont, barlowFont, jetBrainsMonoFont, kalamFont } from '../fonts';
+import { spaceGroteskFont, barlowFont, jetBrainsMonoFont } from '../fonts';
 import { GridIcon, FolderIcon, LayoutIcon, ActivityIcon, LockIcon, UsersIcon, BookIcon } from '../dashboard/NavIcons';
 import { BrandLogo } from '../components/brand/BrandLogo';
 import type { Template, TemplateListResponse } from '../lib/types';
@@ -110,7 +110,7 @@ export default function TemplatesPageV2() {
 
   return (
     <div
-      className={`${spaceGroteskFont.variable} ${barlowFont.variable} ${jetBrainsMonoFont.variable} ${kalamFont.variable}`}
+      className={`${spaceGroteskFont.variable} ${barlowFont.variable} ${jetBrainsMonoFont.variable}`}
       style={{ ...rootVars, display: 'flex', alignItems: 'stretch', minHeight: '100vh', fontSize: 15, lineHeight: 1.55, transition: 'background .3s ease, color .3s ease', fontFamily: 'var(--font-body-marketing), system-ui, sans-serif' }}
     >
       {/* SIDEBAR */}

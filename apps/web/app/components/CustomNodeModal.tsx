@@ -5,6 +5,9 @@ import { Icon } from '@iconify/react';
 import { useAuthStore } from '../store/useAuthStore';
 import useCanvasStore from '../store/useCanvasStore';
 import type { CustomLibraryNode } from '../store/useCanvasStore';
+import { BlueprintCorners } from './ui/BlueprintCorners';
+import './ui/blueprint.css';
+import './CustomNodeModal.css';
 
 interface CustomNodeModalProps {
   isOpen: boolean;
@@ -230,53 +233,132 @@ spec:
       
       {/* PAYWALL UPGRADE STATE */}
       {!isPremium ? (
-        <div className="bg-card border border-border rounded-xl shadow-2xl w-[480px] overflow-hidden animate-in fade-in zoom-in duration-200">
-          <div className="p-6 text-center space-y-4">
-            <div className="h-14 w-14 rounded-full bg-purple-500/10 border border-purple-500/20 text-purple-400 flex items-center justify-center text-2xl mx-auto shadow-lg shadow-purple-500/5 animate-pulse">
-              <Icon icon="lucide:sparkles" />
-            </div>
-            <div className="space-y-1.5">
-              <h3 className="text-lg font-heading font-bold text-foreground">Upgrade to Premium</h3>
-              <p className="text-xs text-muted-foreground leading-relaxed px-4">
-                Unlock custom visual blocks to upload, syntax validate, and drop your own infrastructure-as-code scripts.
-              </p>
-            </div>
+        <div
+          className="wp-blueprint"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="wp-cnm-paywall-title"
+          style={{ position: 'relative', width: 480, maxWidth: '100%', background: 'var(--panel)', padding: 24 }}
+        >
+          <BlueprintCorners />
 
-            <div className="bg-muted/30 border border-border rounded-xl p-4 text-left space-y-2.5 text-xs text-slate-300">
-              <div className="flex items-start gap-2">
-                <Icon icon="lucide:check-circle-2" className="text-emerald-400 text-sm shrink-0 mt-0.5" />
-                <span>Upload Custom Terraform HCL & Kubernetes Manifests</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <Icon icon="lucide:check-circle-2" className="text-emerald-400 text-sm shrink-0 mt-0.5" />
-                <span>Author Reusable Ansible Service & Playbook Tasks</span>
-              </div>
-              <div className="flex items-start gap-2">
-                <Icon icon="lucide:check-circle-2" className="text-emerald-400 text-sm shrink-0 mt-0.5" />
-                <span>Extract Variables Dynamically into the Inspector Panel</span>
-              </div>
-            </div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+                padding: '1px 6px',
+                border: '1px solid var(--amber)',
+                color: 'var(--amber)',
+                fontFamily: 'var(--font-mono-marketing, ui-monospace, monospace)',
+                fontSize: 9.5,
+                letterSpacing: '.08em',
+              }}
+            >
+              <Icon icon="lucide:lock" width={9} />
+              PRO
+            </span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="wp-cnm-close"
+              aria-label="Close"
+              style={{ background: 'none', border: 0, padding: 4, margin: -4, color: 'var(--ink2)', cursor: 'pointer', display: 'flex' }}
+            >
+              <Icon icon="lucide:x" width={16} />
+            </button>
+          </div>
 
-            <div className="pt-3 flex flex-col gap-2">
-              <button
-                onClick={handleUpgrade}
-                disabled={upgradeLoading}
-                className="w-full py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-bold rounded-lg transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+          <h3
+            id="wp-cnm-paywall-title"
+            style={{ margin: '14px 0 0', fontFamily: 'var(--font-display, inherit)', fontWeight: 600, fontSize: 22, letterSpacing: '-.01em', color: 'var(--ink)' }}
+          >
+            Upgrade to Premium
+          </h3>
+          <p style={{ margin: '8px 0 0', fontSize: 13.5, lineHeight: 1.55, color: 'var(--ink2)' }}>
+            Unlock custom visual blocks to upload, syntax validate, and drop your own infrastructure-as-code scripts.
+          </p>
+
+          <p
+            style={{
+              margin: '20px 0 8px',
+              fontFamily: 'var(--font-mono-marketing, ui-monospace, monospace)',
+              fontSize: 9.5,
+              letterSpacing: '.12em',
+              textTransform: 'uppercase',
+              color: 'var(--ink3)',
+            }}
+          >
+            Included
+          </p>
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none', border: '1px solid var(--line)' }}>
+            {[
+              'Upload Custom Terraform HCL & Kubernetes Manifests',
+              'Author Reusable Ansible Service & Playbook Tasks',
+              'Extract Variables Dynamically into the Inspector Panel',
+            ].map((feature, i) => (
+              <li
+                key={feature}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '10px 12px',
+                  borderTop: i === 0 ? 0 : '1px solid var(--line)',
+                  fontSize: 13,
+                  color: 'var(--ink)',
+                }}
               >
-                {upgradeLoading ? (
-                  <Icon icon="lucide:loader-2" className="animate-spin text-base" />
-                ) : (
-                  <Icon icon="lucide:zap" className="text-base animate-bounce" />
-                )}
-                Upgrade to Pro (Instant Sandbox)
-              </button>
-              <button
-                onClick={onClose}
-                className="w-full py-2.5 bg-muted text-foreground hover:bg-muted/80 text-sm font-semibold rounded-lg transition-all cursor-pointer border border-border"
-              >
-                Maybe Later
-              </button>
-            </div>
+                <Icon icon="lucide:check" width={14} style={{ flexShrink: 0, color: 'var(--accent-ink)' }} />
+                {feature}
+              </li>
+            ))}
+          </ul>
+
+          <div style={{ marginTop: 24, display: 'grid', gap: 16 }}>
+            <button
+              type="button"
+              onClick={handleUpgrade}
+              disabled={upgradeLoading}
+              className="wp-blueprint wp-cnm-primary"
+              style={{
+                height: 42,
+                border: 0,
+                background: 'var(--accent)',
+                color: 'var(--on-accent)',
+                fontFamily: 'var(--font-display, inherit)',
+                fontWeight: 600,
+                fontSize: 14,
+                cursor: upgradeLoading ? 'default' : 'pointer',
+                opacity: upgradeLoading ? 0.6 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+              }}
+            >
+              <BlueprintCorners />
+              {upgradeLoading ? <Icon icon="lucide:loader-2" width={15} className="animate-spin" /> : <Icon icon="lucide:zap" width={15} />}
+              Upgrade to Pro (Instant Sandbox)
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="wp-cnm-secondary"
+              style={{
+                height: 40,
+                border: '1px solid var(--line)',
+                background: 'transparent',
+                color: 'var(--ink)',
+                fontFamily: 'var(--font-display, inherit)',
+                fontWeight: 600,
+                fontSize: 13.5,
+                cursor: 'pointer',
+              }}
+            >
+              Maybe Later
+            </button>
           </div>
         </div>
       ) : (

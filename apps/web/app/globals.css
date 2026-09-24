@@ -102,20 +102,5 @@ body {
   cursor: grabbing;
 }
 
-/* React Flow Edge Label Theme Styling */
-.react-flow__edge-textbg {
-  fill: #17181C !important;
-  stroke: #2A2C33 !important;
-  stroke-width: 1px !important;
-  rx: 6px !important;
-  ry: 6px !important;
-}
-
-.react-flow__edge-text {
-  fill: #F5F5F6 !important;
-  font-family: var(--font-sans) !important;
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.025em !important;
-}
+/* Edge label styling lives in components/canvas/canvas.css (theme-aware). */
 
