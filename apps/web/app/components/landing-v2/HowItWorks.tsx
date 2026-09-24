@@ -9,25 +9,25 @@ const STEPS = [
 ];
 
 const STAGE_NODES = [
-  { id: '0', left: '5%', top: '20%', kicker: 'aws_vpc', label: 'main · 10.0.0.0/16', bg: 'rgba(79,70,229,.06)', border: 'var(--line)', color: '#4F46E5' },
-  { id: '1', left: '5%', top: '52%', kicker: 'aws_instance', label: 'app · t3.small', bg: '#FFFFFF', border: 'var(--line)', color: '#4F46E5' },
-  { id: '2', right: '5%', top: '24%', kicker: 'ansible_role', label: 'nginx + certs', bg: '#FFFFFF', border: 'var(--line)', color: '#4F46E5' },
+  { id: '0', left: '5%', top: '20%', kicker: 'aws_vpc', label: 'main · 10.0.0.0/16', bg: 'rgba(255,106,61,.06)', border: 'var(--line)', color: '#C2410C' },
+  { id: '1', left: '5%', top: '52%', kicker: 'aws_instance', label: 'app · t3.small', bg: '#FFFFFF', border: 'var(--line)', color: '#C2410C' },
+  { id: '2', right: '5%', top: '24%', kicker: 'ansible_role', label: 'nginx + certs', bg: '#FFFFFF', border: 'var(--line)', color: '#C2410C' },
 ];
 
 const TF_LINES: ReactNode[] = [
   <>
-    <span style={{ color: '#9EA2F9' }}>resource</span> <span style={{ color: '#F59E0B' }}>&quot;aws_vpc&quot;</span> <span style={{ color: '#F59E0B' }}>&quot;main&quot;</span> {'{'}
+    <span style={{ color: '#FF8A63' }}>resource</span> <span style={{ color: '#F59E0B' }}>&quot;aws_vpc&quot;</span> <span style={{ color: '#F59E0B' }}>&quot;main&quot;</span> {'{'}
   </>,
   <>
     &nbsp;&nbsp;cidr_block&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; = <span style={{ color: '#34D399' }}>&quot;10.0.0.0/16&quot;</span>
   </>,
   <>
-    &nbsp;&nbsp;enable_dns_hostnames = <span style={{ color: '#9EA2F9' }}>true</span>
+    &nbsp;&nbsp;enable_dns_hostnames = <span style={{ color: '#FF8A63' }}>true</span>
   </>,
   <>{'}'}</>,
   <> </>,
   <>
-    <span style={{ color: '#9EA2F9' }}>resource</span> <span style={{ color: '#F59E0B' }}>&quot;aws_instance&quot;</span> <span style={{ color: '#F59E0B' }}>&quot;app&quot;</span> {'{'}
+    <span style={{ color: '#FF8A63' }}>resource</span> <span style={{ color: '#F59E0B' }}>&quot;aws_instance&quot;</span> <span style={{ color: '#F59E0B' }}>&quot;app&quot;</span> {'{'}
   </>,
   <>&nbsp;&nbsp;ami&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; = var.ami_id</>,
   <>
@@ -43,28 +43,28 @@ const TF_LINES: ReactNode[] = [
 
 const LOG_LINES: ReactNode[] = [
   <>
-    <span style={{ color: '#9EA2F9' }}>$</span> whiparc apply --project three-tier-web
+    <span style={{ color: '#FF8A63' }}>$</span> whiparc apply --project three-tier-web
   </>,
   <>
-    <span style={{ color: '#64748B' }}>→</span> terraform init&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style={{ color: '#34D399' }}>ok</span>
+    <span style={{ color: '#7B7E88' }}>→</span> terraform init&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style={{ color: '#34D399' }}>ok</span>
   </>,
   <>
-    <span style={{ color: '#64748B' }}>→</span> terraform plan&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 4 to add, 0 to change
+    <span style={{ color: '#7B7E88' }}>→</span> terraform plan&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 4 to add, 0 to change
   </>,
   <>
-    <span style={{ color: '#64748B' }}>→</span> terraform apply&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; applying…
+    <span style={{ color: '#7B7E88' }}>→</span> terraform apply&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; applying…
   </>,
   <>
-    <span style={{ color: '#64748B' }}>&nbsp;&nbsp;</span>aws_vpc.main&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;created&nbsp; 2.1s
+    <span style={{ color: '#7B7E88' }}>&nbsp;&nbsp;</span>aws_vpc.main&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;created&nbsp; 2.1s
   </>,
   <>
-    <span style={{ color: '#64748B' }}>&nbsp;&nbsp;</span>aws_subnet.app&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;created&nbsp; 1.4s
+    <span style={{ color: '#7B7E88' }}>&nbsp;&nbsp;</span>aws_subnet.app&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;created&nbsp; 1.4s
   </>,
   <>
-    <span style={{ color: '#64748B' }}>&nbsp;&nbsp;</span>aws_instance.app&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;created 31.7s
+    <span style={{ color: '#7B7E88' }}>&nbsp;&nbsp;</span>aws_instance.app&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;created 31.7s
   </>,
   <>
-    <span style={{ color: '#64748B' }}>→</span> ansible-playbook&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 1 host, 6 tasks
+    <span style={{ color: '#7B7E88' }}>→</span> ansible-playbook&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; 1 host, 6 tasks
   </>,
   <>
     <span style={{ color: '#34D399' }}>✓</span> apply complete&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <span style={{ color: '#F59E0B' }}>public_ip 52.14.8.201</span>
@@ -161,21 +161,21 @@ export function HowItWorks() {
                     position: 'absolute',
                     inset: 0,
                     backgroundImage:
-                      'linear-gradient(rgba(15,18,32,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(15,18,32,.06) 1px,transparent 1px)',
+                      'linear-gradient(rgba(16,17,20,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(16,17,20,.06) 1px,transparent 1px)',
                     backgroundSize: '30px 30px',
                   }}
                 />
                 <svg data-graph="stage" style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', overflow: 'visible', pointerEvents: 'none' }}>
                   <defs>
                     <marker id="wpTipS" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto" markerUnits="userSpaceOnUse">
-                      <path d="M0.5 1.2L9 5L0.5 8.8" fill="none" stroke="#4F46E5" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M0.5 1.2L9 5L0.5 8.8" fill="none" stroke="#FF6A3D" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
                     </marker>
                     <marker id="wpTipSA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="9" markerHeight="9" orient="auto" markerUnits="userSpaceOnUse">
                       <path d="M0.5 1.2L9 5L0.5 8.8" fill="none" stroke="#B45309" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round" />
                     </marker>
                   </defs>
-                  <path data-edge="1" data-from="0" data-to="1" data-route="down" fill="none" stroke="#4F46E5" strokeWidth={1.4} markerEnd="url(#wpTipS)" />
-                  <path data-edge="2" data-from="1" data-to="2" data-route="right" fill="none" stroke="#4F46E5" strokeWidth={1.4} markerEnd="url(#wpTipS)" />
+                  <path data-edge="1" data-from="0" data-to="1" data-route="down" fill="none" stroke="#FF6A3D" strokeWidth={1.4} markerEnd="url(#wpTipS)" />
+                  <path data-edge="2" data-from="1" data-to="2" data-route="right" fill="none" stroke="#FF6A3D" strokeWidth={1.4} markerEnd="url(#wpTipS)" />
                   <path data-edge="3" data-from="2" data-to="3" data-route="down" fill="none" stroke="#B45309" strokeWidth={1.4} markerEnd="url(#wpTipSA)" />
                 </svg>
                 <div
@@ -227,16 +227,16 @@ export function HowItWorks() {
                 </div>
               </div>
 
-              <div data-stage="1" style={{ position: 'absolute', inset: 0, background: '#0D0F16', border: '1px solid #1E2233', opacity: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 0, borderBottom: '1px solid #1E2233', flexShrink: 0, overflow: 'hidden' }}>
-                  <span style={{ fontFamily: 'var(--font-mono-marketing)', fontSize: 11, padding: '10px 14px', color: '#FFFFFF', borderRight: '1px solid #1E2233', background: 'rgba(99,102,241,.12)', whiteSpace: 'nowrap' }}>
+              <div data-stage="1" style={{ position: 'absolute', inset: 0, background: '#17181C', border: '1px solid #2A2C33', opacity: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 0, borderBottom: '1px solid #2A2C33', flexShrink: 0, overflow: 'hidden' }}>
+                  <span style={{ fontFamily: 'var(--font-mono-marketing)', fontSize: 11, padding: '10px 14px', color: '#FFFFFF', borderRight: '1px solid #2A2C33', background: 'rgba(255,106,61,.12)', whiteSpace: 'nowrap' }}>
                     main.tf
                   </span>
-                  <span style={{ fontFamily: 'var(--font-mono-marketing)', fontSize: 11, padding: '10px 14px', color: '#64748B', borderRight: '1px solid #1E2233', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontFamily: 'var(--font-mono-marketing)', fontSize: 11, padding: '10px 14px', color: '#7B7E88', borderRight: '1px solid #2A2C33', whiteSpace: 'nowrap' }}>
                     variables.tf
                   </span>
-                  <span style={{ fontFamily: 'var(--font-mono-marketing)', fontSize: 11, padding: '10px 14px', color: '#64748B', whiteSpace: 'nowrap' }}>playbook.yml</span>
-                  <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono-marketing)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: '#64748B', padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                  <span style={{ fontFamily: 'var(--font-mono-marketing)', fontSize: 11, padding: '10px 14px', color: '#7B7E88', whiteSpace: 'nowrap' }}>playbook.yml</span>
+                  <span style={{ marginLeft: 'auto', fontFamily: 'var(--font-mono-marketing)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: '#7B7E88', padding: '10px 14px', whiteSpace: 'nowrap' }}>
                     emitted 12ms ago
                   </span>
                 </div>
@@ -249,9 +249,9 @@ export function HowItWorks() {
                 </div>
               </div>
 
-              <div data-stage="2" style={{ position: 'absolute', inset: 0, background: '#07080B', border: '1px solid #1E2233', opacity: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: '1px solid #1E2233', padding: '10px 14px', flexShrink: 0 }}>
-                  <span style={{ fontFamily: 'var(--font-mono-marketing)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: '#64748B', whiteSpace: 'nowrap' }}>
+              <div data-stage="2" style={{ position: 'absolute', inset: 0, background: '#101114', border: '1px solid #2A2C33', opacity: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: '1px solid #2A2C33', padding: '10px 14px', flexShrink: 0 }}>
+                  <span style={{ fontFamily: 'var(--font-mono-marketing)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: '#7B7E88', whiteSpace: 'nowrap' }}>
                     sandbox agent · eu-west-1
                   </span>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontFamily: 'var(--font-mono-marketing)', fontSize: 10, letterSpacing: '.14em', textTransform: 'uppercase', color: '#34D399', whiteSpace: 'nowrap' }}>

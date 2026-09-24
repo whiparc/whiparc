@@ -23,7 +23,7 @@ interface ReactFlowCanvasNodeProps {
 }
 
 const TECH_COLOR: Record<ReactFlowCanvasNodeProps['data']['tech'], string> = {
-  Terraform: 'var(--accent-ink, #9EA2F9)',
+  Terraform: 'var(--accent-ink, #FF8A63)',
   Ansible: 'var(--amber, #F59E0B)',
   Kubernetes: 'var(--k8s-ink, #7DD3FC)',
   Source: 'var(--amber, #F59E0B)',

@@ -283,7 +283,7 @@ export class MarketingEngine {
     this.segBtns.forEach((btn) => {
       const on = btn.getAttribute('data-seg-btn') === mode;
       btn.style.background = on ? pal['--accent'] : 'transparent';
-      btn.style.color = on ? '#FFFFFF' : 'inherit';
+      btn.style.color = on ? pal['--on-accent'] : 'inherit';
       btn.style.opacity = on ? '1' : '.8';
     });
   }
@@ -344,7 +344,7 @@ export class MarketingEngine {
     if (this.nav && nt !== this.navNow) {
       const p = PALETTES[nt];
       this.nav.style.transition = 'background .5s ease, border-color .5s ease, color .5s ease';
-      this.nav.style.background = nt === 'dark' ? 'rgba(7,8,11,.82)' : 'rgba(251,251,252,.86)';
+      this.nav.style.background = nt === 'dark' ? 'rgba(16,17,20,.82)' : 'rgba(245,245,246,.86)';
       this.nav.style.borderBottomColor = p['--line'];
       this.nav.style.color = p['--ink'];
       if (this.cta) {

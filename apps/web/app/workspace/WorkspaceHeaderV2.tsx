@@ -379,7 +379,7 @@ export function WorkspaceHeaderV2({
             fontFamily: 'var(--font-display, inherit)',
             fontWeight: 600,
             background: 'var(--accent)',
-            color: '#fff',
+            color: 'var(--on-accent)',
             border: 0,
             cursor: isBusy || isPlanBusy ? 'default' : 'pointer',
             display: 'flex',

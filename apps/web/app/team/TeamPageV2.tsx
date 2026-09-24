@@ -7,7 +7,8 @@ import { useAuthStore } from '../store/useAuthStore';
 import ProfileMenu from '../components/ProfileMenu';
 import { THEME_PALETTES, type Theme } from '../components/ui/theme-palette';
 import { spaceGroteskFont, barlowFont, jetBrainsMonoFont } from '../fonts';
-import { GridIcon, FolderIcon, LayoutIcon, ActivityIcon, LockIcon, UsersIcon, BookIcon, LogoMark } from '../dashboard/NavIcons';
+import { GridIcon, FolderIcon, LayoutIcon, ActivityIcon, LockIcon, UsersIcon, BookIcon } from '../dashboard/NavIcons';
+import { BrandLogo } from '../components/brand/BrandLogo';
 import type { Project } from '../lib/types';
 import '../components/ui/blueprint.css';
 import './team.css';
@@ -168,10 +169,7 @@ export default function TeamPageV2() {
       <aside style={{ width: 216, flex: 'none', borderRight: '1px solid var(--line)', background: 'var(--panel)', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, alignSelf: 'flex-start', height: '100vh' }}>
         <div style={{ height: 56, flex: 'none', display: 'flex', alignItems: 'center', gap: 9, padding: '0 16px', borderBottom: '1px solid var(--line)' }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-            <span style={{ width: 24, height: 24, border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <LogoMark size={24} />
-            </span>
-            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, letterSpacing: '-.02em' }}>whiparc</span>
+            <BrandLogo size={24} />
           </Link>
         </div>
         <nav style={{ padding: '14px 10px', display: 'grid', gap: 2 }}>
@@ -232,7 +230,7 @@ export default function TeamPageV2() {
               type="button"
               onClick={() => setShowComingSoon('invite')}
               className="wp-blueprint wp-team-submit"
-              style={{ position: 'relative', height: 32, padding: '0 14px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, background: 'var(--accent)', color: '#fff', border: 0, cursor: 'pointer' }}
+              style={{ position: 'relative', height: 32, padding: '0 14px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, background: 'var(--accent)', color: 'var(--on-accent)', border: 0, cursor: 'pointer' }}
             >
               <Icon icon="lucide:user-plus" width={13} />
               Invite member

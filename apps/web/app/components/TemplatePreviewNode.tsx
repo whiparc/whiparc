@@ -28,7 +28,7 @@ interface TemplatePreviewNodeProps {
 }
 
 const TECH_COLOR: Record<NodeTech, string> = {
-  Terraform: 'var(--accent-ink, #9EA2F9)',
+  Terraform: 'var(--accent-ink, #FF8A63)',
   Ansible: 'var(--amber, #F59E0B)',
   Kubernetes: 'var(--k8s-ink, #7DD3FC)',
   Source: 'var(--amber, #F59E0B)',
@@ -82,7 +82,7 @@ export default function TemplatePreviewNode({ id, data }: TemplatePreviewNodePro
           transform: `rotate(${rotation}deg)`,
           borderRadius: radius,
           border: `2.5px solid ${color}`,
-          background: `color-mix(in srgb, ${color} 8%, var(--panel, #0D0F16))`,
+          background: `color-mix(in srgb, ${color} 8%, var(--panel, #17181C))`,
           padding: '9px 11px 8px',
           fontFamily: 'var(--font-handwriting, cursive)',
         }}
@@ -95,7 +95,7 @@ export default function TemplatePreviewNode({ id, data }: TemplatePreviewNodePro
           {data.label}
         </div>
         {data.description && (
-          <p style={{ margin: '3px 0 0', fontSize: 12, lineHeight: 1.3, color: 'var(--ink2, #94A3B8)' }} className="line-clamp-2">
+          <p style={{ margin: '3px 0 0', fontSize: 12, lineHeight: 1.3, color: 'var(--ink2, #A3A6AF)' }} className="line-clamp-2">
             {data.description}
           </p>
         )}

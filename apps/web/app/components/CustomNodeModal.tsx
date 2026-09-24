@@ -261,7 +261,7 @@ spec:
               <button
                 onClick={handleUpgrade}
                 disabled={upgradeLoading}
-                className="w-full py-2.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-sm font-bold rounded-lg transition-all shadow-lg shadow-indigo-950/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
+                className="w-full py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-bold rounded-lg transition-all shadow-lg shadow-primary/20 flex items-center justify-center gap-1.5 cursor-pointer disabled:opacity-50"
               >
                 {upgradeLoading ? (
                   <Icon icon="lucide:loader-2" className="animate-spin text-base" />

@@ -8,7 +8,8 @@ import ProfileMenu from '../components/ProfileMenu';
 import { BlueprintCorners } from '../components/ui/BlueprintCorners';
 import { THEME_PALETTES, type Theme } from '../components/ui/theme-palette';
 import { spaceGroteskFont, barlowFont, jetBrainsMonoFont } from '../fonts';
-import { GridIcon, FolderIcon, LayoutIcon, ActivityIcon, LockIcon, UsersIcon, BookIcon, LogoMark } from '../dashboard/NavIcons';
+import { GridIcon, FolderIcon, LayoutIcon, ActivityIcon, LockIcon, UsersIcon, BookIcon } from '../dashboard/NavIcons';
+import { BrandLogo } from '../components/brand/BrandLogo';
 import type { Project } from '../lib/types';
 import '../components/ui/blueprint.css';
 import './projects.css';
@@ -153,10 +154,7 @@ export default function ProjectsPageV2() {
       <aside style={{ width: 216, flex: 'none', borderRight: '1px solid var(--line)', background: 'var(--panel)', display: 'flex', flexDirection: 'column', position: 'sticky', top: 0, alignSelf: 'flex-start', height: '100vh' }}>
         <div style={{ height: 56, flex: 'none', display: 'flex', alignItems: 'center', gap: 9, padding: '0 16px', borderBottom: '1px solid var(--line)' }}>
           <Link href="/" style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-            <span style={{ width: 24, height: 24, border: '1px solid var(--line)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <LogoMark size={24} />
-            </span>
-            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 16, letterSpacing: '-.02em' }}>whiparc</span>
+            <BrandLogo size={24} />
           </Link>
         </div>
 
@@ -228,7 +226,7 @@ export default function ProjectsPageV2() {
             <Link
               href={isLoggedIn ? '/dashboard?create=1' : '/login'}
               className="wp-blueprint wp-projects-submit"
-              style={{ position: 'relative', height: 32, padding: '0 14px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, background: 'var(--accent)', color: '#fff' }}
+              style={{ position: 'relative', height: 32, padding: '0 14px', display: 'flex', alignItems: 'center', gap: 6, fontSize: 13.5, background: 'var(--accent)', color: 'var(--on-accent)' }}
             >
               <Icon icon="lucide:plus" width={13} />
               New project

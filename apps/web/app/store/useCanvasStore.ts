@@ -153,14 +153,14 @@ export const getInitialEdges = (): Edge[] => [
     id: 'e_sg_instance',
     source: 'aws_security_group.web_sg',
     target: 'aws_instance.web_server',
-    style: { stroke: '#6366F1', strokeWidth: 2.5 },
+    style: { stroke: '#FF6A3D', strokeWidth: 2.5 },
     animated: false,
     markerEnd: {
       type: MarkerType.Arrow,
       width: 12,
       height: 12,
       strokeWidth: 1.6,
-      color: '#6366F1',
+      color: '#FF6A3D',
     },
   },
   {
@@ -245,13 +245,13 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
                         ...edge,
                         label: label || undefined,
                         labelStyle: {
-                            fill: '#F1F5F9',
+                            fill: '#F5F5F6',
                             fontSize: 11,
                             fontWeight: 600,
                         },
                         labelBgStyle: {
-                            fill: '#0D0F16',
-                            stroke: '#1E2233',
+                            fill: '#17181C',
+                            stroke: '#2A2C33',
                             strokeWidth: 1,
                         },
                         labelBgPadding: [8, 4] as [number, number],
@@ -334,7 +334,7 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
           } else if (sourceTech === 'Target') {
             stroke = '#14B8A6';
           } else if (sourceTech === 'Terraform' && targetTech === 'Terraform') {
-            stroke = '#6366F1';
+            stroke = '#FF6A3D';
           } else if (sourceTech === 'Terraform' && targetTech === 'Ansible') {
             stroke = 'url(#grad-tf-ansible)';
             className = 'animate-dash-flow';

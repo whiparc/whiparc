@@ -2955,13 +2955,13 @@ function WorkspaceCanvas({ deployStatus, planStatus, peerCursors = {}, handleMou
       return {
         ...edge,
         labelStyle: edge.labelStyle || {
-          fill: '#F1F5F9',
+          fill: '#F5F5F6',
           fontSize: 11,
           fontWeight: 600,
         },
         labelBgStyle: edge.labelBgStyle || {
-          fill: '#0D0F16',
-          stroke: '#1E2233',
+          fill: '#17181C',
+          stroke: '#2A2C33',
           strokeWidth: 1,
         },
         labelBgPadding: edge.labelBgPadding || [8, 4],
@@ -3100,13 +3100,13 @@ function WorkspaceCanvas({ deployStatus, planStatus, peerCursors = {}, handleMou
             strokeWidth: 1.6,
           },
           labelStyle: {
-            fill: '#F1F5F9',
+            fill: '#F5F5F6',
             fontSize: 11,
             fontWeight: 600,
           },
           labelBgStyle: {
-            fill: '#0D0F16',
-            stroke: '#1E2233',
+            fill: '#17181C',
+            stroke: '#2A2C33',
             strokeWidth: 1,
           },
           labelBgPadding: [8, 4],
@@ -3158,7 +3158,7 @@ function WorkspaceCanvas({ deployStatus, planStatus, peerCursors = {}, handleMou
       <svg style={{ position: 'absolute', width: 0, height: 0 }}>
         <defs>
           <linearGradient id="grad-tf-ansible" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#6366F1" />
+            <stop offset="0%" stopColor="#FF6A3D" />
             <stop offset="100%" stopColor="#8B5CF6" />
           </linearGradient>
           <linearGradient id="grad-ansible-k8s" x1="0%" y1="0%" x2="100%" y2="0%">
