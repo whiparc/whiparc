@@ -58,7 +58,7 @@ interface Team {
 
 const ROLE_RANK: Record<ProjectMemberInfo['role'], number> = { ADMIN: 3, EDITOR: 2, VIEWER: 1 };
 const ROLE_STYLE: Record<ProjectMemberInfo['role'], { bg: string; fg: string; border: string }> = {
-  ADMIN: { bg: 'var(--accent)', fg: '#fff', border: 'none' },
+  ADMIN: { bg: 'var(--accent)', fg: 'var(--on-accent)', border: 'none' },
   EDITOR: { bg: 'var(--chip)', fg: 'var(--ink2)', border: 'none' },
   VIEWER: { bg: 'transparent', fg: 'var(--ink2)', border: '1px solid var(--line)' },
 };
@@ -175,7 +175,7 @@ export default function TeamPageV2() {
         <nav style={{ padding: '14px 10px', display: 'grid', gap: 2 }}>
           {NAV_ITEMS.map((item) => {
             const active = item.key === 'team';
-            const style: CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', fontSize: 14.5, color: active ? '#fff' : 'var(--ink2)', background: active ? 'var(--accent)' : 'transparent' };
+            const style: CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', fontSize: 14.5, color: active ? 'var(--on-accent)' : 'var(--ink2)', background: active ? 'var(--accent)' : 'transparent' };
             return (
               <Link key={item.key} href={item.href} className={active ? undefined : 'wp-team-navlink'} style={style}>
                 {item.icon}
@@ -187,7 +187,7 @@ export default function TeamPageV2() {
         <div style={{ marginTop: 'auto', padding: 12, borderTop: '1px solid var(--line)' }}>
           {isLoggedIn ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-              <span style={{ width: 26, height: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-hover)', color: '#fff', fontFamily: 'var(--font-display)', fontSize: 12 }}>
+              <span style={{ width: 26, height: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-hover)', color: 'var(--on-accent)', fontFamily: 'var(--font-display)', fontSize: 12 }}>
                 {user.name.slice(0, 2).toUpperCase()}
               </span>
               <div style={{ minWidth: 0 }}>
@@ -294,7 +294,7 @@ export default function TeamPageV2() {
                         <tr key={m.userId} className="wp-team-row">
                           <td style={{ padding: '9px 12px', borderBottom: '1px solid var(--line)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-                              <span style={{ width: 26, height: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: AVATAR_BGS[i % AVATAR_BGS.length], color: '#fff', fontFamily: 'var(--font-display)', fontSize: 11 }}>
+                              <span style={{ width: 26, height: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: AVATAR_BGS[i % AVATAR_BGS.length], color: 'var(--on-accent)', fontFamily: 'var(--font-display)', fontSize: 11 }}>
                                 {initialsOf(m.name)}
                               </span>
                               <div style={{ minWidth: 0 }}>

@@ -160,7 +160,7 @@ export default function CredentialsPageV2() {
         <nav style={{ padding: '14px 10px', display: 'grid', gap: 2 }}>
           {NAV_ITEMS.map((item) => {
             const active = item.key === 'credentials';
-            const style: CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', fontSize: 14.5, color: active ? '#fff' : 'var(--ink2)', background: active ? 'var(--accent)' : 'transparent' };
+            const style: CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', fontSize: 14.5, color: active ? 'var(--on-accent)' : 'var(--ink2)', background: active ? 'var(--accent)' : 'transparent' };
             return (
               <Link key={item.key} href={item.href} className={active ? undefined : 'wp-credentials-navlink'} style={style}>
                 {item.icon}
@@ -172,7 +172,7 @@ export default function CredentialsPageV2() {
         <div style={{ marginTop: 'auto', padding: 12, borderTop: '1px solid var(--line)' }}>
           {isLoggedIn ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-              <span style={{ width: 26, height: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-hover)', color: '#fff', fontFamily: 'var(--font-display)', fontSize: 12 }}>
+              <span style={{ width: 26, height: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-hover)', color: 'var(--on-accent)', fontFamily: 'var(--font-display)', fontSize: 12 }}>
                 {user.name.slice(0, 2).toUpperCase()}
               </span>
               <div style={{ minWidth: 0 }}>
@@ -239,7 +239,7 @@ export default function CredentialsPageV2() {
                   key={f.id}
                   type="button"
                   onClick={() => setCategoryFilter(f.id)}
-                  style={{ height: 30, padding: '0 13px', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 13, cursor: 'pointer', border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`, background: active ? 'var(--accent)' : 'transparent', color: active ? '#fff' : 'var(--ink2)' }}
+                  style={{ height: 30, padding: '0 13px', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 13, cursor: 'pointer', border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`, background: active ? 'var(--accent)' : 'transparent', color: active ? 'var(--on-accent)' : 'var(--ink2)' }}
                 >
                   {f.label}
                 </button>

@@ -144,7 +144,7 @@ export function WorkspaceHeaderV2({
               fontFamily: 'var(--font-display, inherit)',
               fontWeight: 600,
               background: activeView === t.key ? 'var(--accent)' : 'transparent',
-              color: activeView === t.key ? '#fff' : 'var(--ink2)',
+              color: activeView === t.key ? 'var(--on-accent)' : 'var(--ink2)',
               border: 0,
               borderLeft: t.key === 'canvas' ? undefined : '1px solid var(--line)',
             }}

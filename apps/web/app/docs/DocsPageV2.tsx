@@ -371,7 +371,7 @@ export function DocsPageV2() {
                       cursor: 'pointer',
                       fontFamily: 'inherit',
                       fontSize: 13.5,
-                      color: active ? '#fff' : 'var(--ink2)',
+                      color: active ? 'var(--on-accent)' : 'var(--ink2)',
                       background: active ? 'var(--accent)' : 'transparent',
                     }}
                   >

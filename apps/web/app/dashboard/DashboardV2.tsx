@@ -463,7 +463,7 @@ function DashboardContent() {
               gap: 10,
               padding: '8px 10px',
               fontSize: 14.5,
-              color: active ? '#fff' : 'var(--ink2)',
+              color: active ? 'var(--on-accent)' : 'var(--ink2)',
               background: active ? 'var(--accent)' : 'transparent',
             };
             return item.href.startsWith('/') ? (
@@ -480,7 +480,7 @@ function DashboardContent() {
 
         <div style={{ marginTop: 'auto', padding: 12, borderTop: '1px solid var(--line)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-            <span style={{ width: 26, height: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-hover)', color: '#fff', fontFamily: 'var(--font-display)', fontSize: 12 }}>
+            <span style={{ width: 26, height: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-hover)', color: 'var(--on-accent)', fontFamily: 'var(--font-display)', fontSize: 12 }}>
               {initials || 'U'}
             </span>
             <div style={{ minWidth: 0 }}>
@@ -575,7 +575,7 @@ function DashboardContent() {
               </div>
               <div style={{ marginTop: 18, display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 18 }}>
                 <div style={{ display: 'flex', gap: 11 }}>
-                  <span style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: myProjects.length > 0 ? 'var(--accent)' : 'transparent', border: myProjects.length > 0 ? undefined : '1px solid var(--accent-ink)', color: myProjects.length > 0 ? '#fff' : 'var(--accent-ink)', fontFamily: 'var(--font-mono-marketing)', fontSize: 11 }}>
+                  <span style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: myProjects.length > 0 ? 'var(--accent)' : 'transparent', border: myProjects.length > 0 ? undefined : '1px solid var(--accent-ink)', color: myProjects.length > 0 ? 'var(--on-accent)' : 'var(--accent-ink)', fontFamily: 'var(--font-mono-marketing)', fontSize: 11 }}>
                     {myProjects.length > 0 ? '✓' : '1'}
                   </span>
                   <div>
@@ -584,7 +584,7 @@ function DashboardContent() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 11 }}>
-                  <span style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: hasActiveAgent ? 'var(--accent)' : 'transparent', border: hasActiveAgent ? undefined : '1px solid var(--accent-ink)', color: hasActiveAgent ? '#fff' : 'var(--accent-ink)', fontFamily: 'var(--font-mono-marketing)', fontSize: 11 }}>
+                  <span style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: hasActiveAgent ? 'var(--accent)' : 'transparent', border: hasActiveAgent ? undefined : '1px solid var(--accent-ink)', color: hasActiveAgent ? 'var(--on-accent)' : 'var(--accent-ink)', fontFamily: 'var(--font-mono-marketing)', fontSize: 11 }}>
                     {hasActiveAgent ? '✓' : '2'}
                   </span>
                   <div>
@@ -593,7 +593,7 @@ function DashboardContent() {
                   </div>
                 </div>
                 <div style={{ display: 'flex', gap: 11 }}>
-                  <span style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: hasAnyRun ? 'var(--accent)' : 'transparent', border: hasAnyRun ? undefined : '1px solid var(--line)', color: hasAnyRun ? '#fff' : 'var(--ink2)', fontFamily: 'var(--font-mono-marketing)', fontSize: 11 }}>
+                  <span style={{ width: 22, height: 22, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: hasAnyRun ? 'var(--accent)' : 'transparent', border: hasAnyRun ? undefined : '1px solid var(--line)', color: hasAnyRun ? 'var(--on-accent)' : 'var(--ink2)', fontFamily: 'var(--font-mono-marketing)', fontSize: 11 }}>
                     {hasAnyRun ? '✓' : '3'}
                   </span>
                   <div>
@@ -782,14 +782,14 @@ function DashboardContent() {
                     <button
                       type="button"
                       onClick={() => setRunFilter('all')}
-                      style={{ padding: '5px 12px', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 13.5, cursor: 'pointer', border: 0, background: runFilter === 'all' ? 'var(--accent)' : 'transparent', color: runFilter === 'all' ? '#fff' : 'var(--ink2)' }}
+                      style={{ padding: '5px 12px', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 13.5, cursor: 'pointer', border: 0, background: runFilter === 'all' ? 'var(--accent)' : 'transparent', color: runFilter === 'all' ? 'var(--on-accent)' : 'var(--ink2)' }}
                     >
                       All
                     </button>
                     <button
                       type="button"
                       onClick={() => setRunFilter('failed')}
-                      style={{ padding: '5px 12px', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 13.5, cursor: 'pointer', border: 0, borderLeft: '1px solid var(--line)', background: runFilter === 'failed' ? 'var(--accent)' : 'transparent', color: runFilter === 'failed' ? '#fff' : 'var(--ink2)' }}
+                      style={{ padding: '5px 12px', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 13.5, cursor: 'pointer', border: 0, borderLeft: '1px solid var(--line)', background: runFilter === 'failed' ? 'var(--accent)' : 'transparent', color: runFilter === 'failed' ? 'var(--on-accent)' : 'var(--ink2)' }}
                     >
                       Failed only
                     </button>

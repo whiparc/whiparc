@@ -161,7 +161,7 @@ export default function ProjectsPageV2() {
         <nav style={{ padding: '14px 10px', display: 'grid', gap: 2 }}>
           {NAV_ITEMS.map((item) => {
             const active = item.key === 'projects';
-            const style: CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', fontSize: 14.5, color: active ? '#fff' : 'var(--ink2)', background: active ? 'var(--accent)' : 'transparent' };
+            const style: CSSProperties = { display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px', fontSize: 14.5, color: active ? 'var(--on-accent)' : 'var(--ink2)', background: active ? 'var(--accent)' : 'transparent' };
             return (
               <Link key={item.key} href={item.href} className={active ? undefined : 'wp-projects-navlink'} style={style}>
                 {item.icon}
@@ -174,7 +174,7 @@ export default function ProjectsPageV2() {
         <div style={{ marginTop: 'auto', padding: 12, borderTop: '1px solid var(--line)' }}>
           {isLoggedIn ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-              <span style={{ width: 26, height: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-hover)', color: '#fff', fontFamily: 'var(--font-display)', fontSize: 12 }}>
+              <span style={{ width: 26, height: 26, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-hover)', color: 'var(--on-accent)', fontFamily: 'var(--font-display)', fontSize: 12 }}>
                 {user.name.slice(0, 2).toUpperCase()}
               </span>
               <div style={{ minWidth: 0 }}>
@@ -263,7 +263,7 @@ export default function ProjectsPageV2() {
                     cursor: 'pointer',
                     border: `1px solid ${active ? 'var(--accent)' : 'var(--line)'}`,
                     background: active ? 'var(--accent)' : 'transparent',
-                    color: active ? '#fff' : 'var(--ink2)',
+                    color: active ? 'var(--on-accent)' : 'var(--ink2)',
                   }}
                 >
                   {f.label}
