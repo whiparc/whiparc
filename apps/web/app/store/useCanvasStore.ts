@@ -171,8 +171,11 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
     setSaveStatus: (saveStatus) => set({ saveStatus }),
     setVersion: (version) => set({ version }),
 
-    setSelectedNodeId: (id) => set({ selectedNodeId: id }),
-    setSelectedEdgeId: (id) => set({ selectedEdgeId: id }),
+    // The inspector shows one subject at a time, so a node and an edge can't be
+    // selected together: selecting either clears the other. (Passing null only
+    // clears its own side, so closing a panel doesn't disturb the other.)
+    setSelectedNodeId: (id) => set(id ? { selectedNodeId: id, selectedEdgeId: null } : { selectedNodeId: null }),
+    setSelectedEdgeId: (id) => set(id ? { selectedEdgeId: id, selectedNodeId: null } : { selectedEdgeId: null }),
     
     updateNodeData: (nodeId, newData) => {
         set((state) => ({
@@ -201,8 +204,17 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
                 // differs from what the connector currently shows is a user
                 // override; an empty stroke means "auto" (derived from the
                 // target node by BlueprintEdge).
-                const colorChanged = stroke !== (edgeCustomStroke(edge) ?? '');
+                const hadCustomStroke = edgeCustomStroke(edge) !== undefined;
+                const clearedColor = stroke === '' && hadCustomStroke; // the inspector's "Auto"
+                const colorChanged = !clearedColor && stroke !== (edgeCustomStroke(edge) ?? '');
                 const widthChanged = strokeWidth !== edgeStrokeWidth(edge);
+
+                const style = {
+                    ...edge.style,
+                    ...(colorChanged ? { stroke } : {}),
+                    ...(widthChanged ? { strokeWidth } : {}),
+                };
+                if (clearedColor) delete style.stroke;
 
                 return {
                     ...edge,
@@ -211,14 +223,11 @@ const useCanvasStore = create<CanvasState>((set, get) => ({
                     className: animated ? 'animate-dash-flow' : '',
                     data: {
                         ...edge.data,
+                        ...(clearedColor ? { customStroke: false } : {}),
                         ...(colorChanged ? { customStroke: true } : {}),
                         ...(widthChanged ? { customWidth: true } : {}),
                     },
-                    style: {
-                        ...edge.style,
-                        ...(colorChanged ? { stroke } : {}),
-                        ...(widthChanged ? { strokeWidth } : {}),
-                    },
+                    style,
                 };
             })
         }));

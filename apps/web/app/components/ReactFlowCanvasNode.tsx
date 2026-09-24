@@ -107,13 +107,11 @@ export default function ReactFlowCanvasNode({ id, data }: ReactFlowCanvasNodePro
   };
 
   return (
-    <div
-      onClick={(e) => {
-        e.stopPropagation();
-        setSelectedNodeId(id);
-      }}
-      className="select-none cursor-pointer"
-    >
+    // The click is deliberately NOT stopped here: React Flow's node wrapper
+    // handles it next (selection state + the workspace's onNodeClick, which
+    // clears any selected connection). Swallowing it left a previously
+    // selected connection active, so the inspector stayed on the connection.
+    <div onClick={() => setSelectedNodeId(id)} className="select-none cursor-pointer">
       <BlueprintNodeCard
         tech={data.tech}
         icon={data.icon}
