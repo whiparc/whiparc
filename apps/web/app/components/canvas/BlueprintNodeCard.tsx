@@ -20,6 +20,8 @@ export type NodeTag = {
 };
 
 interface BlueprintNodeCardProps {
+  // Defaults to the workspace node width; the landing page passes a fluid one.
+  width?: number | string;
   tech: string | undefined;
   icon: string;
   label: string;
@@ -36,6 +38,7 @@ interface BlueprintNodeCardProps {
 }
 
 export default function BlueprintNodeCard({
+  width = NODE_WIDTH,
   tech,
   icon,
   label,
@@ -55,7 +58,7 @@ export default function BlueprintNodeCard({
       data-active={isActive}
       title={description || undefined}
       style={{
-        width: NODE_WIDTH,
+        width,
         background: 'var(--panel)',
         // Selection is the border in the tech color plus an inset ring, which
         // reads as the mock's 2px border without shifting the layout.
@@ -74,6 +77,7 @@ export default function BlueprintNodeCard({
 
       {tag && (
         <span
+          className="wp-node-tag"
           title={tag.title}
           style={{
             position: 'absolute',
