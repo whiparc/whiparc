@@ -24,6 +24,9 @@ If you're picking your first issue and want the lowest-friction path,
 See the [README quickstart](README.md#quickstart) for the short version, or
 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for full setup detail (sandbox
 containers, OAuth app registration, running each service independently).
+Note that `npm run dev` starts its own API on port `8080`, so it cannot run
+alongside the Docker compose backends; DEVELOPMENT.md has a table of which
+combinations work together.
 
 ## Branching and PRs
 

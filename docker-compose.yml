@@ -1,3 +1,9 @@
+# Port 8080 (api) and 4566/2222/2223 (sandbox) are published on the host, so this
+# stack cannot run at the same time as `npm run dev` (which also starts an API on
+# 8080), docker-compose.hosted.yml, or sandbox/docker-compose.sandbox.yml. With
+# this stack running, start only the frontend: `npm run dev --workspace=web`.
+# See docs/DEVELOPMENT.md, "Choosing How to Run the Backend (Port 8080)".
+
 services:
   api:
     build:

@@ -41,6 +41,13 @@
 # project namespace lets both stacks run side by side safely.
 name: whiparc-hosted
 
+# NOTE: the separate project name above only isolates Compose's bookkeeping; it
+# does not avoid host port clashes. This stack still publishes 8080 (api), 9090
+# (agent-gateway) and 4566 (LocalStack), so it cannot run at the same time as
+# docker-compose.yml or `npm run dev` (which also starts an API on 8080). Run the
+# frontend with `npm run dev --workspace=web`. See docs/DEVELOPMENT.md,
+# "Choosing How to Run the Backend (Port 8080)".
+
 services:
   api:
     build:

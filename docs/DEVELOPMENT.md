@@ -94,6 +94,46 @@ Both servers run in one terminal and share Ctrl+C. If you only want one of
 them, run it directly: `npm run dev --workspace=web` or
 `npm run dev --workspace=api`.
 
+`npm run dev` binds the API to port `8080`, so it **cannot run at the same
+time as a Docker backend** (see
+[Choosing How to Run the Backend](#choosing-how-to-run-the-backend-port-8080)
+below). If you use Docker for the backend, start only the frontend with
+`npm run dev --workspace=web`.
+
+## Choosing How to Run the Backend (Port 8080)
+
+The frontend always calls the API at `http://localhost:8080` (override with
+`NEXT_PUBLIC_API_URL`), and it does not care which backend answers. But three
+different commands all publish port `8080`, so on one machine you can run
+**only one of them at a time**:
+
+| Backend you want | Start the backend | Start the frontend | Database |
+| :--- | :--- | :--- | :--- |
+| Native Go API (default for contributors) | `npm run dev` starts it for you | `npm run dev` (same command) | SQLite (`apps/api/data/dev.db`) |
+| Docker API, SQLite | `docker compose up -d` | `npm run dev --workspace=web` | SQLite on a Docker volume |
+| Docker API, hosted shape | `docker compose -f docker-compose.hosted.yml up -d` | `npm run dev --workspace=web` | Postgres (bundled container) |
+
+Rules of thumb:
+
+- **`npm run dev` plus a Docker backend fails** with a "port is already
+  allocated" / "address already in use" error on `8080` (whichever started
+  second loses). Use `npm run dev --workspace=web` whenever Docker owns the
+  backend.
+- **`docker-compose.yml` and `docker-compose.hosted.yml` also cannot run
+  together**: both publish `8080` and LocalStack's `4566`. Stop one first
+  (`docker compose down`, or `docker compose -f docker-compose.hosted.yml down`).
+- **The sandbox stack** (`sandbox/docker-compose.sandbox.yml`, ports `2222`,
+  `2223`, `4566`) overlaps with both compose files' LocalStack and SSH
+  containers. Use it with the native backend; the compose files bring their own.
+- **The hosted stack refuses to start without `JWT_SECRET` and `FRONTEND_URL`**
+  (see
+  [Testing Against the Hosted Stack](#testing-against-the-hosted-stack-postgres-locally)).
+- Only the Docker stacks' API runs in a container. The Next.js frontend is
+  never containerized by either compose file, so it is always started with npm.
+
+To find what currently owns the port: `docker ps` for containers, or
+`netstat -ano | findstr :8080` (Windows) / `lsof -i :8080` (macOS, Linux).
+
 ## Running the Backend Server Separately
 
 If you are focusing on backend development or debugging the Go runner, you
@@ -126,12 +166,17 @@ By default:
 
 ## Running Everything inside Docker
 
-To run the entire ecosystem (Next.js web client, Go API, database, and
-DevOps sandbox) in containerized form:
+To run the backend (Go API, LocalStack and the SSH sandbox targets) in
+containers:
 
 ```bash
 docker compose up --build
 ```
+
+This does not include the Next.js frontend, which neither compose file
+defines. Start it separately with `npm run dev --workspace=web`; do not use
+plain `npm run dev` here, since it would try to start a second API on port
+`8080` (see [Choosing How to Run the Backend](#choosing-how-to-run-the-backend-port-8080)).
 
 This also defaults to the SQLite file (on the `api-db-data` named volume) —
 `docker-compose.yml` does not set `DB_DRIVER`.
@@ -153,6 +198,10 @@ nothing external to provision:
 ```bash
 docker compose -f docker-compose.hosted.yml up --build
 ```
+
+Like the default compose file, this publishes port `8080` for the API, so
+stop `docker compose up` and any `npm run dev` first, and run the frontend
+with `npm run dev --workspace=web`.
 
 `DB_DRIVER=postgres` is fixed in the compose file itself. `DATABASE_URL`
 defaults to the bundled `postgres` service; set `DATABASE_URL` in a `.env`
