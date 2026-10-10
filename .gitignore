@@ -71,3 +71,12 @@ next-env.d.ts
 
 # mcp for assistant
 /.mcp*
+
+# compiled API binaries (build outputs, not source)
+/apps/api/api
+/apps/api/api.exe
+*.exe
+
+# Python bytecode
+__pycache__/
+*.pyc

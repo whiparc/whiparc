@@ -802,7 +802,7 @@ export function DocsPageV2() {
                   {activeTab === 'windows' && (
                     <>
                       <p style={bodyStyle}>
-                        <strong style={{ color: 'var(--ink)' }}>Recommended — winget.</strong> Windows Package Manager downloads and verifies the installer itself, so you won&apos;t see a SmartScreen prompt, and updates are one command:
+                        <strong style={{ color: 'var(--ink)' }}>Recommended — winget.</strong> Windows Package Manager downloads and verifies the installer for you, and updates are one command. While the installer is unsigned, Windows SmartScreen may still ask you to confirm (More info → Run anyway):
                       </p>
                       <CodeBlock code="winget install Whiparc.CLI" />
                       <p style={bodyStyle}>Or install it manually from the downloaded installer:</p>
