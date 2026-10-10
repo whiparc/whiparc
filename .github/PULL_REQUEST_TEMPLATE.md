@@ -36,8 +36,10 @@
 
 ## Checklist
 
-- [ ] Lint/build/tests pass locally (`npm run lint`/`npm run build` for
-      `apps/web`, `go vet ./... && go test ./...` for any Go module touched)
+- [ ] Lint/build/tests pass locally (`npm run lint`, `npm test` and
+      `npm run build` for `apps/web`, `go vet ./... && go test ./...` for any
+      Go module touched)
+- [ ] The PR title follows Conventional Commits (`type(scope): description`)
 - [ ] Docs updated if behavior or setup steps changed (including
       `apps/web/app/docs/DocsPageV2.tsx` for CLI changes)
 - [ ] No secrets, `.env` files, or build outputs committed

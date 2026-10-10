@@ -1,0 +1,50 @@
+name: PR title
+
+# Squash-merge turns the PR title into the commit message, so the title must
+# follow Conventional Commits: https://www.conventionalcommits.org/
+# Runs without secrets and without checking out code, so it is safe for forks.
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches:
+      - main
+      - dev
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Conventional Commit title
+    runs-on: ubuntu-latest
+    # Dependabot titles are configured in .github/dependabot.yml; skip any that
+    # predate that configuration.
+    if: github.actor != 'dependabot[bot]'
+    steps:
+      - name: Check PR title
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|chore|refactor|test|perf|build|ci|style|revert)(\([a-z0-9._/-]+\))?!?: .+'
+          if [[ "$PR_TITLE" =~ $pattern ]]; then
+            echo "OK: $PR_TITLE"
+            exit 0
+          fi
+          echo "::error title=Invalid PR title::\"$PR_TITLE\" does not follow Conventional Commits."
+          {
+            echo "### PR title needs a Conventional Commits prefix"
+            echo
+            echo "Got: \`$PR_TITLE\`"
+            echo
+            echo "Expected: \`type(scope): description\`, where type is one of"
+            echo "feat, fix, docs, chore, refactor, test, perf, build, ci, style, revert."
+            echo "The scope is optional. Examples:"
+            echo
+            echo "- \`feat(web): add subnet node to the library\`"
+            echo "- \`fix(api): reject empty project names\`"
+            echo "- \`docs: clarify sandbox setup\`"
+            echo
+            echo "Edit the title on the PR; this check re-runs automatically."
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1

@@ -56,7 +56,7 @@ If you are picking your first issue and want the lowest-friction path,
 
 | You want to change | Look in | Check it with |
 | :--- | :--- | :--- |
-| Canvas, dashboard, pages, generated Terraform/Ansible/K8s output | `apps/web/` ([notes](apps/web/README.md)) | `cd apps/web && npm run lint && npm run build` |
+| Canvas, dashboard, pages, generated Terraform/Ansible/K8s output | `apps/web/` ([notes](apps/web/README.md)) | `cd apps/web && npm run lint && npm test && npm run build` |
 | API, auth, runner, credential vault, importer | `apps/api/` ([notes](apps/api/README.md)) | `cd apps/api && go vet ./... && go test ./...` |
 | The `whiparc` CLI and installers | `apps/cli/`, `installers/` ([notes](apps/cli/README.md)) | `cd apps/cli && go vet ./... && go test ./...` |
 | Local sandbox containers | `sandbox/` | `docker compose -f sandbox/docker-compose.sandbox.yml up -d` |
@@ -111,12 +111,13 @@ Compose.
   review and more likely to get stuck.
 - Fill out the PR template. It exists so reviewers do not have to
   reconstruct context you already have.
-- CI (`.github/workflows/ci.yml`) must pass: lint + build for the web
-  workspace, `go build`/`go vet`/`go test` for each Go module. Run the
-  relevant commands locally before pushing:
+- CI (`.github/workflows/ci.yml`) must pass: lint, unit tests, build and
+  Playwright smoke tests for the web workspace, and
+  `go build`/`go vet`/`go test` for each Go module. Run the relevant
+  commands locally before pushing:
   ```bash
-  # web
-  cd apps/web && npm run lint && npm run build
+  # web (add `npm run test:e2e` if you touched routing, auth or layout)
+  cd apps/web && npm run lint && npm test && npm run build
 
   # any Go module (apps/api, apps/cli)
   cd apps/api && go vet ./... && go test ./...
@@ -126,20 +127,27 @@ Compose.
 
 ## Commit style
 
-New commits should follow [Conventional Commits](https://www.conventionalcommits.org/)
-(`feat:`, `fix:`, `docs:`, `chore:`, `refactor:`, `test:`) going forward;
-this is not retroactively enforced on existing history, but it makes future
-changelog generation possible. Squash-merge is fine; the PR title becomes
-the commit message, so make it descriptive. Use a scope when it helps, for
-example `fix(api): reject empty project names`.
+Commits and PR titles follow [Conventional Commits](https://www.conventionalcommits.org/):
+`type(scope): description`, where the type is one of `feat`, `fix`, `docs`,
+`chore`, `refactor`, `test`, `perf`, `build`, `ci`, `style` or `revert`. The
+scope is optional and lowercase, for example `fix(api): reject empty project
+names`. Add `!` before the colon for a breaking change.
+
+PRs are squash-merged and the PR title becomes the commit message, so make it
+descriptive. A CI check (`PR title`) validates the title and re-runs when you
+edit it; individual commits inside your branch are not checked. This is not
+retroactively enforced on existing history, but it makes changelog generation
+possible.
 
 ## What reviewers look for
 
 - **One purpose.** The PR does what its title says and nothing else.
 - **It works.** You ran it, and the PR description says how. For UI changes,
   include a screenshot or short recording.
-- **Tests.** Behavior changes in Go come with a `_test.go` case. The web
-  workspace has no unit-test runner yet, so describe your manual test steps.
+- **Tests.** Behavior changes in Go come with a `_test.go` case. Changes to
+  the web compilers or stores come with a Vitest case (see
+  [apps/web/README.md](apps/web/README.md#check-your-change)). For UI the
+  tests do not cover, describe your manual test steps.
 - **Docs move with code.** If you change setup steps, commands, flags or
   config keys, update the matching doc in the same PR. CLI changes also
   update `apps/web/app/docs/DocsPageV2.tsx`.
