@@ -1,12 +1,19 @@
 # winget package for the Whiparc CLI
 
 These three files are the [Windows Package Manager](https://learn.microsoft.com/en-us/windows/package-manager/)
-manifest for package `Whiparc.CLI`. winget downloads the installer itself, so
-the file never carries the browser "Mark of the Web" and Windows SmartScreen
-does not show "Windows protected your PC" for `winget install` users. It is a
-free alternative to a paid code-signing certificate for command-line users;
-people downloading the `.exe` from a browser are not covered (see
-[docs/RELEASE_SIGNING.md](../../../docs/RELEASE_SIGNING.md)).
+manifest for package `Whiparc.CLI`. It gives command-line users a one-command
+install and update path without paying for a code-signing certificate.
+
+It does **not** reliably remove the Windows SmartScreen prompt. Installing the
+unsigned installer from a local manifest (`winget install --manifest`) did show
+"Windows protected your PC" (tested 2026-10-10). Reports suggest winget skips the
+check for installers from its default community source, but that is unconfirmed
+by Microsoft, and unsigned installers have been reported blocked even from the
+source. Only code signing removes the prompt reliably, and SmartScreen reputation
+for an unsigned file restarts with every new release (see
+[docs/RELEASE_SIGNING.md](../../../docs/RELEASE_SIGNING.md)). Once the package is
+live in `winget-pkgs`, test `winget install Whiparc.CLI` from the default source
+and update this paragraph with what you observe.
 
 | File | Purpose |
 | --- | --- |
