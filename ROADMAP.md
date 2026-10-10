@@ -1,23 +1,27 @@
 # Roadmap
 
-## Known mock / non-implemented pieces
+This file tracks **known gaps between the UI and what is actually wired
+up**, so contributors can find work that is clearly scoped. The live backlog
+and in-flight work are in
+[GitHub Issues](https://github.com/whiparc/whiparc/issues) and
+[Discussions](https://github.com/whiparc/whiparc/discussions).
 
-To help contributors target their efforts, the following UI and logic
-blocks in the project are mock placeholders and will need to be developed:
+## Known placeholders
 
-1. **OS Environment Selector (Header)**: Mocked. The Linux, macOS, and
-   Windows selectors toggle component local state but have no effect on
-   code generation options or target deployment scripts.
+These pieces render something that is not backed by real data or behavior
+yet. Each is a good, self-contained first contribution.
 
-This list is intentionally minimal — for the current backlog and in-flight
-work, see [GitHub Issues](https://github.com/whiparc/whiparc/issues) and
-[Discussions](https://github.com/whiparc/whiparc/discussions) rather than
-this file, which only tracks known gaps between the UI and what's actually
-wired up.
+| Where | What is not real | Suggested direction |
+| :--- | :--- | :--- |
+| Dashboard overview, "Cloud spend this month" card (`apps/web/app/dashboard/DashboardV2.tsx`) | The amount and the "N of M runs were local" caption are hard-coded | Derive the caption from the runs already fetched for the dashboard, and either compute spend or remove the card until it can be |
+| Right panel, security audit (`apps/web/app/components/RightPanel.tsx`) | Shows "Security audit coming soon" | Implement basic checks over the canvas graph (for example open ports, public storage), or hide the section |
+| Template catalog, "Contribute" action | Not wired to a contribution workflow | Define the workflow in a Discussion first |
 
-## Contributing to the roadmap
+If you fix one, remove its row in the same pull request.
 
-Have an idea that isn't listed here? Open a
-[feature request](.github/ISSUE_TEMPLATE/feature_request.yml) rather than
-editing this file directly — issues are easier to discuss and track than a
-markdown list.
+## How to propose something new
+
+Open a [feature request](.github/ISSUE_TEMPLATE/feature_request.yml) or start
+a [Discussion](https://github.com/whiparc/whiparc/discussions) rather than
+editing this file directly. Issues are easier to discuss and track than a
+Markdown list.

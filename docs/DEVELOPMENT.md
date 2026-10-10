@@ -3,10 +3,28 @@
 Full local setup instructions for Whiparc. For the condensed version,
 see the [README quickstart](../README.md#quickstart).
 
+## Contents
+
+- [Prerequisites](#prerequisites)
+- [Developer sandbox setup](#developer-sandbox-setup)
+- [Social login setup](#social-login-google--github-setup)
+- [Running the full stack](#running-the-full-stack-frontend--backend)
+- [Choosing how to run the backend](#choosing-how-to-run-the-backend-port-8080)
+- [Running the tests](#running-the-tests)
+- [Troubleshooting](#troubleshooting)
+- [Running the backend separately](#running-the-backend-server-separately)
+- [Running everything inside Docker](#running-everything-inside-docker)
+- [Testing against the hosted stack](#testing-against-the-hosted-stack-postgres-locally)
+- [CLI configuration](#cli-configuration)
+- [CLI releases and installers](#cli-releases-and-installers)
+- [CI](#ci)
+
+For how the pieces fit together, read [ARCHITECTURE.md](ARCHITECTURE.md).
+
 ## Prerequisites
 
-- Node.js (v18+)
-- Go (v1.22+)
+- Node.js 20.9 or newer (CI runs Node 20; Next.js 16 does not support older versions)
+- Go 1.26 or newer (see the `go` line in `apps/api/go.mod` and `apps/cli/go.mod`)
 - Docker and Docker Compose
 
 ## Developer Sandbox Setup
@@ -90,6 +108,10 @@ web app. Go must be installed (see Prerequisites). Environment variables you
 export in the shell reach both
 processes; the API does not read `.env` itself.
 
+On first run, open `http://localhost:3000`, create an account, and use the
+verification link the API prints to its terminal (no mail provider is
+configured locally, so nothing is emailed).
+
 Both servers run in one terminal and share Ctrl+C. If you only want one of
 them, run it directly: `npm run dev --workspace=web` or
 `npm run dev --workspace=api`.
@@ -133,6 +155,36 @@ Rules of thumb:
 
 To find what currently owns the port: `docker ps` for containers, or
 `netstat -ano | findstr :8080` (Windows) / `lsof -i :8080` (macOS, Linux).
+
+## Running the Tests
+
+| Area | Command | Notes |
+| :--- | :--- | :--- |
+| Web | `cd apps/web && npm run lint && npm run build` | No unit-test runner yet; the build type-checks the app |
+| API | `cd apps/api && go vet ./... && go test ./...` | Postgres integration tests are skipped unless `TEST_DATABASE_URL` is set |
+| CLI | `cd apps/cli && go vet ./... && go test ./...` | |
+
+These are what CI runs (see [CI](#ci)). To run the API's Postgres tests
+locally, start a disposable database and set the variable:
+
+```bash
+docker run --rm -d --name whiparc-test-pg -p 5432:5432 \
+  -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=whiparc_test postgres:16-alpine
+export TEST_DATABASE_URL="postgres://postgres:postgres@localhost:5432/whiparc_test?sslmode=disable"
+cd apps/api && go test ./...
+```
+
+## Troubleshooting
+
+| Symptom | Likely cause and fix |
+| :--- | :--- |
+| `address already in use` or `port is already allocated` on `8080` | Another backend owns the port. See [Choosing how to run the backend](#choosing-how-to-run-the-backend-port-8080). |
+| The first page load takes a minute | Normal: Next.js compiles routes on demand in dev mode. |
+| `go run main.go` fails with undefined symbols | The package spans many files. Run `go run .` from `apps/api`. |
+| The web app cannot reach the API | Confirm the API is up on `http://localhost:8080`, or set `NEXT_PUBLIC_API_URL`. |
+| Sign-up works but no email arrives | Expected locally. The verification link is printed in the API terminal. |
+| Deploys fail immediately | Start the sandbox (`docker compose -f sandbox/docker-compose.sandbox.yml up -d`) and make sure `sandbox/id_rsa` exists. |
+| `npm install` errors about the Node version | Use Node.js 20.9 or newer. |
 
 ## Running the Backend Server Separately
 
