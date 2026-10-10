@@ -23,7 +23,7 @@ For how the pieces fit together, read [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Prerequisites
 
-- Node.js 20.9 or newer (CI runs Node 20; Next.js 16 does not support older versions)
+- Node.js 20.9 or newer to run the app (CI runs Node 20; Next.js 16 does not support older versions). The web unit tests (Vite) need 20.19 or newer.
 - Go 1.26 or newer (see the `go` line in `apps/api/go.mod` and `apps/cli/go.mod`)
 - Docker and Docker Compose
 
@@ -160,7 +160,8 @@ To find what currently owns the port: `docker ps` for containers, or
 
 | Area | Command | Notes |
 | :--- | :--- | :--- |
-| Web | `cd apps/web && npm run lint && npm run build` | No unit-test runner yet; the build type-checks the app |
+| Web | `cd apps/web && npm run lint && npm test && npm run build` | Vitest unit tests; the build type-checks the app |
+| Web e2e | `cd apps/web && npm run test:e2e` | Playwright smoke tests; run `npx playwright install chromium` once. See [apps/web/README.md](../apps/web/README.md#check-your-change) |
 | API | `cd apps/api && go vet ./... && go test ./...` | Postgres integration tests are skipped unless `TEST_DATABASE_URL` is set |
 | CLI | `cd apps/cli && go vet ./... && go test ./...` | |
 
@@ -379,7 +380,17 @@ matching section and its entries in `NAV_SECTIONS`, `SECTION_TOC` and
 
 ## CI
 
-Pull requests run `.github/workflows/ci.yml` (lint/build for `apps/web`,
-`go build`/`go vet`/`go test` for each Go module) and
-`.github/workflows/codeql.yml` (static analysis). Run the same commands
-locally before pushing — see [CONTRIBUTING.md](../CONTRIBUTING.md).
+Pull requests run:
+
+- `.github/workflows/ci.yml`: lint, unit tests and build for `apps/web`, the
+  Playwright smoke tests against a production build, and
+  `go build`/`go vet`/`go test` for each Go module.
+- `.github/workflows/pr-title.yml`: checks that the PR title follows
+  [Conventional Commits](https://www.conventionalcommits.org/), because the
+  title becomes the squash-merge commit message.
+- `.github/workflows/codeql.yml`: static analysis.
+
+Run the same commands locally before pushing; see
+[CONTRIBUTING.md](../CONTRIBUTING.md). Dependabot opens grouped weekly PRs for
+Go modules and GitHub Actions (minor and patch updates together, majors
+separately); see `.github/dependabot.yml`.

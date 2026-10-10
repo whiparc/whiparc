@@ -35,12 +35,30 @@ See [docs/DEVELOPMENT.md](../../docs/DEVELOPMENT.md) for the backend options.
 ```bash
 cd apps/web
 npm run lint
+npm test
 npm run build
 ```
 
-CI runs the same two commands. There is no unit-test runner yet, so describe
-your manual test steps in the pull request (and add a screenshot for visual
-changes).
+`npm test` runs the [Vitest](https://vitest.dev) unit tests, which live next to
+the code in `__tests__/` folders (for example `app/lib/__tests__/` covers the
+Terraform and Ansible compilers). Use `npm run test:watch` while developing.
+
+Playwright smoke tests in `e2e/` check that the main routes render and that
+signed-out visitors are sent to login. They need only the web app, not the API:
+
+```bash
+npx playwright install chromium   # once
+npm run test:e2e
+```
+
+Playwright starts `npm run dev` itself, or reuses a server already running on
+port 3000. The first request to each route compiles it, so the first run is
+slow. If you already have Chrome installed, `PLAYWRIGHT_CHANNEL=chrome npm run test:e2e`
+skips the browser download.
+
+CI runs lint, unit tests, the build and the e2e smoke tests. Add a unit test
+for any change to a compiler or store, and describe manual steps (with a
+screenshot for visual changes) for anything the tests do not cover.
 
 ## Layout
 

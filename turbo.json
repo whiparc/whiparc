@@ -10,6 +10,7 @@
       "persistent": true,
       "passThroughEnv": ["*"]
     },
-    "lint": {}
+    "lint": {},
+    "test": {}
   }
 }
