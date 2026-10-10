@@ -83,6 +83,57 @@ This uses Turborepo to run:
 - Next.js frontend at `http://localhost:3000`
 - Go API backend at `http://localhost:8080`
 
+Turborepo only runs npm workspace packages. `apps/api` is a Go module, not a
+JavaScript package, so it has a stub `apps/api/package.json` whose only job is
+a `dev` script (`go run .`) that lets this one command start it alongside the
+web app. Go must be installed (see Prerequisites). Environment variables you
+export in the shell reach both
+processes; the API does not read `.env` itself.
+
+Both servers run in one terminal and share Ctrl+C. If you only want one of
+them, run it directly: `npm run dev --workspace=web` or
+`npm run dev --workspace=api`.
+
+`npm run dev` binds the API to port `8080`, so it **cannot run at the same
+time as a Docker backend** (see
+[Choosing How to Run the Backend](#choosing-how-to-run-the-backend-port-8080)
+below). If you use Docker for the backend, start only the frontend with
+`npm run dev --workspace=web`.
+
+## Choosing How to Run the Backend (Port 8080)
+
+The frontend always calls the API at `http://localhost:8080` (override with
+`NEXT_PUBLIC_API_URL`), and it does not care which backend answers. But three
+different commands all publish port `8080`, so on one machine you can run
+**only one of them at a time**:
+
+| Backend you want | Start the backend | Start the frontend | Database |
+| :--- | :--- | :--- | :--- |
+| Native Go API (default for contributors) | `npm run dev` starts it for you | `npm run dev` (same command) | SQLite (`apps/api/data/dev.db`) |
+| Docker API, SQLite | `docker compose up -d` | `npm run dev --workspace=web` | SQLite on a Docker volume |
+| Docker API, hosted shape | `docker compose -f docker-compose.hosted.yml up -d` | `npm run dev --workspace=web` | Postgres (bundled container) |
+
+Rules of thumb:
+
+- **`npm run dev` plus a Docker backend fails** with a "port is already
+  allocated" / "address already in use" error on `8080` (whichever started
+  second loses). Use `npm run dev --workspace=web` whenever Docker owns the
+  backend.
+- **`docker-compose.yml` and `docker-compose.hosted.yml` also cannot run
+  together**: both publish `8080` and LocalStack's `4566`. Stop one first
+  (`docker compose down`, or `docker compose -f docker-compose.hosted.yml down`).
+- **The sandbox stack** (`sandbox/docker-compose.sandbox.yml`, ports `2222`,
+  `2223`, `4566`) overlaps with both compose files' LocalStack and SSH
+  containers. Use it with the native backend; the compose files bring their own.
+- **The hosted stack refuses to start without `JWT_SECRET` and `FRONTEND_URL`**
+  (see
+  [Testing Against the Hosted Stack](#testing-against-the-hosted-stack-postgres-locally)).
+- Only the Docker stacks' API runs in a container. The Next.js frontend is
+  never containerized by either compose file, so it is always started with npm.
+
+To find what currently owns the port: `docker ps` for containers, or
+`netstat -ano | findstr :8080` (Windows) / `lsof -i :8080` (macOS, Linux).
+
 ## Running the Backend Server Separately
 
 If you are focusing on backend development or debugging the Go runner, you
@@ -98,9 +149,10 @@ can run the API server independently:
    cd apps/api
    ```
 
-3. Run the Go server:
+3. Run the Go server (the package spans several files, so run `.`, not
+   `main.go`):
    ```bash
-   go run main.go
+   go run .
    ```
 
 By default:
@@ -114,12 +166,17 @@ By default:
 
 ## Running Everything inside Docker
 
-To run the entire ecosystem (Next.js web client, Go API, database, and
-DevOps sandbox) in containerized form:
+To run the backend (Go API, LocalStack and the SSH sandbox targets) in
+containers:
 
 ```bash
 docker compose up --build
 ```
+
+This does not include the Next.js frontend, which neither compose file
+defines. Start it separately with `npm run dev --workspace=web`; do not use
+plain `npm run dev` here, since it would try to start a second API on port
+`8080` (see [Choosing How to Run the Backend](#choosing-how-to-run-the-backend-port-8080)).
 
 This also defaults to the SQLite file (on the `api-db-data` named volume) —
 `docker-compose.yml` does not set `DB_DRIVER`.
@@ -142,11 +199,32 @@ nothing external to provision:
 docker compose -f docker-compose.hosted.yml up --build
 ```
 
+Like the default compose file, this publishes port `8080` for the API, so
+stop `docker compose up` and any `npm run dev` first, and run the frontend
+with `npm run dev --workspace=web`.
+
 `DB_DRIVER=postgres` is fixed in the compose file itself. `DATABASE_URL`
 defaults to the bundled `postgres` service; set `DATABASE_URL` in a `.env`
 file alongside this compose file only if you deliberately want to point at
 something else instead (a real scratch Supabase project, say) — see
 `.env.example`.
+
+Because this stack runs on Postgres, the API treats it as a hosted
+deployment and **refuses to start** unless `JWT_SECRET` and `FRONTEND_URL`
+are set to real values (see `apps/api/config_check.go`) — otherwise it would
+sign sessions with the development key from the public source tree and accept
+any CORS/WebSocket origin. Put both in the `.env` file next to the compose
+file (`openssl rand -base64 32` for the secret; `http://localhost:3000` is a
+fine `FRONTEND_URL` locally). For a purely throwaway run you can instead set
+`WHIPARC_ALLOW_INSECURE_DEV=true` in that `.env`; the API logs a warning and
+skips the check. Never set it on a real deployment.
+
+Per-IP rate limits (signup, login, forgot-password) key on the client IP, and
+only believe `X-Forwarded-For` / `X-Real-IP` when the direct peer is a
+trusted proxy. By default loopback and private ranges are trusted (the Caddy
+reverse proxy in `deploy/Caddyfile` reaches the container over Docker's
+private bridge); set `TRUSTED_PROXY_CIDRS` to a comma-separated CIDR list to
+narrow that, or to `none` when the API is exposed with no proxy in front.
 
 On first run, the bundled `postgres` service's `initdb` can appear to hang
 at "performing post-bootstrap initialization" for several minutes with
