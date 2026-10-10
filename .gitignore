@@ -89,3 +89,6 @@ __pycache__/
 # Written by `next dev` (agentRules); the root AGENTS.md is the source of truth
 /apps/web/AGENTS.md
 /apps/web/CLAUDE.md
+
+# Locally installed agent skills (third-party tooling; reinstall via skills-lock.json)
+/.agents/
