@@ -7,8 +7,10 @@
     },
     "dev": {
       "cache": false,
-      "persistent": true
+      "persistent": true,
+      "passThroughEnv": ["*"]
     },
-    "lint": {}
+    "lint": {},
+    "test": {}
   }
 }
