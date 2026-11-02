@@ -42,6 +42,7 @@ import { ProductTour } from '../components/ProductTour';
 import { getWorkspaceTourSteps } from './workspaceTour';
 import { LEGACY_TOKEN_SCOPE_STYLE } from '../components/ui/legacy-token-scope';
 import { WorkspaceHeaderV2, type WorkspaceView } from './WorkspaceHeaderV2';
+import AIGeneratePanel from './AIGeneratePanel';
 import { LibraryPanelV2 } from './LibraryPanelV2';
 import { ConsoleBar } from './ConsoleBar';
 import { ProjectVariablesView } from './ProjectVariablesView';
@@ -4030,6 +4031,7 @@ function WorkspaceContent() {
               onGcpTargetAdded={() => setShowGcpNotice(true)}
             />
             <GcpComingSoonDialog isOpen={showGcpNotice} onClose={() => setShowGcpNotice(false)} />
+            <AIGeneratePanel projectId={selectedProject} token={token} readOnly={isPipelineBusy || saveStatus === 'readonly'} />
 
             <div
               data-tour="sandbox"
