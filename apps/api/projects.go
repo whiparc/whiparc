@@ -5,12 +5,14 @@ import (
 	"api/vault"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/gorilla/websocket"
 )
@@ -638,6 +640,29 @@ func handleMe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// maxDisplayNameLen caps users.name. Signup and profile edits share it so the
+// two name-setting paths cannot drift apart again.
+const maxDisplayNameLen = 100
+
+// validateDisplayName checks an already-trimmed display name: non-empty, at
+// most maxDisplayNameLen bytes, and free of control characters (newlines and
+// the like have no place in a name that is echoed into JWT claims, activity
+// feeds and email subjects).
+func validateDisplayName(name string) error {
+	if name == "" {
+		return errors.New("Name cannot be empty")
+	}
+	if len(name) > maxDisplayNameLen {
+		return fmt.Errorf("Name is too long (%d characters max)", maxDisplayNameLen)
+	}
+	for _, r := range name {
+		if unicode.IsControl(r) {
+			return errors.New("Name contains invalid characters")
+		}
+	}
+	return nil
+}
+
 // PATCH /api/auth/profile — updates the caller's own display name and/or
 // avatar URL (product-memory 08.5 item G2 follow-up). Fields are optional
 // and independently updatable: omitting `avatar_url` entirely leaves it
@@ -672,12 +697,8 @@ func handleUpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 	if payload.Name != nil {
 		trimmed := strings.TrimSpace(*payload.Name)
-		if trimmed == "" {
-			http.Error(w, "Name cannot be empty", http.StatusBadRequest)
-			return
-		}
-		if len(trimmed) > 100 {
-			http.Error(w, "Name is too long (100 characters max)", http.StatusBadRequest)
+		if err := validateDisplayName(trimmed); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 		payload.Name = &trimmed
