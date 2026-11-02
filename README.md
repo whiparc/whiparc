@@ -96,8 +96,9 @@ Compose.
 # 1. Generate the sandbox SSH keypair (skip if you already have one)
 ssh-keygen -t rsa -b 4096 -f sandbox/id_rsa -N ""
 
-# 2. Start the local DevOps sandbox (LocalStack + SSH targets)
+# 2. Start the local DevOps sandbox (SSH targets) and LocalStack (AWS mock)
 docker compose -f sandbox/docker-compose.sandbox.yml up -d
+docker compose up -d localstack
 
 # 3. Install dependencies and start the app
 npm install

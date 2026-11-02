@@ -53,6 +53,7 @@ interface AuthState {
   uploadAvatar: (image: Blob) => Promise<{ success: boolean; error?: string }>;
   removeAvatar: () => Promise<{ success: boolean; error?: string }>;
   deleteAccount: (password: string, confirmEmail: string) => Promise<{ success: boolean; error?: string; blockers?: { team_id: string; team_name: string; reason: string }[] }>;
+  exportAccountData: () => Promise<{ success: boolean; error?: string }>;
   requestEmailChange: (newEmail: string, currentPassword: string) => Promise<{ success: boolean; message?: string; error?: string }>;
   confirmEmailChange: (token: string) => Promise<{ success: boolean; email?: string; error?: string }>;
 }
@@ -412,6 +413,33 @@ export const useAuthStore = create<AuthState>()(
           return { success: true };
         } catch (err: unknown) {
           return { success: false, error: networkErrorMessage(err, 'Failed to delete account') };
+        }
+      },
+
+      exportAccountData: async () => {
+        const token = get().token;
+        if (!token) return { success: false, error: 'Please sign in first.' };
+        try {
+          const res = await fetch(`${API_URL}/api/auth/export`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (!res.ok) {
+            const errText = await res.text();
+            throw new Error(errText.trim() || 'Failed to export your data');
+          }
+          // The endpoint needs the bearer header, so a plain <a href> cannot
+          // download it: fetch the file, then hand the blob to the browser.
+          const url = URL.createObjectURL(await res.blob());
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `whiparc-export-${new Date().toISOString().slice(0, 10)}.json`;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          URL.revokeObjectURL(url);
+          return { success: true };
+        } catch (err: unknown) {
+          return { success: false, error: networkErrorMessage(err, 'Failed to export your data') };
         }
       },
 
