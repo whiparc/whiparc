@@ -550,3 +550,72 @@ func TestAIGenerateWorksOnAProjectWithNoCanvasRow(t *testing.T) {
 		t.Errorf("got %d: %s", w.Code, w.Body.String())
 	}
 }
+
+func TestInitAIModeSelectsTheProviderAndItsOwnModelDefault(t *testing.T) {
+	env := func(m map[string]string) func(string) string { return func(k string) string { return m[k] } }
+	oldGen, oldModel := aiGenerator, aiModel
+	t.Cleanup(func() { aiGenerator, aiModel = oldGen, oldModel })
+
+	on := map[string]string{"AI_MODE_ENABLED": "true"}
+	with := func(extra map[string]string) map[string]string {
+		m := map[string]string{}
+		for k, v := range on {
+			m[k] = v
+		}
+		for k, v := range extra {
+			m[k] = v
+		}
+		return m
+	}
+
+	t.Run("gemini needs its own key", func(t *testing.T) {
+		initAIMode(env(with(map[string]string{"AI_PROVIDER": "gemini"})))
+		if aiGenerator != nil {
+			t.Error("enabled without GEMINI_API_KEY")
+		}
+		initAIMode(env(with(map[string]string{"AI_PROVIDER": "gemini", "ANTHROPIC_API_KEY": "k"})))
+		if aiGenerator != nil {
+			t.Error("an Anthropic key must not enable the Gemini provider")
+		}
+		initAIMode(env(with(map[string]string{"GEMINI_API_KEY": "k"})))
+		if aiGenerator != nil {
+			t.Error("a Gemini key must not enable the default (Claude) provider")
+		}
+	})
+
+	t.Run("gemini with a key uses the Gemini default model", func(t *testing.T) {
+		initAIMode(env(with(map[string]string{"AI_PROVIDER": "Gemini", "GEMINI_API_KEY": "k", "AI_MAX_OUTPUT_TOKENS": "2048", "GEMINI_BASE_URL": "http://stub"})))
+		g, ok := aiGenerator.(*aigen.Gemini)
+		if !ok {
+			t.Fatalf("got %T", aiGenerator)
+		}
+		if g.Model != aigen.DefaultGeminiModel || aiModel != aigen.DefaultGeminiModel || g.MaxTokens != 2048 || g.BaseURL != "http://stub" || g.APIKey != "k" {
+			t.Errorf("%+v / %s", g, aiModel)
+		}
+	})
+
+	t.Run("AI_MODEL overrides the default", func(t *testing.T) {
+		initAIMode(env(with(map[string]string{"AI_PROVIDER": "gemini", "GEMINI_API_KEY": "k", "AI_MODEL": "gemini-other"})))
+		if g := aiGenerator.(*aigen.Gemini); g.Model != "gemini-other" || aiModel != "gemini-other" {
+			t.Errorf("%+v / %s", g, aiModel)
+		}
+	})
+
+	t.Run("switching providers does not carry the model over", func(t *testing.T) {
+		initAIMode(env(with(map[string]string{"AI_PROVIDER": "gemini", "GEMINI_API_KEY": "k"})))
+		initAIMode(env(with(map[string]string{"ANTHROPIC_API_KEY": "k"})))
+		if c, ok := aiGenerator.(*aigen.Claude); !ok || c.Model != defaultAIModel || aiModel != defaultAIModel {
+			t.Errorf("claude after gemini kept %q", aiModel)
+		}
+		if c := aiGenerator.(*aigen.Claude); c.MaxTokens != 0 {
+			t.Errorf("an unset AI_MAX_OUTPUT_TOKENS must leave the provider default, got %d", c.MaxTokens)
+		}
+	})
+
+	t.Run("usage rows name the mock, not a real model", func(t *testing.T) {
+		initAIMode(env(with(map[string]string{"AI_PROVIDER": "mock"})))
+		if aiModel != "mock" {
+			t.Errorf("aiModel = %q", aiModel)
+		}
+	})
+}
