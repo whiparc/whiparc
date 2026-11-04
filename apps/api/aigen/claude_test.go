@@ -187,3 +187,38 @@ func TestClaudeUnreachableProvider(t *testing.T) {
 		t.Error("API key appears in the error")
 	}
 }
+
+func TestClaudeErrorShowsStatusAndTypeButNeverTheMessage(t *testing.T) {
+	cases := []struct {
+		name, body string
+		status     int
+		want       string
+		wantErr    error
+	}{
+		{"bad key", `{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key sk-ant-LEAK"}}`, 401, "status 401 (authentication_error)", ErrProviderRejected},
+		{"bad model", `{"error":{"type":"not_found_error","message":"model: LEAK"}}`, 404, "status 404 (not_found_error)", ErrProviderRejected},
+		{"no credit", `{"error":{"type":"invalid_request_error","message":"Your credit balance is too low. LEAK"}}`, 400, "status 400 (invalid_request_error)", ErrProviderRejected},
+		{"overloaded", `{"error":{"type":"overloaded_error","message":"LEAK"}}`, 529, "status 529 (overloaded_error)", ErrProviderUnavailable},
+		{"not the expected shape", `plain text LEAK`, 400, "status 400", ErrProviderRejected},
+		{"type is not a word", `{"error":{"type":"x\"; rm -rf /","message":"LEAK"}}`, 400, "status 400", ErrProviderRejected},
+		{"type too long", `{"error":{"type":"` + strings.Repeat("a", 60) + `"}}`, 400, "status 400", ErrProviderRejected},
+		{"type is not a string", `{"error":{"type":{"a":1}}}`, 400, "status 400", ErrProviderRejected},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv := (&stub{status: c.status, body: c.body}).server(t)
+			_, _, err := newClaude(srv).Generate(context.Background(), GenerateRequest{Prompt: "x"})
+			if !errors.Is(err, c.wantErr) {
+				t.Fatalf("got %v, want %v", err, c.wantErr)
+			}
+			if !strings.HasSuffix(err.Error(), c.want) {
+				t.Errorf("error %q does not end with %q", err.Error(), c.want)
+			}
+			for _, leak := range []string{"LEAK", "rm -rf", "aaaaaaaa"} {
+				if strings.Contains(err.Error(), leak) {
+					t.Errorf("error leaks %q: %v", leak, err)
+				}
+			}
+		})
+	}
+}

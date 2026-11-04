@@ -28,11 +28,10 @@ import (
 // unique.
 
 const (
-	aiMaxBodyBytes     = 16 << 10
-	defaultAIDailyCap  = 30
-	defaultAITimeout   = 60 * time.Second
-	defaultAIMaxTokens = 4096
-	defaultAIModel     = "claude-sonnet-5-5"
+	aiMaxBodyBytes    = 16 << 10
+	defaultAIDailyCap = 30
+	defaultAITimeout  = 60 * time.Second
+	defaultAIModel    = "claude-sonnet-5-5"
 
 	// Outcomes recorded in ai_generations.
 	aiOutcomeSuccess       = "success"
@@ -61,18 +60,24 @@ func initAIMode(getenv func(string) string) {
 		return
 	}
 
-	if v := strings.TrimSpace(getenv("AI_MODEL")); v != "" {
-		aiModel = v
-	}
 	if n, err := strconv.Atoi(strings.TrimSpace(getenv("AI_DAILY_CAP"))); err == nil && n > 0 {
 		aiDailyCap = n
 	}
 	if n, err := strconv.Atoi(strings.TrimSpace(getenv("AI_TIMEOUT_SECONDS"))); err == nil && n > 0 {
 		aiTimeout = time.Duration(n) * time.Second
 	}
-	maxTokens := defaultAIMaxTokens
+	// Zero leaves the limit to the provider's own default.
+	maxTokens := 0
 	if n, err := strconv.Atoi(strings.TrimSpace(getenv("AI_MAX_OUTPUT_TOKENS"))); err == nil && n > 0 {
 		maxTokens = n
+	}
+	// The model default depends on the provider, so AI_MODEL overrides it below.
+	model := strings.TrimSpace(getenv("AI_MODEL"))
+	pick := func(fallback string) string {
+		if model != "" {
+			return model
+		}
+		return fallback
 	}
 
 	switch provider := strings.ToLower(strings.TrimSpace(getenv("AI_PROVIDER"))); provider {
@@ -82,9 +87,20 @@ func initAIMode(getenv func(string) string) {
 			log.Println("[AI] AI_MODE_ENABLED=true but ANTHROPIC_API_KEY is not set; AI mode stays off.")
 			return
 		}
+		aiModel = pick(defaultAIModel)
 		aiGenerator = &aigen.Claude{APIKey: key, Model: aiModel, BaseURL: strings.TrimSpace(getenv("ANTHROPIC_BASE_URL")), MaxTokens: maxTokens}
 		log.Printf("[AI] AI mode enabled (provider=claude model=%s dailyCap=%d)\n", aiModel, aiDailyCap)
+	case "gemini":
+		key := strings.TrimSpace(getenv("GEMINI_API_KEY"))
+		if key == "" {
+			log.Println("[AI] AI_PROVIDER=gemini but GEMINI_API_KEY is not set; AI mode stays off.")
+			return
+		}
+		aiModel = pick(aigen.DefaultGeminiModel)
+		aiGenerator = &aigen.Gemini{APIKey: key, Model: aiModel, BaseURL: strings.TrimSpace(getenv("GEMINI_BASE_URL")), MaxTokens: maxTokens}
+		log.Printf("[AI] AI mode enabled (provider=gemini model=%s dailyCap=%d)\n", aiModel, aiDailyCap)
 	case "mock":
+		aiModel = pick("mock")
 		aiGenerator = aigen.Mock{}
 		log.Println("[AI] AI mode enabled with the MOCK provider. Development only: it is a keyword matcher, not a model.")
 	default:

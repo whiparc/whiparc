@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -109,11 +110,12 @@ func (c *Claude) Generate(ctx context.Context, req GenerateRequest) (json.RawMes
 
 	switch {
 	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
-		return nil, Usage{}, fmt.Errorf("%w: status %d", ErrProviderUnavailable, resp.StatusCode)
+		return nil, Usage{}, fmt.Errorf("%w: status %d%s", ErrProviderUnavailable, resp.StatusCode, errorType(raw))
 	case resp.StatusCode != http.StatusOK:
 		// 4xx other than 429 is our request being wrong (bad key, bad model, bad
-		// schema). The body is not surfaced: it may echo request content.
-		return nil, Usage{}, fmt.Errorf("%w: status %d", ErrProviderRejected, resp.StatusCode)
+		// schema) or the account being unable to pay for it. The message is not
+		// surfaced: it may echo request content. The error type is.
+		return nil, Usage{}, fmt.Errorf("%w: status %d%s", ErrProviderRejected, resp.StatusCode, errorType(raw))
 	}
 
 	var parsed struct {
@@ -142,4 +144,33 @@ func (c *Claude) Generate(ctx context.Context, req GenerateRequest) (json.RawMes
 		}
 	}
 	return nil, usage, ErrProviderNoResult
+}
+
+// errorTypePattern admits only the short words the providers use to name an
+// error: Anthropic's snake_case types (authentication_error, not_found_error) and
+// Google's upper-case statuses (INVALID_ARGUMENT, RESOURCE_EXHAUSTED).
+var errorTypePattern = regexp.MustCompile(`^[A-Za-z][A-Za-z_]{0,39}$`)
+
+// errorType extracts the error's name from a provider error body, formatted for
+// appending to an error message (" (authentication_error)"), or "" when the
+// body is not that shape. It reads Anthropic's error.type or Google's
+// error.status. Only that name is read: the accompanying message is free text
+// that can echo request content, so it is never surfaced. The name is
+// validated, so a hostile or garbled body cannot inject anything.
+func errorType(body []byte) string {
+	var e struct {
+		Error struct {
+			Type   string `json:"type"`
+			Status string `json:"status"`
+		} `json:"error"`
+	}
+	if json.Unmarshal(body, &e) != nil {
+		return ""
+	}
+	for _, name := range []string{e.Error.Type, e.Error.Status} {
+		if errorTypePattern.MatchString(name) {
+			return " (" + name + ")"
+		}
+	}
+	return ""
 }
