@@ -51,6 +51,8 @@ next-env.d.ts
 # local dev builds
 /apps/api/data
 /apps/api/dev.db
+# AI-mode evaluation output (apps/api/cmd/aieval); machine-specific
+/apps/api/aieval-results*.json
 
 # compiled CLI binaries (build outputs, not source)
 /apps/cli/cli
