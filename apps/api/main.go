@@ -145,6 +145,7 @@ var (
 	emailChangeLimiter *RateLimiter
 	avatarLimiter      *RateLimiter
 	deleteAcctLimiter  *RateLimiter
+	exportLimiter      *RateLimiter
 )
 
 // waitForPostgres retries the initial ping instead of failing on first
@@ -304,11 +305,14 @@ func main() {
 	emailChangeLimiter = NewRateLimiter(5, 15*time.Minute, 5)    // 5 email-change requests per 15 min per user
 	avatarLimiter = NewRateLimiter(10, 15*time.Minute, 10)       // 10 avatar uploads per 15 min per user
 	deleteAcctLimiter = NewRateLimiter(5, 15*time.Minute, 5)     // 5 account-deletion attempts per 15 min per user (password guessing guard)
+	exportLimiter = NewRateLimiter(5, 15*time.Minute, 5)         // 5 data exports per 15 min per user (each walks the whole account)
 	subscribeLimiter = NewRateLimiter(5, 15*time.Minute, 5)      // 5 newsletter signups per 15 min per IP
 	subscribeGlobalLimiter = NewRateLimiter(120, time.Hour, 120) // ceiling on confirmation emails per hour, holds even if X-Forwarded-For is spoofed
 	contactLimiter = NewRateLimiter(3, time.Hour, 3)             // 3 contact messages per hour per IP
 	contactGlobalLimiter = NewRateLimiter(60, time.Hour, 60)     // ceiling on contact messages (and acknowledgements) per hour
 	captureTokenLimiter = NewRateLimiter(30, 15*time.Minute, 30) // newsletter confirm/unsubscribe attempts per 15 min per IP
+
+	initAIMode(os.Getenv)
 
 	// Set up routing
 	mux := http.NewServeMux()
@@ -337,6 +341,7 @@ func main() {
 	mux.Handle("DELETE /api/auth/avatar", AuthMiddleware(http.HandlerFunc(handleDeleteAvatar)))
 	mux.HandleFunc("GET /api/avatars/{key}", handleGetAvatar)
 	mux.Handle("DELETE /api/auth/account", AuthMiddleware(http.HandlerFunc(handleDeleteAccount)))
+	mux.Handle("GET /api/auth/export", AuthMiddleware(http.HandlerFunc(handleExportAccount)))
 	mux.Handle("PATCH /api/auth/onboarding", AuthMiddleware(http.HandlerFunc(handleDismissOnboarding)))
 	mux.Handle("PATCH /api/auth/tour", AuthMiddleware(http.HandlerFunc(handleCompleteTour)))
 	mux.HandleFunc("POST /api/auth/forgot", enableCORS(handleForgotPassword))
@@ -353,6 +358,7 @@ func main() {
 	mux.Handle("POST /api/auth/email/change", AuthMiddleware(http.HandlerFunc(handleRequestEmailChange)))
 	mux.HandleFunc("POST /api/auth/email/confirm", enableCORS(handleConfirmEmailChange))
 	mux.Handle("GET /api/activity", AuthMiddleware(http.HandlerFunc(handleGetActivity)))
+	mux.Handle("GET /api/ai/status", AuthMiddleware(http.HandlerFunc(handleAIStatus)))
 	mux.HandleFunc("GET /api/auth/{provider}/login", handleOAuthLogin)
 	mux.HandleFunc("GET /api/auth/{provider}/callback", handleOAuthCallback)
 	mux.HandleFunc("GET /api/workspace/{projectId}/sync", handleWorkspaceWebSocketSync)
@@ -390,6 +396,7 @@ func main() {
 	mux.Handle("GET /api/projects/{id}/snapshots", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleGetSnapshots))))
 	mux.Handle("POST /api/projects/{id}/snapshots/{snapshotId}/revert", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleRevertSnapshot))))
 	mux.Handle("POST /api/projects/{id}/import", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleImport))))
+	mux.Handle("POST /api/projects/{id}/ai/generate", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleAIGenerate))))
 	mux.Handle("GET /api/projects/{id}/credentials", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleGetProjectCredentials))))
 	mux.Handle("POST /api/projects/{id}/credentials", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleCreateProjectCredential))))
 	mux.Handle("DELETE /api/projects/{id}/credentials/{credId}", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleDeleteProjectCredential))))
@@ -402,7 +409,7 @@ func main() {
 	mux.Handle("DELETE /api/projects/{id}/members/{userId}", AuthMiddleware(RequireProjectRole("ADMIN")(http.HandlerFunc(handleRemoveProjectMember))))
 
 	// Custom Nodes Routes
-	mux.HandleFunc("POST /api/custom-nodes/validate", handleValidateCustomNode)
+	mux.Handle("POST /api/custom-nodes/validate", AuthMiddleware(http.HandlerFunc(handleValidateCustomNode)))
 	mux.Handle("GET /api/projects/{id}/entitlements", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleGetProjectEntitlements))))
 	mux.Handle("GET /api/projects/{id}/custom-nodes", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleGetCustomNodes))))
 	mux.Handle("POST /api/projects/{id}/custom-nodes", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleCreateCustomNode))))
@@ -1531,6 +1538,10 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 	name := strings.TrimSpace(payload.Name)
 	if email == "" || payload.Password == "" || name == "" {
 		http.Error(w, "Email, password, and name are required", http.StatusBadRequest)
+		return
+	}
+	if err := validateDisplayName(name); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 

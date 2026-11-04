@@ -558,6 +558,38 @@ var migrations = []migration{
 			return nil
 		},
 	},
+	{
+		version:     18,
+		description: "add_ai_generations_table",
+		up: func(tx sqlExecer) error {
+			// One row per AI-mode generation attempt, successful or not: the
+			// daily cap counts attempts (a failed call still costs money), and
+			// the token columns are the billing data a credits system will need
+			// later. The prompt is deliberately not stored. No FKs, for the same
+			// reason as activity_events: this is a usage log, and deleting a
+			// project or user must neither be blocked by it nor erase it.
+			ddl := `CREATE TABLE ai_generations (
+				id TEXT PRIMARY KEY,
+				user_id TEXT NOT NULL,
+				project_id TEXT NOT NULL,
+				model TEXT NOT NULL DEFAULT '',
+				input_tokens INTEGER NOT NULL DEFAULT 0,
+				output_tokens INTEGER NOT NULL DEFAULT 0,
+				outcome TEXT NOT NULL,
+				created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+			)`
+			if t, ok := tx.(*dbTx); ok && t.backend == "postgres" {
+				ddl = pgSchema(ddl)
+			}
+			if _, err := tx.Exec(ddl); err != nil {
+				return fmt.Errorf("failed to create ai_generations: %w", err)
+			}
+			if _, err := tx.Exec("CREATE INDEX idx_ai_generations_user ON ai_generations(user_id, created_at)"); err != nil {
+				return fmt.Errorf("failed to create ai_generations user index: %w", err)
+			}
+			return nil
+		},
+	},
 }
 
 // runMigrations applies, in version order, any migration above not yet

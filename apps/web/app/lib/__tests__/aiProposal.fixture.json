@@ -1,0 +1,283 @@
+{
+  "edges": [
+    {
+      "id": "e_aws_vpc_1_aws_subnet_1",
+      "source": "aws_vpc_1",
+      "target": "aws_subnet_1",
+      "markerEnd": {
+        "type": "arrow"
+      }
+    },
+    {
+      "id": "e_aws_vpc_1_aws_security_group_1",
+      "source": "aws_vpc_1",
+      "target": "aws_security_group_1",
+      "markerEnd": {
+        "type": "arrow"
+      }
+    },
+    {
+      "id": "e_aws_subnet_1_aws_instance.web_server_1",
+      "source": "aws_subnet_1",
+      "target": "aws_instance.web_server_1",
+      "markerEnd": {
+        "type": "arrow"
+      }
+    },
+    {
+      "id": "e_aws_security_group_1_aws_instance.web_server_1",
+      "source": "aws_security_group_1",
+      "target": "aws_instance.web_server_1",
+      "markerEnd": {
+        "type": "arrow"
+      }
+    },
+    {
+      "id": "e_aws_instance.web_server_1_update-packages_1",
+      "source": "aws_instance.web_server_1",
+      "target": "update-packages_1",
+      "markerEnd": {
+        "type": "arrow"
+      }
+    },
+    {
+      "id": "e_update-packages_1_nodejs_1",
+      "source": "update-packages_1",
+      "target": "nodejs_1",
+      "markerEnd": {
+        "type": "arrow"
+      }
+    },
+    {
+      "id": "e_aws_subnet_1_aws_db_instance_1",
+      "source": "aws_subnet_1",
+      "target": "aws_db_instance_1",
+      "markerEnd": {
+        "type": "arrow"
+      }
+    },
+    {
+      "id": "e_aws_security_group_1_aws_db_instance_1",
+      "source": "aws_security_group_1",
+      "target": "aws_db_instance_1",
+      "markerEnd": {
+        "type": "arrow"
+      }
+    }
+  ],
+  "nodes": [
+    {
+      "id": "aws_vpc_1",
+      "type": "customNode",
+      "position": {
+        "x": 100,
+        "y": 50
+      },
+      "data": {
+        "label": "app_vpc",
+        "tech": "Terraform",
+        "icon": "lucide:network",
+        "categoryLabel": "Provisioning \u0026 Cloud",
+        "description": "A virtual private cloud network.",
+        "status": "Validated",
+        "statusText": "AI generated",
+        "parameters": {
+          "cidrBlock": "10.0.0.0/16",
+          "enableDnsHostnames": true,
+          "vpcName": "app_vpc"
+        },
+        "isCustom": false,
+        "rawCode": "",
+        "codeType": ""
+      }
+    },
+    {
+      "id": "aws_subnet_1",
+      "type": "customNode",
+      "position": {
+        "x": 380,
+        "y": 50
+      },
+      "data": {
+        "label": "app_subnet_1a",
+        "tech": "Terraform",
+        "icon": "lucide:split",
+        "categoryLabel": "Provisioning \u0026 Cloud",
+        "description": "A subnet in a VPC.",
+        "status": "Validated",
+        "statusText": "AI generated",
+        "parameters": {
+          "availabilityZone": "us-east-1a",
+          "cidrBlock": "10.0.1.0/24",
+          "mapPublicIp": true,
+          "subnetName": "app_subnet_1a",
+          "vpcId": "aws_vpc.app_vpc.id"
+        },
+        "isCustom": false,
+        "rawCode": "",
+        "codeType": ""
+      }
+    },
+    {
+      "id": "aws_security_group_1",
+      "type": "customNode",
+      "position": {
+        "x": 660,
+        "y": 50
+      },
+      "data": {
+        "label": "web_sg",
+        "tech": "Terraform",
+        "icon": "lucide:shield",
+        "categoryLabel": "Provisioning \u0026 Cloud",
+        "description": "Stateful firewall rules.",
+        "status": "Validated",
+        "statusText": "AI generated",
+        "parameters": {
+          "allowedCidr": "0.0.0.0/0",
+          "description": "Allows HTTP/HTTPS inbound \u0026 SSH access",
+          "httpPort": 80,
+          "httpsPort": 443,
+          "sgName": "web_sg",
+          "sshEnabled": true,
+          "vpcId": ""
+        },
+        "isCustom": false,
+        "rawCode": "",
+        "codeType": ""
+      }
+    },
+    {
+      "id": "aws_instance.web_server_1",
+      "type": "customNode",
+      "position": {
+        "x": 940,
+        "y": 50
+      },
+      "data": {
+        "label": "web_server",
+        "tech": "Terraform",
+        "icon": "lucide:server",
+        "categoryLabel": "Provisioning \u0026 Cloud",
+        "description": "Provisions a VM instance.",
+        "status": "Validated",
+        "statusText": "AI generated",
+        "parameters": {
+          "amiId": "ami-785db401",
+          "instanceName": "web_server",
+          "instanceType": "t3.medium",
+          "rootVolumeSize": 30,
+          "securityGroupId": "",
+          "subnetId": ""
+        },
+        "isCustom": false,
+        "rawCode": "",
+        "codeType": ""
+      }
+    },
+    {
+      "id": "update-packages_1",
+      "type": "customNode",
+      "position": {
+        "x": 100,
+        "y": 300
+      },
+      "data": {
+        "label": "Update Packages",
+        "tech": "Ansible",
+        "icon": "lucide:refresh-cw",
+        "categoryLabel": "Configuration \u0026 Setup",
+        "description": "Updates package repositories and upgrades system modules.",
+        "status": "Validated",
+        "statusText": "AI generated",
+        "parameters": {
+          "ansibleHost": "",
+          "ansibleUser": "ubuntu"
+        },
+        "isCustom": false,
+        "rawCode": "",
+        "codeType": ""
+      }
+    },
+    {
+      "id": "nodejs_1",
+      "type": "customNode",
+      "position": {
+        "x": 380,
+        "y": 300
+      },
+      "data": {
+        "label": "Install Node.js",
+        "tech": "Ansible",
+        "icon": "lucide:terminal",
+        "categoryLabel": "Configuration \u0026 Setup",
+        "description": "Installs Node.js and npm.",
+        "status": "Validated",
+        "statusText": "AI generated",
+        "parameters": {
+          "ansibleHost": "",
+          "ansibleUser": "ubuntu"
+        },
+        "isCustom": false,
+        "rawCode": "",
+        "codeType": ""
+      }
+    },
+    {
+      "id": "aws_db_instance_1",
+      "type": "customNode",
+      "position": {
+        "x": 1220,
+        "y": 50
+      },
+      "data": {
+        "label": "appdb",
+        "tech": "Terraform",
+        "icon": "lucide:database",
+        "categoryLabel": "Provisioning \u0026 Cloud",
+        "description": "PostgreSQL database instance.",
+        "status": "Validated",
+        "statusText": "AI generated",
+        "parameters": {
+          "allocatedStorage": 20,
+          "dbName": "appdb",
+          "dbSubnetGroupName": "",
+          "engineVersion": "14.1",
+          "instanceClass": "db.t3.micro",
+          "password": "SuperSecurePassword123!",
+          "username": "dbadmin",
+          "vpcSecurityGroupIds": ""
+        },
+        "isCustom": false,
+        "rawCode": "",
+        "codeType": ""
+      }
+    },
+    {
+      "id": "aws_s3_bucket_1",
+      "type": "customNode",
+      "position": {
+        "x": 1500,
+        "y": 50
+      },
+      "data": {
+        "label": "app-uploads",
+        "tech": "Terraform",
+        "icon": "lucide:hard-drive",
+        "categoryLabel": "Provisioning \u0026 Cloud",
+        "description": "Object storage bucket.",
+        "status": "Validated",
+        "statusText": "AI generated",
+        "parameters": {
+          "bucketName": "app-uploads",
+          "forceDestroy": true,
+          "versioningEnabled": true
+        },
+        "isCustom": false,
+        "rawCode": "",
+        "codeType": ""
+      }
+    }
+  ],
+  "warnings": []
+}

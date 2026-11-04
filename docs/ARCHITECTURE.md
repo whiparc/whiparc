@@ -117,10 +117,12 @@ for the project.
 
 ### `sandbox`: local DevOps sandbox
 
-`sandbox/docker-compose.sandbox.yml` starts LocalStack (an AWS API mock on
-port 4566) and two Ubuntu SSH containers (ports 2222 and 2223). It gives
-contributors something to deploy to without a cloud account. It is a
-development fixture, not a security boundary.
+`sandbox/docker-compose.sandbox.yml` starts two Ubuntu SSH containers (ports
+2222 and 2223). LocalStack (an AWS API mock on port 4566) is the `localstack`
+service in the root `docker-compose.yml` and in `docker-compose.hosted.yml`,
+not in the sandbox file, so the sandbox and hosted stacks can run side by side
+without a port clash. Together they give contributors something to deploy to
+without a cloud account. It is a development fixture, not a security boundary.
 
 ### `apps/cli`: `whiparc` CLI
 
