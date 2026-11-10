@@ -24,6 +24,11 @@ func JSONSchema() map[string]any {
 				"maxItems": MaxNodes,
 				"items":    map[string]any{"oneOf": variants},
 			},
+			"notes": map[string]any{
+				"type":     "array",
+				"maxItems": MaxNotes,
+				"items":    map[string]any{"type": "string", "maxLength": MaxNoteLen},
+			},
 			"edges": map[string]any{
 				"type":     "array",
 				"maxItems": MaxEdges,

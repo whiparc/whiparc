@@ -619,3 +619,66 @@ func TestInitAIModeSelectsTheProviderAndItsOwnModelDefault(t *testing.T) {
 		}
 	})
 }
+
+func TestAIGenerateReturnsTheModelsNotesWithAProposal(t *testing.T) {
+	aiTestEnv(t, fakeGraph(`{"nodes":[{"ref":"a","type":"nginx"}],"edges":[],"notes":["Kubernetes is not available, so it is not included."]}`))
+	w := aiCall("u_owner", "proj_ai", `{"prompt":"x"}`)
+	if w.Code != http.StatusOK {
+		t.Fatalf("got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct{ Notes []string }
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if len(resp.Notes) != 1 || !strings.Contains(resp.Notes[0], "Kubernetes") {
+		t.Errorf("notes = %q", resp.Notes)
+	}
+}
+
+func TestAIGenerateAlwaysSendsANotesList(t *testing.T) {
+	aiTestEnv(t, fakeGraph(`{"nodes":[{"ref":"a","type":"nginx"}],"edges":[]}`))
+	w := aiCall("u_owner", "proj_ai", `{"prompt":"x"}`)
+	if !strings.Contains(w.Body.String(), `"notes":[]`) {
+		t.Errorf("a client should always get a list: %s", w.Body.String())
+	}
+}
+
+func TestAIGenerateShowsNotesWhenNothingCouldBeBuilt(t *testing.T) {
+	aiTestEnv(t, fakeGraph(`{"nodes":[],"edges":[],"notes":["Google Cloud is not available."]}`))
+	w := aiCall("u_owner", "proj_ai", `{"prompt":"x"}`)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("got %d: %s", w.Code, w.Body.String())
+	}
+	var resp struct {
+		Error string
+		Notes []string
+	}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.Error == "" || len(resp.Notes) != 1 || resp.Notes[0] != "Google Cloud is not available." {
+		t.Errorf("body = %s", w.Body.String())
+	}
+	if n, outcomes := usageRows(t); n != 1 || outcomes != "rejected" {
+		t.Errorf("usage = %d (%s)", n, outcomes)
+	}
+	if got := canvasNodes(t, "proj_ai"); got != "[]" {
+		t.Errorf("canvas modified: %s", got)
+	}
+}
+
+func TestAIGenerateGivesNoNotesForStructuralFailures(t *testing.T) {
+	// When the output is not a valid document nothing in it, notes included, is trusted.
+	aiTestEnv(t, fakeGraph(`{"nodes":[{"ref":"a","type":"nginx"}],"edges":[],"extra":1,"notes":["Visit the site."]}`))
+	w := aiCall("u_owner", "proj_ai", `{"prompt":"x"}`)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("got %d", w.Code)
+	}
+	if strings.Contains(w.Body.String(), "Visit") || strings.Contains(w.Body.String(), `"notes"`) {
+		t.Errorf("notes from a rejected document reached the client: %s", w.Body.String())
+	}
+}
+
+func TestMockProviderSaysWhatItLeftOut(t *testing.T) {
+	aiTestEnv(t, aigen.Mock{})
+	w := aiCall("u_owner", "proj_ai", `{"prompt":"a web server on kubernetes"}`)
+	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), "Kubernetes") {
+		t.Errorf("got %d: %s", w.Code, w.Body.String())
+	}
+}

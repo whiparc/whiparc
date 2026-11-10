@@ -42,10 +42,6 @@ const typeOf = (id: string) =>
     .filter((t) => id.startsWith(`${t}_`))
     .sort((a, b) => b.length - a.length)[0];
 
-// Known: the generator emits this once per EC2 node, so two servers duplicate
-// it. It predates AI mode and is tracked separately.
-const KNOWN_DUPLICATES = new Set(["aws_key_pair.whiparc_key"]);
-
 // A line whose double quotes do not pair up is how an injected value would show up.
 const unbalancedQuotes = (text: string) =>
   text.split("\n").filter((line) => ((line.replace(/\\"/g, "").match(/"/g) ?? []).length % 2) === 1);
@@ -79,7 +75,9 @@ describe.skipIf(!resultsPath)("validated AI proposals compile with the real gene
 
     // Resource labels are unique, which is what Terraform requires.
     const labels = [...mainTf.matchAll(/^resource "([a-z0-9_]+)" "([^"]+)"/gm)].map((m) => `${m[1]}.${m[2]}`);
-    const duplicated = labels.filter((l, i) => labels.indexOf(l) !== i && !KNOWN_DUPLICATES.has(l));
+    // No exceptions: the shared key pair used to be written once per server and
+    // was tolerated here; it is now written once, so any duplicate is a real defect.
+    const duplicated = labels.filter((l, i) => labels.indexOf(l) !== i);
     expect(duplicated, "duplicate Terraform resources").toEqual([]);
 
     // Ansible tasks exist for Ansible blocks, in a playbook that has a host line.

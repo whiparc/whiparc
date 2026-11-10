@@ -33,6 +33,12 @@ const (
 	defaultAITimeout  = 60 * time.Second
 	defaultAIModel    = "claude-sonnet-5-5"
 
+	// How many more times a provider call is repeated after an overload or a
+	// brief outage (HTTP 500, 502, 503, 504, 529, or a connection error). A
+	// first real evaluation saw 2 of 32 calls fail with 503 "high demand"; each
+	// retry is bounded by aiTimeout, so a request never takes longer than that.
+	aiProviderRetries = 2
+
 	// Outcomes recorded in ai_generations.
 	aiOutcomeSuccess       = "success"
 	aiOutcomeProviderError = "provider_error"
@@ -88,7 +94,7 @@ func initAIMode(getenv func(string) string) {
 			return
 		}
 		aiModel = pick(defaultAIModel)
-		aiGenerator = &aigen.Claude{APIKey: key, Model: aiModel, BaseURL: strings.TrimSpace(getenv("ANTHROPIC_BASE_URL")), MaxTokens: maxTokens}
+		aiGenerator = &aigen.Claude{APIKey: key, Model: aiModel, BaseURL: strings.TrimSpace(getenv("ANTHROPIC_BASE_URL")), MaxTokens: maxTokens, Retries: aiProviderRetries}
 		log.Printf("[AI] AI mode enabled (provider=claude model=%s dailyCap=%d)\n", aiModel, aiDailyCap)
 	case "gemini":
 		key := strings.TrimSpace(getenv("GEMINI_API_KEY"))
@@ -97,7 +103,7 @@ func initAIMode(getenv func(string) string) {
 			return
 		}
 		aiModel = pick(aigen.DefaultGeminiModel)
-		aiGenerator = &aigen.Gemini{APIKey: key, Model: aiModel, BaseURL: strings.TrimSpace(getenv("GEMINI_BASE_URL")), MaxTokens: maxTokens}
+		aiGenerator = &aigen.Gemini{APIKey: key, Model: aiModel, BaseURL: strings.TrimSpace(getenv("GEMINI_BASE_URL")), MaxTokens: maxTokens, Retries: aiProviderRetries}
 		log.Printf("[AI] AI mode enabled (provider=gemini model=%s dailyCap=%d)\n", aiModel, aiDailyCap)
 	case "mock":
 		aiModel = pick("mock")
@@ -124,6 +130,16 @@ type aiGenerateResponse struct {
 	Nodes    json.RawMessage `json:"nodes"`
 	Edges    json.RawMessage `json:"edges"`
 	Warnings []aigen.Warning `json:"warnings"`
+	// Notes is what the model says it left out. Always a list, possibly empty.
+	Notes []string `json:"notes"`
+}
+
+// aiRejectedResponse is the 422 body. It is the usual {"error": ...} plus the
+// model's notes when it gave any, because "I can't do that on GCP" is the useful
+// part of an answer that contained no nodes.
+type aiRejectedResponse struct {
+	Error string   `json:"error"`
+	Notes []string `json:"notes,omitempty"`
 }
 
 // POST /api/projects/{id}/ai/generate
@@ -195,7 +211,11 @@ func handleAIGenerate(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		recordAIGeneration(user.ID, projectID, usage, aiOutcomeRejected)
 		log.Printf("[AI] output rejected project=%s user=%s: %v\n", projectID, user.ID, err)
-		writeJSONError(w, http.StatusUnprocessableEntity, "The AI could not produce a usable design for that description. Try rephrasing it, or describe fewer things at once.")
+		rej := aiRejectedResponse{Error: "The AI could not produce a usable design for that description. Try rephrasing it, or describe fewer things at once."}
+		if result != nil { // only ErrEmpty returns a result; it carries the model's notes
+			rej.Notes = result.Notes
+		}
+		writeJSONStatus(w, http.StatusUnprocessableEntity, rej)
 		return
 	}
 
@@ -210,7 +230,7 @@ func handleAIGenerate(w http.ResponseWriter, r *http.Request) {
 	recordAIGeneration(user.ID, projectID, usage, aiOutcomeSuccess)
 	log.Printf("[AI] generated project=%s user=%s nodes=%d edges=%d warnings=%d tokens_in=%d tokens_out=%d\n",
 		projectID, user.ID, len(result.Nodes), len(result.Edges), len(result.Warnings), usage.InputTokens, usage.OutputTokens)
-	writeJSONStatus(w, http.StatusOK, aiGenerateResponse{Nodes: nodes, Edges: edges, Warnings: result.Warnings})
+	writeJSONStatus(w, http.StatusOK, aiGenerateResponse{Nodes: nodes, Edges: edges, Warnings: result.Warnings, Notes: result.Notes})
 }
 
 // placeProposal lays the validated nodes out below whatever is already on the

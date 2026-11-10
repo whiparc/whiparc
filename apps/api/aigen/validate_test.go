@@ -277,14 +277,50 @@ func TestWholeOutputRejections(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			res, err := Validate([]byte(c.raw))
-			if !errors.Is(err, c.want) || res != nil {
-				t.Errorf("got (%v, %v), want %v", res, err, c.want)
+			if !errors.Is(err, c.want) {
+				t.Fatalf("got (%v, %v), want %v", res, err, c.want)
+			}
+			// Only ErrEmpty carries a result (no nodes, the drop warnings); every
+			// other rejection returns nothing at all.
+			if c.want == ErrEmpty {
+				if res == nil || len(res.Nodes) != 0 || len(res.Edges) != 0 {
+					t.Errorf("ErrEmpty must come with an empty, non-nil result: %+v", res)
+				}
+			} else if res != nil {
+				t.Errorf("a rejected output must return no result: %+v", res)
 			}
 			// Errors must not reflect model text.
 			if err != nil && strings.Contains(err.Error(), "explanation") {
 				t.Errorf("error reflects model output: %v", err)
 			}
 		})
+	}
+}
+
+// When nothing survives, the warnings still say what the model tried, so a caller
+// can tell an empty answer from one made only of forbidden things.
+func TestEmptyResultCarriesWhatWasDropped(t *testing.T) {
+	res, err := Validate([]byte(graph([]string{
+		node("a", "shell_command", ""),
+		node("b", "no_such_node", ""),
+		`{"ref":"c","type":"nginx","isCustom":true,"rawCode":"x"}`,
+	}, []string{edge("a", "b")})))
+	if !errors.Is(err, ErrEmpty) || res == nil {
+		t.Fatalf("got (%v, %v)", res, err)
+	}
+	for _, code := range []string{WarnRestrictedType, WarnUnknownType, WarnForbiddenField} {
+		if !hasWarning(res, code) {
+			t.Errorf("missing %s in %+v", code, res.Warnings)
+		}
+	}
+	if len(res.Nodes) != 0 || len(res.Edges) != 0 {
+		t.Errorf("nothing may survive: %+v", res)
+	}
+
+	// A truly empty answer carries no warnings.
+	res, err = Validate([]byte(`{"nodes":[],"edges":[]}`))
+	if !errors.Is(err, ErrEmpty) || res == nil || len(res.Warnings) != 0 {
+		t.Errorf("got (%+v, %v)", res, err)
 	}
 }
 

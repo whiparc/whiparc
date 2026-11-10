@@ -58,6 +58,9 @@ type Result struct {
 	Nodes    []importer.CanvasNode
 	Edges    []importer.CanvasEdge
 	Warnings []Warning
+	// Notes is what the model said it left out, cleaned by CleanNotes. It is
+	// advisory text for the user and never drives anything.
+	Notes []string
 }
 
 // forbiddenFields are never accepted on a node, whatever their value. They are
@@ -88,6 +91,11 @@ var patterns = func() map[string]*regexp.Regexp {
 // Validate is the trust boundary between a model and a canvas. It builds the
 // result from scratch out of allow-listed values, so nothing the model sent can
 // reach the output unless a catalog rule admitted it.
+//
+// On any error the output is unusable and nothing from it may be used, with one
+// addition: for ErrEmpty the returned Result is non-nil, has no nodes, and carries
+// the warnings for whatever was dropped and the model's notes. For every other
+// error it is nil.
 func Validate(raw []byte) (*Result, error) { return ValidateWithUsed(raw, nil) }
 
 // LabelKey identifies a resource label within its node type and parameter, the
@@ -135,6 +143,9 @@ func ValidateWithUsed(raw []byte, used map[string]bool) (*Result, error) {
 	var top struct {
 		Nodes []json.RawMessage `json:"nodes"`
 		Edges []json.RawMessage `json:"edges"`
+		// Notes is read loosely: a malformed list must cost only the notes, never
+		// an otherwise usable graph.
+		Notes json.RawMessage `json:"notes"`
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
@@ -148,13 +159,17 @@ func ValidateWithUsed(raw []byte, used map[string]bool) (*Result, error) {
 		return nil, ErrTooLarge
 	}
 
-	v := &validation{res: &Result{Warnings: []Warning{}}, byRef: map[string]*proposed{}, used: used}
+	v := &validation{res: &Result{Warnings: []Warning{}, Notes: CleanNotes(top.Notes)}, byRef: map[string]*proposed{}, used: used}
 	for _, rn := range top.Nodes {
 		v.node(rn)
 	}
 	v.uniqueLabels()
 	if len(v.kept) == 0 {
-		return nil, ErrEmpty
+		// Return the warnings and notes with the error: the warnings say what was
+		// dropped, which is how a caller tells "the model sent nothing" from "the
+		// model sent only things the catalog forbids", and the notes are how the
+		// model says why it sent nothing.
+		return v.res, ErrEmpty
 	}
 	v.assignIDs()
 	for _, re := range top.Edges {

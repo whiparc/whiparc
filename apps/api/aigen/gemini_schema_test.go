@@ -2,6 +2,7 @@ package aigen
 
 import (
 	"encoding/json"
+	"fmt"
 	"reflect"
 	"regexp"
 	"strings"
@@ -10,12 +11,13 @@ import (
 	"api/catalog"
 )
 
-// allowedKeys is the full set of keywords the translated schema may contain: the
-// Gemini Schema fields the translator is allowed to emit.
+// allowedKeys is the full set of keywords the translated schema may contain. It
+// deliberately omits the length and range bounds: sent as constraints with a
+// forced function call they make Gemini refuse the request (measured with the
+// evaluation's -probe mode), so they travel as sentences in descriptions.
 var allowedKeys = map[string]bool{
 	"type": true, "description": true, "format": true, "nullable": true, "enum": true,
 	"items": true, "properties": true, "required": true, "anyOf": true,
-	"minimum": true, "maximum": true, "minItems": true, "maxItems": true, "minLength": true, "maxLength": true,
 }
 
 var geminiTypeNames = map[string]bool{"STRING": true, "NUMBER": true, "INTEGER": true, "BOOLEAN": true, "ARRAY": true, "OBJECT": true}
@@ -75,8 +77,14 @@ func TestGeminiSchemaOnlyUsesTheSupportedSubset(t *testing.T) {
 func TestGeminiSchemaKeepsEveryNodeTypeAndSettableParameter(t *testing.T) {
 	out := GeminiSchema(catalog.JSONSchema())
 	nodes := out["properties"].(map[string]any)["nodes"].(map[string]any)
-	if nodes["type"] != "ARRAY" || nodes["maxItems"] != catalog.MaxNodes {
-		t.Errorf("nodes array lost its type or bound: %v", nodes)
+	if nodes["type"] != "ARRAY" {
+		t.Errorf("nodes array lost its type: %v", nodes)
+	}
+	if d, _ := nodes["description"].(string); d != fmt.Sprintf("At most %d items", catalog.MaxNodes) {
+		t.Errorf("the node limit is not stated to the model: %q", d)
+	}
+	if _, bound := nodes["maxItems"]; bound {
+		t.Error("maxItems must not be sent as a constraint")
 	}
 	variants := nodes["items"].(map[string]any)["anyOf"].([]any)
 	if len(variants) != len(catalog.AIGeneratable()) {
@@ -146,8 +154,14 @@ func TestGeminiSchemaPreservesEnumsRangesAndTurnsPatternsIntoHints(t *testing.T)
 		t.Errorf("enum changed: %v", size["enum"])
 	}
 	disk := param("aws_instance.web_server", "rootVolumeSize")
-	if disk["type"] != "INTEGER" || disk["minimum"] != 8 || disk["maximum"] != 100 {
-		t.Errorf("range lost: %v", disk)
+	if disk["type"] != "INTEGER" || disk["description"] != "Between 8 and 100" {
+		t.Errorf("range not stated as a hint: %v", disk)
+	}
+	if _, kept := disk["minimum"]; kept {
+		t.Error("minimum must not be sent as a constraint")
+	}
+	if _, kept := disk["maximum"]; kept {
+		t.Error("maximum must not be sent as a constraint")
 	}
 	name := param("aws_vpc", "vpcName")
 	if _, kept := name["pattern"]; kept {
@@ -156,8 +170,11 @@ func TestGeminiSchemaPreservesEnumsRangesAndTurnsPatternsIntoHints(t *testing.T)
 	if d, _ := name["description"].(string); !strings.Contains(d, "regular expression") || !strings.Contains(d, "a-zA-Z") {
 		t.Errorf("pattern not preserved as a hint: %q", d)
 	}
-	if name["maxLength"] != 40 {
-		t.Errorf("maxLength lost: %v", name["maxLength"])
+	if d, _ := name["description"].(string); !strings.HasPrefix(d, "At most 40 characters. Must match the regular expression ") {
+		t.Errorf("length not stated before the pattern: %q", d)
+	}
+	if _, kept := name["maxLength"]; kept {
+		t.Error("maxLength must not be sent as a constraint")
 	}
 	if param("aws_security_group", "sshEnabled")["type"] != "BOOLEAN" {
 		t.Error("boolean type lost")
@@ -228,5 +245,137 @@ func TestGeminiHintQuotesThePatternExactly(t *testing.T) {
 	d := out["properties"].(map[string]any)["n"].(map[string]any)["description"].(string)
 	if m := re.FindStringSubmatch(d); m == nil || m[1] != `^[a-z]{1,3}$` || !strings.HasPrefix(d, "A name. ") {
 		t.Errorf("description = %q", d)
+	}
+}
+
+// Every bound the catalog states must reach the model in words, since it no
+// longer reaches it as a constraint.
+func TestEveryCatalogBoundSurvivesAsAHint(t *testing.T) {
+	src := catalog.JSONSchema()
+	out := GeminiSchema(src)
+	// Walk both trees together: wherever the source had a bound, the translation
+	// must have a description that mentions its number and no constraint.
+	var walkBoth func(path string, s, o map[string]any)
+	checked := 0
+	walkBoth = func(path string, s, o map[string]any) {
+		for _, k := range []string{"minimum", "maximum", "minItems", "maxItems", "minLength", "maxLength"} {
+			v, ok := s[k]
+			if !ok {
+				continue
+			}
+			checked++
+			if _, kept := o[k]; kept {
+				t.Errorf("%s: %s sent as a constraint", path, k)
+			}
+			if d, _ := o["description"].(string); !strings.Contains(d, fmt.Sprint(v)) {
+				t.Errorf("%s: %s=%v is not stated in the description %q", path, k, v, d)
+			}
+		}
+		if sp, ok := s["properties"].(map[string]any); ok {
+			op, _ := o["properties"].(map[string]any)
+			for name, child := range sp {
+				if oc, ok := op[name].(map[string]any); ok {
+					walkBoth(path+"."+name, child.(map[string]any), oc)
+				}
+			}
+		}
+		if si, ok := s["items"].(map[string]any); ok {
+			oi, _ := o["items"].(map[string]any)
+			if oi != nil {
+				walkBoth(path+"[]", si, oi)
+			}
+		}
+		if sv, ok := s["oneOf"].([]any); ok {
+			ov, _ := o["anyOf"].([]any)
+			for i := range sv {
+				if i < len(ov) {
+					walkBoth(fmt.Sprintf("%s|%d", path, i), sv[i].(map[string]any), ov[i].(map[string]any))
+				}
+			}
+		}
+	}
+	walkBoth("$", src, out)
+	if checked < 40 {
+		t.Errorf("only %d bounds checked; the walk is not covering the schema", checked)
+	}
+}
+
+func TestBoundHintWording(t *testing.T) {
+	cases := map[string]struct {
+		in   map[string]any
+		want string
+	}{
+		"range":         {map[string]any{"minimum": 8, "maximum": 100}, "Between 8 and 100"},
+		"only max":      {map[string]any{"maximum": 5}, "At most 5"},
+		"only min":      {map[string]any{"minimum": 1}, "At least 1"},
+		"string length": {map[string]any{"maxLength": 40}, "At most 40 characters"},
+		"both lengths":  {map[string]any{"minLength": 2, "maxLength": 9}, "At least 2 characters. At most 9 characters"},
+		"items":         {map[string]any{"minItems": 1, "maxItems": 30}, "At least 1 items. At most 30 items"},
+		"none":          {map[string]any{"type": "string"}, ""},
+		"float bounds":  {map[string]any{"minimum": 0.5, "maximum": 2.5}, "Between 0.5 and 2.5"},
+	}
+	for name, c := range cases {
+		if got := boundHint(c.in); got != c.want {
+			t.Errorf("%s: %q, want %q", name, got, c.want)
+		}
+	}
+}
+
+func TestDescriptionOrderIsDescriptionThenBoundsThenPattern(t *testing.T) {
+	out := GeminiSchema(map[string]any{"type": "object", "properties": map[string]any{
+		"n": map[string]any{"type": "string", "description": "A name", "maxLength": 5, "pattern": `^[a-z]+$`}}})
+	got := out["properties"].(map[string]any)["n"].(map[string]any)["description"]
+	if want := "A name. At most 5 characters. Must match the regular expression ^[a-z]+$"; got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
+
+// Probe mode needs the old behaviour to be able to confirm the diagnosis.
+func TestKeepingBoundsSendsThemAsConstraintsWithoutHints(t *testing.T) {
+	src := map[string]any{"type": "object", "properties": map[string]any{
+		"n": map[string]any{"type": "string", "maxLength": 5},
+		"k": map[string]any{"type": "integer", "minimum": 1, "maximum": 9},
+	}}
+	out := GeminiSchemaKeepingBounds(src)["properties"].(map[string]any)
+	n, k := out["n"].(map[string]any), out["k"].(map[string]any)
+	if n["maxLength"] != 5 || k["minimum"] != 1 || k["maximum"] != 9 {
+		t.Errorf("bounds not kept: %v %v", n, k)
+	}
+	if _, hinted := n["description"]; hinted {
+		t.Errorf("a bound was both kept and described: %v", n)
+	}
+	if hinted := GeminiSchema(src)["properties"].(map[string]any)["n"].(map[string]any); hinted["description"] != "At most 5 characters" {
+		t.Errorf("default translation did not hint: %v", hinted)
+	}
+}
+
+func TestGeminiSchemaKeepsNotesWithoutBoundConstraints(t *testing.T) {
+	out := GeminiSchema(catalog.JSONSchema())
+	props, _ := out["properties"].(map[string]any)
+	notes, ok := props["notes"].(map[string]any)
+	if !ok {
+		t.Fatalf("notes missing from the Gemini schema: %v", props)
+	}
+	// Bounds as constraints are refused by Gemini with a forced call; they must be words.
+	b, _ := json.Marshal(notes)
+	for _, k := range []string{"maxItems", "maxLength", "minItems"} {
+		if strings.Contains(string(b), `"`+k+`"`) {
+			t.Errorf("%s survived as a constraint: %s", k, b)
+		}
+	}
+	if !strings.Contains(string(b), "At most") {
+		t.Errorf("the limits should appear as a sentence: %s", b)
+	}
+	var top struct {
+		Required []string `json:"required"`
+	}
+	full, _ := json.Marshal(out)
+	if err := json.Unmarshal(full, &top); err != nil || len(top.Required) == 0 {
+		t.Fatalf("could not read required: %v %s", err, full)
+	}
+	for _, r := range top.Required {
+		if r == "notes" {
+			t.Error("notes became required")
+		}
 	}
 }

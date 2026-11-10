@@ -16,6 +16,8 @@ const (
 	// DefaultGeminiModel is a small, inexpensive model for development and
 	// evaluation runs. It is a default only: set AI_MODEL (or -model) to use another.
 	DefaultGeminiModel = "gemini-3.5-flash-lite"
+
+	defaultGeminiMaxTokens = 8192 // thinking tokens count against this limit on some models
 )
 
 // Gemini is a Generator backed by the Gemini API's generateContent method. Like
@@ -32,69 +34,43 @@ type Gemini struct {
 	BaseURL   string // empty means the public API; tests point this at a stub
 	MaxTokens int
 	Client    *http.Client
+	// Retries is how many more times a call is repeated after a transient
+	// failure (overload, brief outage, connection error). Zero means once.
+	Retries int
 }
 
-func (g *Gemini) Generate(ctx context.Context, req GenerateRequest) (json.RawMessage, Usage, error) {
-	model := strings.TrimPrefix(strings.TrimSpace(g.Model), "models/")
-	if !modelNameOK(model) {
-		// Never put an unchecked name in the request path.
-		return nil, Usage{}, fmt.Errorf("%w: invalid model name", ErrProviderRejected)
-	}
-	base := strings.TrimRight(g.BaseURL, "/")
-	if base == "" {
-		base = defaultGeminiBaseURL
-	}
-	client := g.Client
-	if client == nil {
-		client = &http.Client{Timeout: 90 * time.Second}
-	}
-	maxTokens := g.MaxTokens
+// BuildGeminiBody returns the generateContent request body for a prompt: a
+// system instruction, the prompt as the only user turn, one function declaration
+// carrying the translated catalog schema, and a forced call to that function.
+// It is exported so the evaluation tool's probe mode can vary one part at a time.
+func BuildGeminiBody(prompt string, schema map[string]any, maxTokens int) map[string]any {
 	if maxTokens <= 0 {
-		maxTokens = 8192 // thinking tokens count against this limit on some models
+		maxTokens = defaultGeminiMaxTokens
 	}
-
-	body, err := json.Marshal(map[string]any{
-		"systemInstruction": map[string]any{"parts": []map[string]any{{"text": systemPrompt}}},
-		"contents":          []map[string]any{{"role": "user", "parts": []map[string]any{{"text": req.Prompt}}}},
-		"tools": []map[string]any{{"functionDeclarations": []map[string]any{{
+	return map[string]any{
+		"systemInstruction": map[string]any{"parts": []any{map[string]any{"text": systemPrompt}}},
+		"contents":          []any{map[string]any{"role": "user", "parts": []any{map[string]any{"text": prompt}}}},
+		"tools": []any{map[string]any{"functionDeclarations": []any{map[string]any{
 			"name":        toolName,
 			"description": "Propose the infrastructure graph that satisfies the description.",
-			"parameters":  GeminiSchema(req.Schema),
+			"parameters":  GeminiSchema(schema),
 		}}}},
 		"toolConfig": map[string]any{"functionCallingConfig": map[string]any{
 			"mode":                 "ANY",
-			"allowedFunctionNames": []string{toolName},
+			"allowedFunctionNames": []any{toolName},
 		}},
 		"generationConfig": map[string]any{"maxOutputTokens": maxTokens},
-	})
+	}
+}
+
+func (g *Gemini) Generate(ctx context.Context, req GenerateRequest) (json.RawMessage, Usage, error) {
+	body, err := json.Marshal(BuildGeminiBody(req.Prompt, req.Schema, g.MaxTokens))
 	if err != nil {
 		return nil, Usage{}, fmt.Errorf("encode request: %w", err)
 	}
-
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/v1beta/models/"+model+":generateContent", bytes.NewReader(body))
+	raw, err := withRetry(ctx, g.Retries, func() ([]byte, error) { return g.send(ctx, body) })
 	if err != nil {
-		return nil, Usage{}, fmt.Errorf("build request: %w", err)
-	}
-	httpReq.Header.Set("content-type", "application/json")
-	// In a header, not the ?key= query parameter, so the key is never part of a
-	// URL that an error message, proxy log or trace could capture.
-	httpReq.Header.Set("x-goog-api-key", g.APIKey)
-
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return nil, Usage{}, fmt.Errorf("%w: %w", ErrProviderUnavailable, err)
-	}
-	defer resp.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
-	if err != nil {
-		return nil, Usage{}, fmt.Errorf("%w: reading response", ErrProviderUnavailable)
-	}
-
-	switch {
-	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
-		return nil, Usage{}, fmt.Errorf("%w: status %d%s", ErrProviderUnavailable, resp.StatusCode, errorType(raw))
-	case resp.StatusCode != http.StatusOK:
-		return nil, Usage{}, fmt.Errorf("%w: status %d%s", ErrProviderRejected, resp.StatusCode, errorType(raw))
+		return nil, Usage{}, err
 	}
 
 	var parsed struct {
@@ -139,4 +115,63 @@ func (g *Gemini) Generate(ctx context.Context, req GenerateRequest) (json.RawMes
 		}
 	}
 	return nil, usage, ErrProviderNoResult
+}
+
+// Probe sends an arbitrary request body and reports only whether the API
+// accepted it (HTTP 200). On refusal the error is an *APIError. It exists for
+// the evaluation tool's probe mode, which finds out which part of a request a
+// provider rejects.
+func (g *Gemini) Probe(ctx context.Context, body map[string]any) error {
+	b, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("encode request: %w", err)
+	}
+	_, err = g.send(ctx, b)
+	return err
+}
+
+// send posts a request body to generateContent and returns the body of a 200
+// response. Every failure is an error that names the status and, for an error
+// response, the provider's error name; see APIError.
+func (g *Gemini) send(ctx context.Context, body []byte) ([]byte, error) {
+	model := strings.TrimPrefix(strings.TrimSpace(g.Model), "models/")
+	if !modelNameOK(model) {
+		// Never put an unchecked name in the request path.
+		return nil, fmt.Errorf("%w: invalid model name", ErrProviderRejected)
+	}
+	base := strings.TrimRight(g.BaseURL, "/")
+	if base == "" {
+		base = defaultGeminiBaseURL
+	}
+	client := g.Client
+	if client == nil {
+		client = &http.Client{Timeout: 90 * time.Second}
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/v1beta/models/"+model+":generateContent", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	httpReq.Header.Set("content-type", "application/json")
+	// In a header, not the ?key= query parameter, so the key is never part of a
+	// URL that an error message, proxy log or trace could capture.
+	httpReq.Header.Set("x-goog-api-key", g.APIKey)
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrProviderUnavailable, err)
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	if err != nil {
+		return nil, fmt.Errorf("%w: reading response", ErrProviderUnavailable)
+	}
+
+	switch {
+	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
+		return nil, newAPIError(ErrProviderUnavailable, resp.StatusCode, raw)
+	case resp.StatusCode != http.StatusOK:
+		return nil, newAPIError(ErrProviderRejected, resp.StatusCode, raw)
+	}
+	return raw, nil
 }
