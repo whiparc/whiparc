@@ -22,11 +22,23 @@ export interface AIProposal {
   nodes: Node[];
   edges: Edge[];
   warnings: AIWarning[];
+  // What the model said it left out. Plain text from a model: show it as text only.
+  notes: string[];
 }
 
 export type AIGenerateResult =
   | { ok: true; proposal: AIProposal }
-  | { ok: false; status: number; message: string };
+  // notes is set on a refusal where the model said why it built nothing.
+  | { ok: false; status: number; message: string; notes: string[] };
+
+const MAX_NOTES = 5;
+
+// parseNotes accepts only a list of non-empty strings and applies the server's
+// count limit again, so a bad response cannot flood the review panel.
+export function parseNotes(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((n): n is string => typeof n === 'string' && n.trim() !== '').slice(0, MAX_NOTES);
+}
 
 const FALLBACK_STATUS: AIStatus = { enabled: false, maxPromptLength: 2000 };
 
@@ -46,16 +58,17 @@ export async function fetchAIStatus(token: string): Promise<AIStatus> {
   }
 }
 
-async function errorMessage(res: Response): Promise<string> {
+async function errorDetails(res: Response): Promise<{ message: string; notes: string[] }> {
   try {
     const body = await res.json();
-    if (body && typeof body.error === 'string' && body.error) return body.error;
+    const notes = parseNotes(body?.notes);
+    if (body && typeof body.error === 'string' && body.error) return { message: body.error, notes };
   } catch {
     // fall through
   }
-  if (res.status === 403) return 'You need edit access to this project to use AI generation.';
-  if (res.status === 429) return 'Too many requests. Please wait a moment and try again.';
-  return 'Something went wrong. Please try again.';
+  if (res.status === 403) return { message: 'You need edit access to this project to use AI generation.', notes: [] };
+  if (res.status === 429) return { message: 'Too many requests. Please wait a moment and try again.', notes: [] };
+  return { message: 'Something went wrong. Please try again.', notes: [] };
 }
 
 export async function generateProposal(projectId: string, token: string, prompt: string, signal?: AbortSignal): Promise<AIGenerateResult> {
@@ -69,22 +82,27 @@ export async function generateProposal(projectId: string, token: string, prompt:
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
-      return { ok: false, status: 0, message: 'Cancelled.' };
+      return { ok: false, status: 0, message: 'Cancelled.', notes: [] };
     }
-    return { ok: false, status: 0, message: 'Could not reach the server. Check your connection and try again.' };
+    return { ok: false, status: 0, message: 'Could not reach the server. Check your connection and try again.', notes: [] };
   }
 
-  if (!res.ok) return { ok: false, status: res.status, message: await errorMessage(res) };
+  if (!res.ok) return { ok: false, status: res.status, ...(await errorDetails(res)) };
 
   try {
     const body = await res.json();
     if (!Array.isArray(body?.nodes) || !Array.isArray(body?.edges)) throw new Error('shape');
     return {
       ok: true,
-      proposal: { nodes: body.nodes, edges: body.edges, warnings: Array.isArray(body.warnings) ? body.warnings : [] },
+      proposal: {
+        nodes: body.nodes,
+        edges: body.edges,
+        warnings: Array.isArray(body.warnings) ? body.warnings : [],
+        notes: parseNotes(body.notes),
+      },
     };
   } catch {
-    return { ok: false, status: res.status, message: 'The server returned an unreadable response. Please try again.' };
+    return { ok: false, status: res.status, message: 'The server returned an unreadable response. Please try again.', notes: [] };
   }
 }
 

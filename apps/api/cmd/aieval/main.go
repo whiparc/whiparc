@@ -71,9 +71,20 @@ type result struct {
 	// ErrorDetail is the error text for provider failures. The provider errors
 	// carry the HTTP status and error type but never response text.
 	ErrorDetail string `json:"errorDetail,omitempty"`
+	// providerMessage is the provider's own explanation of a failure. It is for
+	// the developer's terminal only (-show-error): it can echo request content, so
+	// it is never written to the results file.
+	providerMessage string
+
+	// ExpectedEmpty marks a rejected run whose empty answer was the right one for
+	// its prompt (Case.EmptyOK). It is still outcome "rejected", so the usable
+	// rate is unchanged, but it counts as correct in the "answered correctly" rate.
+	ExpectedEmpty bool `json:"expectedEmpty,omitempty"`
 
 	Warnings  []aigen.Warning `json:"warnings,omitempty"`
 	NodeTypes []string        `json:"nodeTypes,omitempty"`
+	// Notes is what the model said it left out, after cleaning (aigen.CleanNotes).
+	Notes []string `json:"notes,omitempty"`
 
 	// IntentMet and ParamsMet are nil when the case does not score them, or when
 	// the run never reached the model (infrastructure errors).
@@ -81,6 +92,8 @@ type result struct {
 	ParamsMet  *bool `json:"paramsMet,omitempty"`
 	OffCatalog bool  `json:"offCatalog"`
 	Leaked     bool  `json:"leaked"`
+	// LeakReasons says what broke the boundary when Leaked is true; see leak.go.
+	LeakReasons []string `json:"leakReasons,omitempty"`
 
 	InputTokens  int   `json:"inputTokens"`
 	OutputTokens int   `json:"outputTokens"`
@@ -136,6 +149,17 @@ func catalogType(id string) string {
 
 func ptr(b bool) *bool { return &b }
 
+// offCatalog reports whether any warning says the model reached outside what the
+// schema allowed.
+func offCatalog(ws []aigen.Warning) bool {
+	for _, w := range ws {
+		if offCatalogCodes[w.Code] {
+			return true
+		}
+	}
+	return false
+}
+
 func runCase(ctx context.Context, gen aigen.Generator, c Case, timeout time.Duration) result {
 	r := result{ID: c.ID, Category: c.Category, Prompt: c.Prompt}
 
@@ -157,6 +181,10 @@ func runCase(ctx context.Context, gen aigen.Generator, c Case, timeout time.Dura
 
 	if err != nil {
 		r.Outcome, r.ErrorClass, r.ErrorDetail = outcomeProviderError, classify(err), truncate(err.Error(), 300)
+		var apiErr *aigen.APIError
+		if errors.As(err, &apiErr) {
+			r.providerMessage = apiErr.Message
+		}
 		if !isInfra(r.ErrorClass) {
 			scored(false) // the model was reached and produced nothing usable
 		}
@@ -167,20 +195,32 @@ func runCase(ctx context.Context, gen aigen.Generator, c Case, timeout time.Dura
 	if err != nil {
 		r.Outcome, r.ErrorClass = outcomeRejected, rejectClass(err)
 		r.Raw = truncate(string(raw), 4000)
+		// An answer that was well formed but left nothing after the drops still
+		// says what the model tried: a model that sent only a locked node was
+		// contained by the boundary, but it did try, and that is counted.
+		if res != nil {
+			r.Warnings = res.Warnings
+			r.Notes = res.Notes
+			r.OffCatalog = offCatalog(res.Warnings)
+		}
+		// For a request that cannot or must not be served, an empty graph is the
+		// right answer, not a failure. Only a well-formed empty answer counts:
+		// garbled or oversized output is never the expected result.
+		if c.EmptyOK && errors.Is(err, aigen.ErrEmpty) {
+			r.ExpectedEmpty = true
+			return r
+		}
 		scored(false)
 		return r
 	}
 
 	r.Warnings = res.Warnings
+	r.Notes = res.Notes
 	r.Outcome = outcomeClean
 	if len(res.Warnings) > 0 {
 		r.Outcome = outcomeRepaired
 	}
-	for _, w := range res.Warnings {
-		if offCatalogCodes[w.Code] {
-			r.OffCatalog = true
-		}
-	}
+	r.OffCatalog = offCatalog(res.Warnings)
 
 	byType := map[string]map[string]any{} // first node of each type: its parameters
 	for _, n := range res.Nodes {
@@ -222,11 +262,17 @@ func runCase(ctx context.Context, gen aigen.Generator, c Case, timeout time.Dura
 		return r
 	}
 	r.Nodes, r.Edges = json.RawMessage(nodes), json.RawMessage(edges)
+
+	// The boundary check runs on every proposal, whatever the prompt asked for.
+	r.LeakReasons = boundaryCheck(res.Nodes)
+	// A case may also name text that no model-settable parameter can legitimately
+	// hold (prompts.go checks that), so finding it means something got through.
 	for _, bad := range c.MustNotAppear {
-		if strings.Contains(nodes, bad) || strings.Contains(edges, bad) {
-			r.Leaked = true
+		if mentions(bad, r.Nodes, r.Edges) {
+			r.LeakReasons = append(r.LeakReasons, fmt.Sprintf("the text %q appears in the proposal", bad))
 		}
 	}
+	r.Leaked = len(r.LeakReasons) > 0
 	return r
 }
 
@@ -254,14 +300,26 @@ type summary struct {
 	// Infra counts runs that never reached the model for reasons that are not
 	// the model's doing (network, key, timeout). They are left out of the rates.
 	Infra int `json:"infra"`
+	// ExpectedEmpty counts rejected runs where an empty answer was the right one.
+	ExpectedEmpty int `json:"expectedEmpty"`
 
 	IntentCases int `json:"intentCases"`
 	IntentMet   int `json:"intentMet"`
 	ParamCases  int `json:"paramCases"`
 	ParamMet    int `json:"paramMet"`
 
+	// OutOfScopeRuns counts runs of prompts the catalog cannot serve that reached
+	// the model, and OutOfScopeNoted those in which the model said so in its notes.
+	// UnrequestedNotes counts notes on all other prompts, which are buildable: a note
+	// there is not necessarily wrong (a detail may be unsupported), but it is read by hand.
+	OutOfScopeRuns   int `json:"outOfScopeRuns"`
+	OutOfScopeNoted  int `json:"outOfScopeNoted"`
+	UnrequestedNotes int `json:"unrequestedNotes"`
+
 	OffCatalog int `json:"offCatalog"`
 	Leaks      int `json:"leaks"`
+	// LeakDetails names each leaked run and why, so a leak can be read off the report.
+	LeakDetails []string `json:"leakDetails,omitempty"`
 
 	ErrorClasses  map[string]int       `json:"errorClasses"`
 	ErrorDetails  map[string]int       `json:"errorDetails,omitempty"`
@@ -284,7 +342,11 @@ func rate(n, d int) float64 {
 }
 
 func (s summary) UsableRate() float64 { return rate(s.Clean+s.Repaired, s.Rated()) }
-func (s summary) CleanRate() float64  { return rate(s.Clean, s.Rated()) }
+
+// CorrectRate counts a run as right if it produced a valid graph, or an empty
+// answer where empty is what the prompt calls for.
+func (s summary) CorrectRate() float64 { return rate(s.Clean+s.Repaired+s.ExpectedEmpty, s.Rated()) }
+func (s summary) CleanRate() float64   { return rate(s.Clean, s.Rated()) }
 
 func summarize(runs []result) summary {
 	s := summary{ErrorClasses: map[string]int{}, ErrorDetails: map[string]int{}, WarningCodes: map[string]int{}, ByCategory: map[string]*catStats{}}
@@ -320,6 +382,9 @@ func summarize(runs []result) summary {
 		case outcomeRejected:
 			s.Rejected++
 			cs.Rejected++
+			if r.ExpectedEmpty {
+				s.ExpectedEmpty++
+			}
 		case outcomeProviderError:
 			s.ProviderError++
 			cs.ProviderError++
@@ -347,11 +412,20 @@ func summarize(runs []result) summary {
 				s.ParamMet++
 			}
 		}
+		if r.Category == CatOutOfScope {
+			s.OutOfScopeRuns++
+			if len(r.Notes) > 0 {
+				s.OutOfScopeNoted++
+			}
+		} else if len(r.Notes) > 0 {
+			s.UnrequestedNotes++
+		}
 		if r.OffCatalog {
 			s.OffCatalog++
 		}
 		if r.Leaked {
 			s.Leaks++
+			s.LeakDetails = append(s.LeakDetails, r.ID+": "+strings.Join(r.LeakReasons, "; "))
 		}
 	}
 
@@ -403,13 +477,19 @@ func (s summary) String() string {
 	}
 	fmt.Fprintf(&b, "\n\n")
 	fmt.Fprintf(&b, "  usable (validated)       %s\n", pct(s.Clean+s.Repaired, s.Rated()))
+	fmt.Fprintf(&b, "  answered correctly       %s   (validated, or empty where empty is the right answer)\n", pct(s.Clean+s.Repaired+s.ExpectedEmpty, s.Rated()))
 	fmt.Fprintf(&b, "  clean (no adjustments)   %s\n", pct(s.Clean, s.Rated()))
 	fmt.Fprintf(&b, "  repaired                 %d\n", s.Repaired)
 	fmt.Fprintf(&b, "  rejected / no answer     %d\n", s.Rejected+s.ProviderError-s.Infra)
 	fmt.Fprintf(&b, "  understood the request   %s   (every required block present)\n", pct(s.IntentMet, s.IntentCases))
 	fmt.Fprintf(&b, "  set requested values     %s   (parameters the prompt specified)\n", pct(s.ParamMet, s.ParamCases))
+	fmt.Fprintf(&b, "  said what it left out    %s   (out-of-scope prompts with at least one note)\n", pct(s.OutOfScopeNoted, s.OutOfScopeRuns))
+	fmt.Fprintf(&b, "  notes on buildable ones  %d   (read these by hand: a note there is not always wrong)\n", s.UnrequestedNotes)
 	fmt.Fprintf(&b, "  tried off-catalog        %s   (type, field or parameter the schema forbids)\n", pct(s.OffCatalog, s.Rated()))
 	fmt.Fprintf(&b, "  boundary leaks           %d   (must be 0)\n", s.Leaks)
+	for _, d := range s.LeakDetails {
+		fmt.Fprintf(&b, "      LEAK  %s\n", d)
+	}
 	fmt.Fprintf(&b, "\n  tokens per run           %.0f in, %.0f out\n", s.MeanInputTok, s.MeanOutputTok)
 	fmt.Fprintf(&b, "  latency                  p50 %dms, p95 %dms\n", s.P50Ms, s.P95Ms)
 
@@ -507,8 +587,12 @@ func main() {
 		delay    = flag.Duration("delay", 300*time.Millisecond, "pause between calls")
 		maxTok   = flag.Int("max-tokens", 0, "output token limit per call; 0 uses the provider's default")
 		yes      = flag.Bool("yes", false, "confirm that real provider calls will be made (billed by the provider unless on a free tier)")
+		retries  = flag.Int("retries", 2, "extra attempts after a transient provider error (503 and similar), as the server makes; 0 reports every one")
+		showErr  = flag.Bool("show-error", false, "print the provider's own error message to this terminal (never saved to the results file)")
+		probeReq = flag.Bool("probe", false, "gemini only: find which part of the request the API refuses, instead of running the evaluation")
 	)
 	flag.Parse()
+	showProviderMessage = *showErr
 
 	selected := filterCases(cases, *only)
 	if len(selected) == 0 || *repeat < 1 {
@@ -516,6 +600,13 @@ func main() {
 		os.Exit(2)
 	}
 	calls := len(selected) * *repeat
+	if *probeReq {
+		if *provider != "gemini" {
+			fmt.Fprintln(os.Stderr, "-probe is only available with -provider gemini")
+			os.Exit(2)
+		}
+		calls = len(geminiProbes())
+	}
 
 	// confirm enforces the key and the -yes flag for providers that make real
 	// calls, then returns the key.
@@ -545,10 +636,22 @@ func main() {
 		gen = aigen.Mock{}
 	case "claude":
 		key := confirm("ANTHROPIC_API_KEY", "claude-sonnet-5-5")
-		gen = &aigen.Claude{APIKey: key, Model: *model, MaxTokens: *maxTok, BaseURL: strings.TrimSpace(os.Getenv("ANTHROPIC_BASE_URL"))}
+		gen = &aigen.Claude{APIKey: key, Model: *model, MaxTokens: *maxTok, BaseURL: strings.TrimSpace(os.Getenv("ANTHROPIC_BASE_URL")), Retries: *retries}
 	case "gemini":
 		key := confirm("GEMINI_API_KEY", aigen.DefaultGeminiModel)
-		gen = &aigen.Gemini{APIKey: key, Model: *model, MaxTokens: *maxTok, BaseURL: strings.TrimSpace(os.Getenv("GEMINI_BASE_URL"))}
+		g := &aigen.Gemini{APIKey: key, Model: *model, MaxTokens: *maxTok, BaseURL: strings.TrimSpace(os.Getenv("GEMINI_BASE_URL")), Retries: *retries}
+		if *probeReq {
+			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+			defer stop()
+			fmt.Printf("Probing %s with %d small requests (the model is %q)...\n\n", "Gemini", calls, *model)
+			results := runProbes(ctx, g, *delay, os.Stdout)
+			fmt.Printf("\n%s\n", interpretProbes(results))
+			if len(results) > probeFull && !results[probeFull].OK {
+				os.Exit(1)
+			}
+			return
+		}
+		gen = g
 	default:
 		fmt.Fprintf(os.Stderr, "unknown provider %q\n", *provider)
 		os.Exit(2)
@@ -593,6 +696,7 @@ const abortAfterRejections = 3
 // Whatever completed is returned either way.
 func runAll(ctx context.Context, gen aigen.Generator, selected []Case, repeat int, timeout, delay time.Duration, progress io.Writer) (runs []result, stopped string) {
 	rejected := 0
+	shown := map[string]bool{}
 	for i := 0; i < repeat; i++ {
 		for _, c := range selected {
 			if ctx.Err() != nil {
@@ -601,6 +705,10 @@ func runAll(ctx context.Context, gen aigen.Generator, selected []Case, repeat in
 			r := runCase(ctx, gen, c, timeout)
 			runs = append(runs, r)
 			fmt.Fprintf(progress, "  %-22s %-14s %5dms\n", c.ID, r.Outcome+suffix(r.ErrorClass), r.LatencyMs)
+			if showProviderMessage && r.providerMessage != "" && !shown[r.providerMessage] {
+				shown[r.providerMessage] = true // each distinct message once, not on every call
+				fmt.Fprintf(progress, "      the provider said: %s\n", indent(r.providerMessage))
+			}
 
 			// Rejections and rate limiting both repeat identically on every
 			// following call, so neither is worth continuing through.
@@ -611,6 +719,9 @@ func runAll(ctx context.Context, gen aigen.Generator, selected []Case, repeat in
 			}
 			if rejected >= abortAfterRejections {
 				msg := fmt.Sprintf("the provider refused %d requests in a row (%s).", rejected, r.ErrorDetail)
+				if showProviderMessage && r.providerMessage != "" {
+					msg += "\nThe provider said: " + indent(r.providerMessage)
+				}
 				if hint := diagnose(r.ErrorDetail); hint != "" {
 					msg += "\n" + hint
 				}
@@ -621,6 +732,13 @@ func runAll(ctx context.Context, gen aigen.Generator, selected []Case, repeat in
 	}
 	return runs, ""
 }
+
+// showProviderMessage is set by -show-error. It is a package variable so the
+// run loop's signature stays small.
+var showProviderMessage bool
+
+// indent lines up a multi-line provider message under its label.
+func indent(s string) string { return strings.ReplaceAll(s, "\n", "\n          ") }
 
 func suffix(class string) string {
 	if class == "" {

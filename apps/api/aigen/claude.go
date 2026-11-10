@@ -32,21 +32,6 @@ var (
 	ErrProviderNoResult    = errors.New("the model did not return a graph")
 )
 
-// systemPrompt frames the task. The user's text arrives as the only user
-// message and is data to translate, not instructions that can widen what the
-// tool accepts: the tool schema and the validator behind it are what enforce
-// the limits, not this text.
-const systemPrompt = `You turn a plain-language description of infrastructure into a small graph of building blocks, by calling the propose_infrastructure tool exactly once.
-
-Rules:
-- Use only the node types the tool offers. Do not invent types, parameters or fields.
-- Prefer few nodes. Use a node only when the description needs it.
-- Give each node a short unique "ref" (letters, digits, underscore). Use refs in "edges" to connect nodes.
-- Connect a VPC to its subnets and security groups, subnets and security groups to the virtual machine, and the virtual machine to the configuration tasks that should run on it. Chain configuration tasks in the order they should run.
-- Leave a parameter out unless the description asks for a specific value; defaults are applied for you.
-- Never put credentials, passwords, keys, commands or scripts in any field. They cannot be set here.
-- If the description cannot be expressed with the offered node types, return the closest small graph that can.`
-
 // Claude is a Generator backed by the Anthropic Messages API. It forces a
 // single tool call whose input schema is the catalog schema, which makes the
 // model's answer a JSON document in the shape the validator expects. The
@@ -57,6 +42,9 @@ type Claude struct {
 	BaseURL   string // empty means the public API; tests point this at a stub
 	MaxTokens int
 	Client    *http.Client
+	// Retries is how many more times a call is repeated after a transient
+	// failure (overload, brief outage, connection error). Zero means once.
+	Retries int
 }
 
 func (c *Claude) Generate(ctx context.Context, req GenerateRequest) (json.RawMessage, Usage, error) {
@@ -89,33 +77,9 @@ func (c *Claude) Generate(ctx context.Context, req GenerateRequest) (json.RawMes
 		return nil, Usage{}, fmt.Errorf("encode request: %w", err)
 	}
 
-	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/v1/messages", bytes.NewReader(body))
+	raw, err := withRetry(ctx, c.Retries, func() ([]byte, error) { return c.post(ctx, client, base, body) })
 	if err != nil {
-		return nil, Usage{}, fmt.Errorf("build request: %w", err)
-	}
-	httpReq.Header.Set("content-type", "application/json")
-	httpReq.Header.Set("x-api-key", c.APIKey)
-	httpReq.Header.Set("anthropic-version", anthropicVersion)
-
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		// err can embed the request URL but never the API key, which is only in a header.
-		return nil, Usage{}, fmt.Errorf("%w: %w", ErrProviderUnavailable, err)
-	}
-	defer resp.Body.Close()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
-	if err != nil {
-		return nil, Usage{}, fmt.Errorf("%w: reading response", ErrProviderUnavailable)
-	}
-
-	switch {
-	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
-		return nil, Usage{}, fmt.Errorf("%w: status %d%s", ErrProviderUnavailable, resp.StatusCode, errorType(raw))
-	case resp.StatusCode != http.StatusOK:
-		// 4xx other than 429 is our request being wrong (bad key, bad model, bad
-		// schema) or the account being unable to pay for it. The message is not
-		// surfaced: it may echo request content. The error type is.
-		return nil, Usage{}, fmt.Errorf("%w: status %d%s", ErrProviderRejected, resp.StatusCode, errorType(raw))
+		return nil, Usage{}, err
 	}
 
 	var parsed struct {
@@ -144,6 +108,41 @@ func (c *Claude) Generate(ctx context.Context, req GenerateRequest) (json.RawMes
 		}
 	}
 	return nil, usage, ErrProviderNoResult
+}
+
+// post sends one Messages API request and returns the body of a 200 response.
+// Every failure is an error that names the status and, for an error response,
+// the provider's error name; see APIError.
+func (c *Claude) post(ctx context.Context, client *http.Client, base string, body []byte) ([]byte, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, base+"/v1/messages", bytes.NewReader(body))
+	if err != nil {
+		return nil, fmt.Errorf("build request: %w", err)
+	}
+	httpReq.Header.Set("content-type", "application/json")
+	httpReq.Header.Set("x-api-key", c.APIKey)
+	httpReq.Header.Set("anthropic-version", anthropicVersion)
+
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		// err can embed the request URL but never the API key, which is only in a header.
+		return nil, fmt.Errorf("%w: %w", ErrProviderUnavailable, err)
+	}
+	defer resp.Body.Close()
+	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxResponseBytes))
+	if err != nil {
+		return nil, fmt.Errorf("%w: reading response", ErrProviderUnavailable)
+	}
+
+	switch {
+	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
+		return nil, newAPIError(ErrProviderUnavailable, resp.StatusCode, raw)
+	case resp.StatusCode != http.StatusOK:
+		// 4xx other than 429 is our request being wrong (bad key, bad model, bad
+		// schema) or the account being unable to pay for it. The message is not
+		// surfaced: it may echo request content. The error type is.
+		return nil, newAPIError(ErrProviderRejected, resp.StatusCode, raw)
+	}
+	return raw, nil
 }
 
 // errorTypePattern admits only the short words the providers use to name an

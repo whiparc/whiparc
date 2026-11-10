@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Edge, Node } from "@xyflow/react";
-import { fetchAIStatus, generateProposal, mergeProposal } from "../aiGenerate";
+import { fetchAIStatus, generateProposal, mergeProposal, parseNotes } from "../aiGenerate";
 import { generateAnsibleYAML } from "../exportYaml";
 import { generateTerraformFiles } from "../bundleGenerator";
 import fixture from "./aiProposal.fixture.json";
@@ -8,7 +8,7 @@ import fixture from "./aiProposal.fixture.json";
 // aiProposal.fixture.json is real output of the Go side (mock model, then the
 // validator, then the layout step) for "node api with a postgres database and
 // an s3 bucket". It pins the contract between server and client.
-const proposal = fixture as unknown as { nodes: Node[]; edges: Edge[]; warnings: unknown[] };
+const proposal = fixture as unknown as { nodes: Node[]; edges: Edge[]; warnings: unknown[]; notes: string[] };
 
 const jsonResponse = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -139,9 +139,31 @@ describe("generateProposal", () => {
     expect(res.ok && res.proposal.warnings).toEqual([]);
   });
 
+  it("defaults notes to an empty list", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, { nodes: [], edges: [] })));
+    const res = await generateProposal("p", "t", "x");
+    expect(res.ok && res.proposal.notes).toEqual([]);
+  });
+
+  it("returns the model's notes with a proposal", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(200, { ...proposal, notes: ["No Kubernetes."] })));
+    const res = await generateProposal("p", "t", "x");
+    expect(res.ok && res.proposal.notes).toEqual(["No Kubernetes."]);
+  });
+
+  it("carries the notes of a refusal so the user learns why nothing was built", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(422, { error: "Try rephrasing it.", notes: ["Google Cloud is not available."] })));
+    expect(await generateProposal("p", "t", "x")).toEqual({
+      ok: false,
+      status: 422,
+      message: "Try rephrasing it.",
+      notes: ["Google Cloud is not available."],
+    });
+  });
+
   it("surfaces the server's message for failures", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(422, { error: "Try rephrasing it." })));
-    expect(await generateProposal("p", "t", "x")).toEqual({ ok: false, status: 422, message: "Try rephrasing it." });
+    expect(await generateProposal("p", "t", "x")).toEqual({ ok: false, status: 422, message: "Try rephrasing it.", notes: [] });
   });
 
   it("has sensible messages when the body has no error text", async () => {
@@ -166,5 +188,19 @@ describe("generateProposal", () => {
     expect(await generateProposal("p", "t", "x")).toMatchObject({ ok: false, status: 0 });
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new DOMException("aborted", "AbortError")));
     expect(await generateProposal("p", "t", "x")).toMatchObject({ ok: false, message: "Cancelled." });
+  });
+});
+
+describe("parseNotes", () => {
+  it("keeps only non-empty strings", () => {
+    expect(parseNotes(["a", "", "  ", 3, null, { x: 1 }, "b"])).toEqual(["a", "b"]);
+  });
+
+  it("returns an empty list for anything that is not a list", () => {
+    for (const v of [undefined, null, "text", 7, { 0: "a" }]) expect(parseNotes(v)).toEqual([]);
+  });
+
+  it("applies the count limit again", () => {
+    expect(parseNotes(["1", "2", "3", "4", "5", "6", "7"])).toEqual(["1", "2", "3", "4", "5"]);
   });
 });

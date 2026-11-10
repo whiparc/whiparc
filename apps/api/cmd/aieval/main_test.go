@@ -490,3 +490,126 @@ func TestRunAllStopsOnRepeatedRateLimiting(t *testing.T) {
 		t.Errorf("rate-limited runs counted against the model: %+v", s)
 	}
 }
+
+func apiErr(status int, name, msg string) error {
+	return &aigen.APIError{Kind: aigen.ErrProviderRejected, Status: status, Name: name, Message: msg}
+}
+
+func TestShowErrorPrintsTheProviderMessageOnlyWhenAsked(t *testing.T) {
+	old := showProviderMessage
+	t.Cleanup(func() { showProviderMessage = old })
+	gen := func() *aigen.FakeGenerator {
+		return &aigen.FakeGenerator{Err: apiErr(400, "INVALID_ARGUMENT", "API key not valid. Please pass a valid API key.")}
+	}
+
+	t.Run("off by default: the message appears nowhere", func(t *testing.T) {
+		showProviderMessage = false
+		var out strings.Builder
+		runs, stopped := runAll(context.Background(), gen(), cases, 1, time.Second, 0, &out)
+		if strings.Contains(out.String(), "API key not valid") || strings.Contains(stopped, "API key not valid") {
+			t.Errorf("message shown without -show-error:\n%s\n%s", out.String(), stopped)
+		}
+		if len(runs) != abortAfterRejections {
+			t.Errorf("%d runs", len(runs))
+		}
+	})
+
+	t.Run("on: shown once in the progress output and again in the stop message", func(t *testing.T) {
+		showProviderMessage = true
+		var out strings.Builder
+		_, stopped := runAll(context.Background(), gen(), cases, 1, time.Second, 0, &out)
+		if n := strings.Count(out.String(), "the provider said: API key not valid"); n != 1 {
+			t.Errorf("shown %d times in progress output, want once:\n%s", n, out.String())
+		}
+		if !strings.Contains(stopped, "The provider said: API key not valid") || !strings.Contains(stopped, "GEMINI_API_KEY") {
+			t.Errorf("stop message: %q", stopped)
+		}
+	})
+
+	t.Run("distinct messages are each shown", func(t *testing.T) {
+		showProviderMessage = true
+		g := &sequence{errs: []error{apiErr(400, "X", "first reason"), apiErr(400, "X", "second reason"), apiErr(400, "X", "second reason")}}
+		var out strings.Builder
+		runAll(context.Background(), g, cases, 1, time.Second, 0, &out)
+		if !strings.Contains(out.String(), "first reason") || strings.Count(out.String(), "second reason") != 1 {
+			t.Errorf("%s", out.String())
+		}
+	})
+
+	t.Run("never written to the results file", func(t *testing.T) {
+		showProviderMessage = true
+		r := run(t, gen(), cases[0])
+		if r.providerMessage == "" {
+			t.Fatal("the message was not captured")
+		}
+		raw, _ := json.Marshal(r)
+		if strings.Contains(string(raw), "API key not valid") {
+			t.Errorf("provider message serialised into the results: %s", raw)
+		}
+		rep, _ := json.Marshal(report{Runs: []result{r}, Summary: summarize([]result{r})})
+		if strings.Contains(string(rep), "API key not valid") {
+			t.Error("provider message reached the saved report")
+		}
+	})
+
+	t.Run("multi-line messages stay aligned", func(t *testing.T) {
+		if got := indent("a\nb"); got != "a\n          b" {
+			t.Errorf("%q", got)
+		}
+	})
+}
+
+// sequence returns each error in turn, then repeats the last.
+type sequence struct {
+	errs []error
+	n    int
+}
+
+func (s *sequence) Generate(context.Context, aigen.GenerateRequest) (json.RawMessage, aigen.Usage, error) {
+	e := s.errs[min(s.n, len(s.errs)-1)]
+	s.n++
+	return nil, aigen.Usage{}, e
+}
+
+func TestRunCaseRecordsWhatTheModelSaidItLeftOut(t *testing.T) {
+	t.Run("alongside a proposal", func(t *testing.T) {
+		r := run(t, fake(`{"nodes":[{"ref":"a","type":"nginx"}],"edges":[],"notes":["No Kubernetes."]}`), Case{ID: "x", Category: CatSimple, Prompt: "p"})
+		if len(r.Notes) != 1 || r.Notes[0] != "No Kubernetes." {
+			t.Errorf("notes = %q", r.Notes)
+		}
+	})
+	t.Run("when the answer is empty", func(t *testing.T) {
+		r := run(t, fake(`{"nodes":[],"edges":[],"notes":["Google Cloud is not available."]}`), Case{ID: "x", Category: CatOutOfScope, Prompt: "p", EmptyOK: true})
+		if r.Outcome != outcomeRejected || !r.ExpectedEmpty || len(r.Notes) != 1 {
+			t.Errorf("%+v", r)
+		}
+	})
+	t.Run("not from a malformed document", func(t *testing.T) {
+		r := run(t, fake(`{"nodes":[],"edges":[],"extra":1,"notes":["x"]}`), Case{ID: "x", Category: CatOutOfScope, Prompt: "p", EmptyOK: true})
+		if len(r.Notes) != 0 {
+			t.Errorf("notes from an untrusted document were kept: %q", r.Notes)
+		}
+	})
+}
+
+func TestSummaryCountsNotesOnOutOfScopeAndBuildablePrompts(t *testing.T) {
+	runs := []result{
+		{Category: CatOutOfScope, Outcome: outcomeRejected, ExpectedEmpty: true, Notes: []string{"No GCP."}},
+		{Category: CatOutOfScope, Outcome: outcomeRejected, ExpectedEmpty: true},
+		{Category: CatOutOfScope, Outcome: outcomeClean},
+		{Category: CatSimple, Outcome: outcomeClean, Notes: []string{"Could not set X."}},
+		{Category: CatSimple, Outcome: outcomeClean},
+		// Never reached the model: counted in neither.
+		{Category: CatOutOfScope, Outcome: outcomeProviderError, ErrorClass: classUnavailable, Notes: []string{"ignored"}},
+	}
+	s := summarize(runs)
+	if s.OutOfScopeRuns != 3 || s.OutOfScopeNoted != 1 || s.UnrequestedNotes != 1 {
+		t.Errorf("runs=%d noted=%d unrequested=%d", s.OutOfScopeRuns, s.OutOfScopeNoted, s.UnrequestedNotes)
+	}
+	out := s.String()
+	for _, want := range []string{"said what it left out    33% (1/3)", "notes on buildable ones  1"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("report is missing %q:\n%s", want, out)
+		}
+	}
+}

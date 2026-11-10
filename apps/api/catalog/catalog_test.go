@@ -387,3 +387,24 @@ func TestRDSIdentifiersExcludeHyphen(t *testing.T) {
 		}
 	}
 }
+
+func TestSchemaOffersAnOptionalBoundedNotesList(t *testing.T) {
+	s := JSONSchema()
+	props := s["properties"].(map[string]any)
+	notes, ok := props["notes"].(map[string]any)
+	if !ok {
+		t.Fatal("schema has no notes property")
+	}
+	if notes["maxItems"] != MaxNotes {
+		t.Errorf("maxItems = %v", notes["maxItems"])
+	}
+	item := notes["items"].(map[string]any)
+	if item["type"] != "string" || item["maxLength"] != MaxNoteLen {
+		t.Errorf("items = %v", item)
+	}
+	for _, r := range s["required"].([]string) {
+		if r == "notes" {
+			t.Error("notes must stay optional: a model with nothing to report should not have to invent something")
+		}
+	}
+}

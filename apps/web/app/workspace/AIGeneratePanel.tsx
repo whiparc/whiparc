@@ -11,6 +11,7 @@ import {
   type AIProposal,
   type AIStatus,
 } from '../lib/aiGenerate';
+import NotIncluded from './NotIncluded';
 
 const EXAMPLES = [
   'A web server running nginx behind a firewall',
@@ -61,6 +62,8 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
   const [phase, setPhase] = useState<Phase>('closed');
   const [prompt, setPrompt] = useState('');
   const [error, setError] = useState<string | null>(null);
+  // Why nothing was built, when the model said so (shown with the error).
+  const [errorNotes, setErrorNotes] = useState<string[]>([]);
   const [proposal, setProposal] = useState<AIProposal | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const { fitView } = useReactFlow();
@@ -82,6 +85,7 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
     abortRef.current?.abort();
     setPhase('closed');
     setError(null);
+    setErrorNotes([]);
     setProposal(null);
   }, []);
 
@@ -98,6 +102,7 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
     const text = prompt.trim();
     if (!token || !text || phase === 'loading') return;
     setError(null);
+    setErrorNotes([]);
     setPhase('loading');
     const controller = new AbortController();
     abortRef.current = controller;
@@ -108,6 +113,7 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
       setPhase('review');
     } else {
       setError(result.message);
+      setErrorNotes(result.notes);
       setPhase('compose');
     }
   }, [prompt, token, projectId, phase]);
@@ -215,6 +221,7 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
                 {error}
               </div>
             )}
+            {errorNotes.length > 0 && <NotIncluded notes={errorNotes} />}
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <span style={{ ...mono, fontSize: 10, color: remaining < 100 ? 'var(--amber)' : 'var(--ink3)' }}>{remaining} left</span>
               <button
@@ -250,6 +257,7 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
             <span style={{ ...mono, fontSize: 10, color: 'var(--ink3)' }}>
               {proposal.nodes.length} nodes, {proposal.edges.length} connections
             </span>
+            {proposal.notes.length > 0 && <NotIncluded notes={proposal.notes} />}
             {proposal.warnings.length > 0 && (
               <div data-testid="ai-warnings" style={{ border: '1px solid var(--line)', padding: 8 }}>
                 <span style={labelStyle}>{proposal.warnings.length} adjustment{proposal.warnings.length === 1 ? '' : 's'}</span>

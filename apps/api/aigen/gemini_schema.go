@@ -17,14 +17,33 @@ import (
 //   - Keywords outside the subset (additionalProperties, pattern, $schema, ...)
 //     are dropped. A string's pattern is kept as a sentence in its description,
 //     which guides the model without adding a regular expression the API has to
-//     compile into its decoding constraints and may refuse as too complex.
+//     compile into its decoding constraints.
+//   - Length and range bounds (minLength, maxLength, minimum, maximum, minItems,
+//     maxItems) are also turned into sentences ("Between 8 and 100.", "At most
+//     30 items."). When the function call is forced, Gemini compiles the schema
+//     into a decoding constraint, and these bounds combined with a many-way anyOf
+//     make that constraint too complex: the API refuses the request with a bare
+//     "invalid argument". Measured with the evaluation's -probe mode: the same
+//     request is accepted with the bounds removed. The validator enforces every
+//     bound anyway.
 //   - An object with no properties is omitted from its parent: the API rejects
 //     empty object schemas, and the validator treats missing "parameters" as "use
 //     the defaults", which is what an empty one meant.
 //
 // The input is not modified.
 func GeminiSchema(src map[string]any) map[string]any {
-	out, _ := translateSchema(src)
+	return geminiSchema(src, false)
+}
+
+// GeminiSchemaKeepingBounds is GeminiSchema with the bounds sent as constraints,
+// which is what Gemini refuses (see above). It exists so probe mode can confirm
+// that, and tell if it ever stops being true.
+func GeminiSchemaKeepingBounds(src map[string]any) map[string]any {
+	return geminiSchema(src, true)
+}
+
+func geminiSchema(src map[string]any, keepBounds bool) map[string]any {
+	out, _ := translateSchema(src, keepBounds)
 	if out == nil || (out["type"] == nil && out["anyOf"] == nil) {
 		out = map[string]any{"type": "OBJECT", "properties": map[string]any{}}
 	}
@@ -32,16 +51,55 @@ func GeminiSchema(src map[string]any) map[string]any {
 }
 
 // keptKeywords are the schema keywords copied through unchanged.
-var keptKeywords = []string{"description", "format", "nullable", "minimum", "maximum", "minItems", "maxItems", "minLength", "maxLength"}
+var keptKeywords = []string{"description", "format", "nullable"}
+
+// boundKeywords are the length and range bounds. They are sent as constraints
+// only when asked (keepBounds), and otherwise as a sentence in the description.
+var boundKeywords = []string{"minimum", "maximum", "minItems", "maxItems", "minLength", "maxLength"}
 
 var geminiTypes = map[string]string{
 	"string": "STRING", "number": "NUMBER", "integer": "INTEGER",
 	"boolean": "BOOLEAN", "array": "ARRAY", "object": "OBJECT",
 }
 
+// boundHint describes the bounds of a schema in words, or "" if it has none.
+func boundHint(src map[string]any) string {
+	get := func(k string) (string, bool) {
+		v, ok := src[k]
+		if !ok {
+			return "", false
+		}
+		return fmt.Sprint(v), true
+	}
+	var parts []string
+	lo, hasLo := get("minimum")
+	hi, hasHi := get("maximum")
+	switch {
+	case hasLo && hasHi:
+		parts = append(parts, fmt.Sprintf("Between %s and %s", lo, hi))
+	case hasLo:
+		parts = append(parts, "At least "+lo)
+	case hasHi:
+		parts = append(parts, "At most "+hi)
+	}
+	if v, ok := get("minLength"); ok {
+		parts = append(parts, "At least "+v+" characters")
+	}
+	if v, ok := get("maxLength"); ok {
+		parts = append(parts, "At most "+v+" characters")
+	}
+	if v, ok := get("minItems"); ok {
+		parts = append(parts, "At least "+v+" items")
+	}
+	if v, ok := get("maxItems"); ok {
+		parts = append(parts, "At most "+v+" items")
+	}
+	return strings.Join(parts, ". ")
+}
+
 // translateSchema returns the translated schema and whether it is an object with
 // no properties (which the caller omits).
-func translateSchema(src map[string]any) (map[string]any, bool) {
+func translateSchema(src map[string]any, keepBounds bool) (map[string]any, bool) {
 	out := map[string]any{}
 
 	typ, _ := src["type"].(string)
@@ -60,15 +118,33 @@ func translateSchema(src map[string]any) (map[string]any, bool) {
 			out[k] = v
 		}
 	}
+	if keepBounds {
+		for _, k := range boundKeywords {
+			if v, ok := src[k]; ok {
+				out[k] = v
+			}
+		}
+	}
 	if values := stringList(src["enum"]); len(values) > 0 {
 		out["enum"] = values
 	}
-	if p, ok := src["pattern"].(string); ok && p != "" {
-		hint := "Must match the regular expression " + p
-		if d, ok := out["description"].(string); ok && d != "" {
-			hint = d + ". " + hint
+
+	// What the dropped keywords said, in words: the description, then the bounds,
+	// then the pattern, as sentences joined with ". ".
+	var sentences []string
+	if d, ok := out["description"].(string); ok && d != "" {
+		sentences = append(sentences, d)
+	}
+	if !keepBounds {
+		if h := boundHint(src); h != "" {
+			sentences = append(sentences, h)
 		}
-		out["description"] = hint
+	}
+	if p, ok := src["pattern"].(string); ok && p != "" {
+		sentences = append(sentences, "Must match the regular expression "+p)
+	}
+	if len(sentences) > 0 {
+		out["description"] = strings.Join(sentences, ". ")
 	}
 
 	variants := anyList(src["oneOf"])
@@ -79,7 +155,7 @@ func translateSchema(src map[string]any) (map[string]any, bool) {
 		var translated []any
 		for _, v := range variants {
 			if m, ok := v.(map[string]any); ok {
-				if t, empty := translateSchema(m); !empty {
+				if t, empty := translateSchema(m, keepBounds); !empty {
 					translated = append(translated, t)
 				}
 			}
@@ -88,14 +164,14 @@ func translateSchema(src map[string]any) (map[string]any, bool) {
 	}
 
 	if items, ok := src["items"].(map[string]any); ok {
-		out["items"], _ = translateSchema(items)
+		out["items"], _ = translateSchema(items, keepBounds)
 	}
 
 	if props, ok := src["properties"].(map[string]any); ok || typ == "object" {
 		kept := map[string]any{}
 		for name, raw := range props {
 			if child, ok := raw.(map[string]any); ok {
-				if t, empty := translateSchema(child); !empty {
+				if t, empty := translateSchema(child, keepBounds); !empty {
 					kept[name] = t
 				}
 			}

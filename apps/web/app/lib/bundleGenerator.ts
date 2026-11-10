@@ -296,6 +296,11 @@ variable "gcp_ssh_pub_key" {
 }\n\n`;
   }
 
+  // Every EC2 instance shares one key pair, so the resource is written once.
+  // Writing it inside each instance's block produced a duplicate
+  // aws_key_pair.whiparc_key, which Terraform rejects, for any canvas with two servers.
+  let keyPairWritten = false;
+
   tfNodes.forEach(node => {
     const id = node.id;
     const p: NodeParams = (node.data as unknown as CanvasNodeData)?.parameters || {};
@@ -393,12 +398,17 @@ data "aws_subnets" "default" {
           }
         }
 
-        tfResourcesBlock += `resource "aws_key_pair" "whiparc_key" {
+        if (!keyPairWritten) {
+          tfResourcesBlock += `resource "aws_key_pair" "whiparc_key" {
   key_name   = "whiparc-deploy-key"
   public_key = var.aws_ssh_pub_key
 }
 
-resource "aws_instance" "${name}" {
+`;
+          keyPairWritten = true;
+        }
+
+        tfResourcesBlock += `resource "aws_instance" "${name}" {
   ami           = "${ami}"
   instance_type = "${type}"${subnetLine}${sgLine}
   key_name      = aws_key_pair.whiparc_key.key_name

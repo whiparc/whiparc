@@ -58,6 +58,10 @@ func (Mock) Generate(_ context.Context, req GenerateRequest) (json.RawMessage, U
 		nodes = append(nodes, map[string]any{"ref": "files", "type": "aws_s3_bucket", "parameters": map[string]any{"bucketName": "app-uploads"}})
 	}
 
-	out, _ := json.Marshal(map[string]any{"nodes": nodes, "edges": edges})
+	doc := map[string]any{"nodes": nodes, "edges": edges}
+	if has("kubernetes", "k8s", "lambda", "gcp", "azure") {
+		doc["notes"] = []string{"Kubernetes, serverless functions, Google Cloud and Azure are not available here, so none of them is included."}
+	}
+	out, _ := json.Marshal(doc)
 	return out, Usage{InputTokens: len(req.Prompt) / 4, OutputTokens: len(out) / 4}, nil
 }

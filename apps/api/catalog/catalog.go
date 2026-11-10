@@ -92,6 +92,11 @@ const (
 	MaxPromptLen = 2000
 	// MaxRefLen bounds the model-local label used only to resolve edges.
 	MaxRefLen = 32
+	// MaxNotes and MaxNoteLen bound the optional list in which the model says
+	// what it left out. Notes are free text shown to the user, so they are kept
+	// few and short.
+	MaxNotes   = 5
+	MaxNoteLen = 200
 )
 
 // Reusable patterns. None can match a double quote, backslash, dollar sign or

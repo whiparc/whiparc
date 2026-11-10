@@ -52,6 +52,43 @@ describe("generateTerraformFiles", () => {
   });
 });
 
+describe("generateTerraformFiles with several servers", () => {
+  const server = (id: string, name: string) =>
+    node(id, { tech: "Terraform", label: name, parameters: { instanceName: name } });
+  const keyPairBlocks = (tf: string) => tf.match(/^resource "aws_key_pair" "whiparc_key"/gm) ?? [];
+
+  it("writes the shared key pair once, however many servers there are", () => {
+    for (const count of [1, 2, 3]) {
+      const nodes = [awsTarget(), ...Array.from({ length: count }, (_, i) => server(`aws_instance.web_server_${i + 1}`, `web_${i + 1}`))];
+      const { mainTf } = generateTerraformFiles(nodes, []);
+      expect(keyPairBlocks(mainTf), `${count} servers`).toHaveLength(1);
+      // Each server still uses it.
+      expect(mainTf.match(/key_name\s+= aws_key_pair\.whiparc_key\.key_name/g) ?? []).toHaveLength(count);
+    }
+  });
+
+  it("gives every server its own resource and no duplicate resource labels", () => {
+    const { mainTf } = generateTerraformFiles(
+      [awsTarget(), server("aws_instance.web_server_1", "web_a"), server("aws_instance.web_server_2", "web_b")],
+      [],
+    );
+    expect(mainTf).toContain('resource "aws_instance" "web_a"');
+    expect(mainTf).toContain('resource "aws_instance" "web_b"');
+    const labels = [...mainTf.matchAll(/^resource "([a-z0-9_]+)" "([^"]+)"/gm)].map((m) => `${m[1]}.${m[2]}`);
+    expect(labels.filter((l, i) => labels.indexOf(l) !== i)).toEqual([]);
+  });
+
+  it("writes no key pair when there is no server", () => {
+    expect(keyPairBlocks(generateTerraformFiles([awsTarget()], []).mainTf)).toHaveLength(0);
+  });
+
+  it("is unchanged for a single server: the key pair comes right before it", () => {
+    const { mainTf } = generateTerraformFiles([awsTarget(), ec2()], []);
+    expect(mainTf.indexOf('resource "aws_key_pair"')).toBeGreaterThan(-1);
+    expect(mainTf.indexOf('resource "aws_key_pair"')).toBeLessThan(mainTf.indexOf('resource "aws_instance"'));
+  });
+});
+
 describe("generateBundleFiles", () => {
   it("produces the documented bundle layout", () => {
     const { nodes, edges } = fullCanvas();
