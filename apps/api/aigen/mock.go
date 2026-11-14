@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"strings"
+
+	"api/catalog"
 )
 
 // Mock is a keyword-driven Generator for local development and demos
@@ -23,6 +25,25 @@ func (Mock) Generate(_ context.Context, req GenerateRequest) (json.RawMessage, U
 			}
 		}
 		return false
+	}
+
+	// Declines, as a real model is told to: build nothing and say why. The mock
+	// recognises only a few obvious cases, enough to exercise the refusal path.
+	infra := has("server", "vm", "bucket", "s3", "storage", "database", "postgres", "sql", "nginx", "node", "vpc", "subnet", "firewall", "network", "aws", "site", "web")
+	decline := ""
+	switch {
+	case has("rawcode", "shell script", "ignore all previous", "ignore your instructions", "system prompt"), !infra && has("password", "credential"):
+		decline = catalog.DeclineUnsafe
+	case !infra && has("kubernetes", "k8s", "lambda", "gcp", "azure", "google cloud"):
+		decline = catalog.DeclineUnsupported
+	case !infra && has("poem", "joke", "weather", "recipe", "capital of", "who are you", "hello", "hi there"):
+		decline = catalog.DeclineNotInfrastructure
+	case !infra:
+		decline = catalog.DeclineTooVague
+	}
+	if decline != "" {
+		out, _ := json.Marshal(map[string]any{"nodes": []any{}, "edges": []any{}, "decline": decline})
+		return out, Usage{InputTokens: len(req.Prompt) / 4, OutputTokens: len(out) / 4}, nil
 	}
 
 	nodes := []map[string]any{

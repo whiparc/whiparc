@@ -24,6 +24,9 @@ func JSONSchema() map[string]any {
 				"maxItems": MaxNodes,
 				"items":    map[string]any{"oneOf": variants},
 			},
+			// Optional. Only meaningful when no nodes are returned; the validator
+			// ignores it otherwise.
+			"decline": map[string]any{"type": "string", "enum": DeclineReasons},
 			"notes": map[string]any{
 				"type":     "array",
 				"maxItems": MaxNotes,

@@ -47,6 +47,16 @@ describe("proposal contract with the generators", () => {
     expect(new Set(labels).size).toBe(labels.length);
   });
 
+  it("proposes storage and a database on the safe side, so the Terraform is private and encrypted", () => {
+    const { mainTf } = generateTerraformFiles(proposal.nodes, proposal.edges);
+    // A model cannot set these, so they are the catalog defaults carried into the node.
+    expect(mainTf).toContain("aws_s3_bucket_public_access_block");
+    expect(mainTf).toContain("aws_s3_bucket_server_side_encryption_configuration");
+    expect(mainTf).toContain("storage_encrypted = true");
+    expect(mainTf).not.toContain("publicly_accessible");
+    expect(mainTf).not.toContain("multi_az");
+  });
+
   it("compiles to an Ansible playbook in dependency order", () => {
     const yaml = generateAnsibleYAML(proposal.nodes, proposal.edges);
     expect(yaml).toContain("hosts:");
@@ -158,12 +168,29 @@ describe("generateProposal", () => {
       status: 422,
       message: "Try rephrasing it.",
       notes: ["Google Cloud is not available."],
+      reason: "",
     });
   });
 
   it("surfaces the server's message for failures", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(422, { error: "Try rephrasing it." })));
-    expect(await generateProposal("p", "t", "x")).toEqual({ ok: false, status: 422, message: "Try rephrasing it.", notes: [] });
+    expect(await generateProposal("p", "t", "x")).toEqual({ ok: false, status: 422, message: "Try rephrasing it.", notes: [], reason: "" });
+  });
+
+  it("reports a decline with the server's reason, so the panel can say so plainly", async () => {
+    for (const reason of ["not_infrastructure", "unsupported", "unsafe", "too_vague", "empty"]) {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(422, { error: "I can't build that.", reason })));
+      expect(await generateProposal("p", "t", "x")).toEqual({ ok: false, status: 422, message: "I can't build that.", notes: [], reason });
+    }
+  });
+
+  it("does not treat an unknown or misplaced reason as a decline", async () => {
+    // An unknown code, a reason on a status that is not 422, and a non-string.
+    for (const [status, reason] of [[422, "made_up"], [500, "unsafe"], [422, 7], [422, ["unsafe"]]] as const) {
+      vi.stubGlobal("fetch", vi.fn().mockResolvedValue(jsonResponse(status, { error: "x", reason })));
+      const res = await generateProposal("p", "t", "x");
+      expect(res.ok === false && res.reason).toBe("");
+    }
   });
 
   it("has sensible messages when the body has no error text", async () => {

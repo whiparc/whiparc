@@ -61,6 +61,10 @@ type Result struct {
 	// Notes is what the model said it left out, cleaned by CleanNotes. It is
 	// advisory text for the user and never drives anything.
 	Notes []string
+	// Decline is the reason code the model gave for building nothing (one of
+	// catalog.DeclineReasons), or "". It is set only when no node survives
+	// validation; a result with nodes never carries one.
+	Decline string
 }
 
 // forbiddenFields are never accepted on a node, whatever their value. They are
@@ -146,6 +150,8 @@ func ValidateWithUsed(raw []byte, used map[string]bool) (*Result, error) {
 		// Notes is read loosely: a malformed list must cost only the notes, never
 		// an otherwise usable graph.
 		Notes json.RawMessage `json:"notes"`
+		// Decline is read the same way, and used only if nothing is built.
+		Decline json.RawMessage `json:"decline"`
 	}
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
@@ -169,6 +175,7 @@ func ValidateWithUsed(raw []byte, used map[string]bool) (*Result, error) {
 		// dropped, which is how a caller tells "the model sent nothing" from "the
 		// model sent only things the catalog forbids", and the notes are how the
 		// model says why it sent nothing.
+		v.res.Decline = cleanDecline(top.Decline)
 		return v.res, ErrEmpty
 	}
 	v.assignIDs()

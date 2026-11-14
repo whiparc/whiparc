@@ -80,6 +80,8 @@ type result struct {
 	// its prompt (Case.EmptyOK). It is still outcome "rejected", so the usable
 	// rate is unchanged, but it counts as correct in the "answered correctly" rate.
 	ExpectedEmpty bool `json:"expectedEmpty,omitempty"`
+	// Decline is the reason code the model gave for building nothing, "" if none.
+	Decline string `json:"decline,omitempty"`
 
 	Warnings  []aigen.Warning `json:"warnings,omitempty"`
 	NodeTypes []string        `json:"nodeTypes,omitempty"`
@@ -201,6 +203,7 @@ func runCase(ctx context.Context, gen aigen.Generator, c Case, timeout time.Dura
 		if res != nil {
 			r.Warnings = res.Warnings
 			r.Notes = res.Notes
+			r.Decline = res.Decline
 			r.OffCatalog = offCatalog(res.Warnings)
 		}
 		// For a request that cannot or must not be served, an empty graph is the
@@ -316,6 +319,12 @@ type summary struct {
 	OutOfScopeNoted  int `json:"outOfScopeNoted"`
 	UnrequestedNotes int `json:"unrequestedNotes"`
 
+	// DeclineCases counts runs of prompts with nothing buildable (Case.MustDecline)
+	// that reached the model; Declined those answered with no nodes and a reason
+	// code. The rest built something anyway, or built nothing and gave no reason.
+	DeclineCases int `json:"declineCases"`
+	Declined     int `json:"declined"`
+
 	OffCatalog int `json:"offCatalog"`
 	Leaks      int `json:"leaks"`
 	// LeakDetails names each leaked run and why, so a leak can be read off the report.
@@ -412,6 +421,12 @@ func summarize(runs []result) summary {
 				s.ParamMet++
 			}
 		}
+		if mustDecline[r.ID] {
+			s.DeclineCases++
+			if r.Decline != "" {
+				s.Declined++
+			}
+		}
 		if r.Category == CatOutOfScope {
 			s.OutOfScopeRuns++
 			if len(r.Notes) > 0 {
@@ -484,6 +499,7 @@ func (s summary) String() string {
 	fmt.Fprintf(&b, "  understood the request   %s   (every required block present)\n", pct(s.IntentMet, s.IntentCases))
 	fmt.Fprintf(&b, "  set requested values     %s   (parameters the prompt specified)\n", pct(s.ParamMet, s.ParamCases))
 	fmt.Fprintf(&b, "  said what it left out    %s   (out-of-scope prompts with at least one note)\n", pct(s.OutOfScopeNoted, s.OutOfScopeRuns))
+	fmt.Fprintf(&b, "  declined with a reason   %s   (nothing buildable: no nodes and a reason, not a stand-in)\n", pct(s.Declined, s.DeclineCases))
 	fmt.Fprintf(&b, "  notes on buildable ones  %d   (read these by hand: a note there is not always wrong)\n", s.UnrequestedNotes)
 	fmt.Fprintf(&b, "  tried off-catalog        %s   (type, field or parameter the schema forbids)\n", pct(s.OffCatalog, s.Rated()))
 	fmt.Fprintf(&b, "  boundary leaks           %d   (must be 0)\n", s.Leaks)

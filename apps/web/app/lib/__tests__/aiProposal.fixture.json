@@ -246,7 +246,10 @@
           "instanceClass": "db.t3.micro",
           "password": "SuperSecurePassword123!",
           "username": "dbadmin",
-          "vpcSecurityGroupIds": ""
+          "vpcSecurityGroupIds": "",
+          "multiAz": false,
+          "publiclyAccessible": false,
+          "storageEncrypted": true
         },
         "isCustom": false,
         "rawCode": "",
@@ -271,7 +274,9 @@
         "parameters": {
           "bucketName": "app-uploads",
           "forceDestroy": true,
-          "versioningEnabled": true
+          "versioningEnabled": true,
+          "blockPublicAccess": true,
+          "encryptionEnabled": true
         },
         "isCustom": false,
         "rawCode": "",

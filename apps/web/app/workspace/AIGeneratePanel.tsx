@@ -8,10 +8,13 @@ import {
   fetchAIStatus,
   generateProposal,
   mergeProposal,
+  isDecline,
   type AIProposal,
   type AIStatus,
 } from '../lib/aiGenerate';
 import NotIncluded from './NotIncluded';
+import WhiparcThinking from './WhiparcThinking';
+import { summarizeNode } from '../lib/nodeSummary';
 
 const EXAMPLES = [
   'A web server running nginx behind a firewall',
@@ -48,6 +51,15 @@ const primaryButton: CSSProperties = {
 
 type Phase = 'closed' | 'compose' | 'loading' | 'review';
 
+// The heading over a server decline. The sentence beneath it is the server's.
+const DECLINE_TITLE: Record<string, string> = {
+  not_infrastructure: 'Outside what I can build',
+  unsupported: 'Not available yet',
+  unsafe: "I can't do that",
+  too_vague: 'Tell me a little more',
+  empty: 'Nothing to build from that',
+};
+
 interface Props {
   projectId: string;
   token: string | null;
@@ -64,6 +76,8 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
   const [error, setError] = useState<string | null>(null);
   // Why nothing was built, when the model said so (shown with the error).
   const [errorNotes, setErrorNotes] = useState<string[]>([]);
+  // Set when the request was understood and declined, as opposed to failing.
+  const [declineReason, setDeclineReason] = useState('');
   const [proposal, setProposal] = useState<AIProposal | null>(null);
   const abortRef = useRef<AbortController | null>(null);
   const { fitView } = useReactFlow();
@@ -86,7 +100,14 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
     setPhase('closed');
     setError(null);
     setErrorNotes([]);
+    setDeclineReason('');
     setProposal(null);
+  }, []);
+
+  // Stop waiting without losing what was typed.
+  const cancel = useCallback(() => {
+    abortRef.current?.abort();
+    setPhase('compose');
   }, []);
 
   useEffect(() => {
@@ -103,6 +124,7 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
     if (!token || !text || phase === 'loading') return;
     setError(null);
     setErrorNotes([]);
+    setDeclineReason('');
     setPhase('loading');
     const controller = new AbortController();
     abortRef.current = controller;
@@ -114,6 +136,7 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
     } else {
       setError(result.message);
       setErrorNotes(result.notes);
+      setDeclineReason(result.reason);
       setPhase('compose');
     }
   }, [prompt, token, projectId, phase]);
@@ -124,6 +147,9 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
     const merged = mergeProposal(nodes, edges, proposal);
     setNodes(merged.nodes);
     setEdges(merged.edges);
+    // Open the first new node in the inspector, so its settings are one look away.
+    const first = merged.nodes[nodes.length];
+    if (first) useCanvasStore.getState().setSelectedNodeId(first.id);
     setPrompt('');
     setProposal(null);
     setPhase('closed');
@@ -176,7 +202,24 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
           </button>
         </header>
 
-        {phase !== 'review' && (
+        {phase === 'loading' && (
+          <>
+            <blockquote
+              data-testid="ai-submitted"
+              style={{ ...mono, margin: 0, padding: '6px 8px', borderLeft: '2px solid var(--line)', fontSize: 11, color: 'var(--ink3)', maxHeight: 60, overflow: 'hidden', overflowWrap: 'anywhere' }}
+            >
+              {prompt.trim()}
+            </blockquote>
+            <WhiparcThinking />
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button type="button" data-testid="ai-cancel" onClick={cancel} style={buttonBase}>
+                Cancel
+              </button>
+            </div>
+          </>
+        )}
+
+        {phase === 'compose' && (
           <>
             <textarea
               data-testid="ai-prompt"
@@ -186,7 +229,6 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
                 if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
               }}
               maxLength={status.maxPromptLength}
-              disabled={phase === 'loading'}
               placeholder="Describe what you want to build, e.g. a Node.js app on a small server with a PostgreSQL database."
               rows={5}
               autoFocus
@@ -201,7 +243,7 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
                 padding: 8,
               }}
             />
-            {!prompt && (
+            {(!prompt || isDecline(declineReason)) && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 <span style={labelStyle}>Try</span>
                 {EXAMPLES.map((ex) => (
@@ -216,7 +258,18 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
                 ))}
               </div>
             )}
-            {error && (
+            {error && isDecline(declineReason) && (
+              <div
+                role="status"
+                data-testid="ai-decline"
+                data-reason={declineReason}
+                style={{ border: '1px solid var(--line)', borderLeft: '3px solid var(--amber)', padding: '8px 10px', display: 'flex', flexDirection: 'column', gap: 4 }}
+              >
+                <span style={{ ...labelStyle, color: 'var(--amber)' }}>{DECLINE_TITLE[declineReason]}</span>
+                <span style={{ fontSize: 12, lineHeight: 1.45, color: 'var(--ink)' }}>{error}</span>
+              </div>
+            )}
+            {error && !isDecline(declineReason) && (
               <div role="alert" data-testid="ai-error" style={{ ...mono, fontSize: 11, color: 'var(--amber)' }}>
                 {error}
               </div>
@@ -228,10 +281,10 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
                 type="button"
                 data-testid="ai-generate"
                 onClick={submit}
-                disabled={!prompt.trim() || phase === 'loading'}
-                style={{ ...primaryButton, opacity: !prompt.trim() || phase === 'loading' ? 0.5 : 1 }}
+                disabled={!prompt.trim()}
+                style={{ ...primaryButton, opacity: !prompt.trim() ? 0.5 : 1 }}
               >
-                {phase === 'loading' ? 'Generating…' : 'Generate'}
+                Generate
               </button>
             </div>
             <p style={{ ...mono, fontSize: 10, color: 'var(--ink3)', margin: 0 }}>
@@ -244,18 +297,26 @@ export default function AIGeneratePanel({ projectId, token, readOnly }: Props) {
           <>
             <ul data-testid="ai-nodes" style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 220, overflowY: 'auto' }}>
               {proposal.nodes.map((n) => {
-                const d = n.data as { label?: string; tech?: string; icon?: string };
+                const d = n.data as { label?: string; tech?: string; icon?: string; parameters?: Record<string, unknown> };
+                const summary = summarizeNode(n.id, d.parameters);
                 return (
                   <li key={n.id} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
-                    <Icon icon={d.icon || 'lucide:box'} width={14} />
-                    <span style={{ flex: 1 }}>{d.label}</span>
+                    <Icon icon={d.icon || 'lucide:box'} width={14} style={{ flexShrink: 0 }} />
+                    <span style={{ flex: 1, minWidth: 0 }}>
+                      <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.label}</span>
+                      {summary && (
+                        <span data-testid="ai-node-summary" title={summary} style={{ ...mono, display: 'block', fontSize: 10, color: 'var(--ink3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {summary}
+                        </span>
+                      )}
+                    </span>
                     <span style={labelStyle}>{d.tech}</span>
                   </li>
                 );
               })}
             </ul>
             <span style={{ ...mono, fontSize: 10, color: 'var(--ink3)' }}>
-              {proposal.nodes.length} nodes, {proposal.edges.length} connections
+              {proposal.nodes.length} nodes, {proposal.edges.length} connections. Every setting stays editable: select a node after adding it.
             </span>
             {proposal.notes.length > 0 && <NotIncluded notes={proposal.notes} />}
             {proposal.warnings.length > 0 && (

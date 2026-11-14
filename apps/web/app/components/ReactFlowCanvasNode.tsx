@@ -6,6 +6,7 @@ import { Icon } from '@iconify/react';
 import useCanvasStore, { NodeExecutionStatus } from '../store/useCanvasStore';
 import BlueprintNodeCard, { type NodeTag } from './canvas/BlueprintNodeCard';
 import type { NodeTech } from '../lib/canvasDesign';
+import { summarizeNode } from '../lib/nodeSummary';
 
 interface ReactFlowCanvasNodeProps {
   id: string;
@@ -19,6 +20,7 @@ interface ReactFlowCanvasNodeProps {
     statusText: string;
     editorName?: string;
     isCustom?: boolean;
+    parameters?: Record<string, unknown>;
   };
   selected?: boolean;
 }
@@ -118,6 +120,7 @@ export default function ReactFlowCanvasNode({ id, data }: ReactFlowCanvasNodePro
         label={data.label}
         categoryLabel={data.categoryLabel}
         description={data.description}
+        summary={data.isCustom ? undefined : summarizeNode(id, data.parameters)}
         isActive={isActive}
         isCustom={data.isCustom}
         tag={statusTag(data)}
