@@ -32,6 +32,8 @@ interface NodeParams {
   bucketName?: string;
   forceDestroy?: boolean;
   versioningEnabled?: boolean;
+  blockPublicAccess?: boolean;
+  encryptionEnabled?: boolean;
   // AWS RDS instance
   dbName?: string;
   allocatedStorage?: number;
@@ -41,6 +43,9 @@ interface NodeParams {
   engineVersion?: string;
   dbSubnetGroupName?: string;
   vpcSecurityGroupIds?: string;
+  publiclyAccessible?: boolean;
+  storageEncrypted?: boolean;
+  multiAz?: boolean;
   // AWS VPC
   vpcName?: string;
   cidrBlock?: string;
@@ -296,6 +301,11 @@ variable "gcp_ssh_pub_key" {
 }\n\n`;
   }
 
+  // Every EC2 instance shares one key pair, so the resource is written once.
+  // Writing it inside each instance's block produced a duplicate
+  // aws_key_pair.whiparc_key, which Terraform rejects, for any canvas with two servers.
+  let keyPairWritten = false;
+
   tfNodes.forEach(node => {
     const id = node.id;
     const p: NodeParams = (node.data as unknown as CanvasNodeData)?.parameters || {};
@@ -393,12 +403,17 @@ data "aws_subnets" "default" {
           }
         }
 
-        tfResourcesBlock += `resource "aws_key_pair" "whiparc_key" {
+        if (!keyPairWritten) {
+          tfResourcesBlock += `resource "aws_key_pair" "whiparc_key" {
   key_name   = "whiparc-deploy-key"
   public_key = var.aws_ssh_pub_key
 }
 
-resource "aws_instance" "${name}" {
+`;
+          keyPairWritten = true;
+        }
+
+        tfResourcesBlock += `resource "aws_instance" "${name}" {
   ami           = "${ami}"
   instance_type = "${type}"${subnetLine}${sgLine}
   key_name      = aws_key_pair.whiparc_key.key_name
@@ -663,6 +678,30 @@ resource "aws_s3_bucket_versioning" "${name}_versioning" {
     status = "${versioning ? 'Enabled' : 'Suspended'}"
   }
 }\n\n`;
+
+      // Posture settings are opt-in on the value (=== true), not on its absence: a
+      // bucket saved before these settings existed has neither key and must keep
+      // producing exactly the Terraform it always did, or the next apply would
+      // change infrastructure the user never touched.
+      if (p.blockPublicAccess === true) {
+        tfResourcesBlock += `resource "aws_s3_bucket_public_access_block" "${name}_public_access" {
+  bucket                  = aws_s3_bucket.${name}.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}\n\n`;
+      }
+      if (p.encryptionEnabled === true) {
+        tfResourcesBlock += `resource "aws_s3_bucket_server_side_encryption_configuration" "${name}_encryption" {
+  bucket = aws_s3_bucket.${name}.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}\n\n`;
+      }
     }
     else if (id.startsWith('aws_db_instance') && hasAws) {
       const name = p.dbName || 'appdb';
@@ -697,6 +736,13 @@ resource "aws_s3_bucket_versioning" "${name}_versioning" {
           extraParams += `\n  vpc_security_group_ids = [aws_security_group.${sgName}.id]`;
         }
       }
+
+      // Opt-in on the value, like the S3 settings: a database saved before these
+      // existed keeps its Terraform unchanged (turning encryption on later would
+      // force AWS to replace the instance).
+      if (p.storageEncrypted === true) extraParams += `\n  storage_encrypted = true`;
+      if (p.multiAz === true) extraParams += `\n  multi_az = true`;
+      if (p.publiclyAccessible === true) extraParams += `\n  publicly_accessible = true`;
 
       tfResourcesBlock += `resource "aws_db_instance" "${name}" {
   allocated_storage   = ${storage}

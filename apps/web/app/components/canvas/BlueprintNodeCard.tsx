@@ -28,6 +28,9 @@ interface BlueprintNodeCardProps {
   categoryLabel?: string;
   // Shown as a native tooltip: the mock's node face is kicker + title only.
   description?: string;
+  // One line of the settings that matter ("t3.small · 50 GB"), under the title.
+  // Omitted when a node has nothing worth showing, so the face stays as before.
+  summary?: string;
   isActive?: boolean;
   isCustom?: boolean;
   tag?: NodeTag;
@@ -44,6 +47,7 @@ export default function BlueprintNodeCard({
   label,
   categoryLabel,
   description,
+  summary,
   isActive = false,
   isCustom = false,
   tag,
@@ -145,6 +149,23 @@ export default function BlueprintNodeCard({
         >
           {label}
         </div>
+        {summary && (
+          <div
+            data-testid="node-summary"
+            title={summary}
+            style={{
+              fontFamily: 'var(--font-mono-marketing, ui-monospace, monospace)',
+              fontSize: 10,
+              lineHeight: 1.3,
+              color: 'var(--ink3)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {summary}
+          </div>
+        )}
       </div>
 
       {footer}

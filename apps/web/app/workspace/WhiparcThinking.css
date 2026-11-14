@@ -1,0 +1,128 @@
+/* The Whiparc mark as a small character that works while an AI request runs.
+   The dark stroke hops (squash, stretch, land) and the orange arc whips about
+   its foot, which is where the name comes from. Registration "+" marks blink
+   around it like a blueprint being drawn. Everything is transform and opacity,
+   so it costs no layout, and it stops for people who ask for less motion. */
+
+.wp-think {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0 6px;
+}
+
+.wp-think-stage {
+  position: relative;
+  width: 132px;
+  height: 92px;
+}
+
+.wp-think-hop {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  width: 56px;
+  height: 56px;
+  margin-left: -28px;
+  transform-origin: 50% 100%;
+  animation: wpThinkHop 1.5s cubic-bezier(.3, 0, .3, 1) infinite;
+  color: var(--ink);
+}
+
+.wp-think-arc {
+  transform-box: view-box;
+  /* The foot of the arc in the mark's 512-unit space. */
+  transform-origin: 345px 510px;
+  animation: wpThinkWhip 1.5s ease-in-out infinite;
+}
+
+.wp-think-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: 4px;
+  width: 44px;
+  height: 7px;
+  margin-left: -22px;
+  border-radius: 50%;
+  background: var(--ink);
+  opacity: .22;
+  animation: wpThinkShadow 1.5s cubic-bezier(.3, 0, .3, 1) infinite;
+}
+
+.wp-think-mark {
+  position: absolute;
+  font-family: var(--font-mono-marketing, ui-monospace, monospace);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--accent-ink);
+  opacity: 0;
+  animation: wpThinkMark 3s ease-in-out infinite;
+}
+.wp-think-mark:nth-of-type(1) { left: 6px;  top: 14px; animation-delay: 0s; }
+.wp-think-mark:nth-of-type(2) { right: 8px; top: 8px;  animation-delay: 1s; }
+.wp-think-mark:nth-of-type(3) { right: 20px; top: 56px; animation-delay: 2s; }
+.wp-think-mark:nth-of-type(4) { left: 18px; top: 60px; animation-delay: 1.5s; }
+
+.wp-think-caption {
+  min-height: 16px;
+  font-family: var(--font-mono-marketing, ui-monospace, monospace);
+  font-size: 11px;
+  letter-spacing: .04em;
+  color: var(--ink2);
+  text-align: center;
+}
+
+.wp-think-dots {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 2px;
+}
+.wp-think-dots i {
+  width: 3px;
+  height: 3px;
+  background: currentColor;
+  animation: wpThinkDot 1.2s ease-in-out infinite;
+}
+.wp-think-dots i:nth-child(2) { animation-delay: .15s; }
+.wp-think-dots i:nth-child(3) { animation-delay: .3s; }
+
+@keyframes wpThinkHop {
+  0%   { transform: translateY(0) scale(1.06, .9); }
+  14%  { transform: translateY(0) scale(1, 1); }
+  45%  { transform: translateY(-26px) scale(.96, 1.06); }
+  78%  { transform: translateY(0) scale(1, 1); }
+  88%  { transform: translateY(0) scale(1.08, .88); }
+  100% { transform: translateY(0) scale(1.06, .9); }
+}
+
+@keyframes wpThinkWhip {
+  0%   { transform: rotate(0deg); }
+  30%  { transform: rotate(-14deg); }
+  55%  { transform: rotate(9deg); }
+  78%  { transform: rotate(-4deg); }
+  100% { transform: rotate(0deg); }
+}
+
+@keyframes wpThinkShadow {
+  0%, 14%, 78%, 100% { transform: scaleX(1);   opacity: .22; }
+  45%                { transform: scaleX(.55); opacity: .1; }
+}
+
+@keyframes wpThinkMark {
+  0%, 100% { opacity: 0; transform: scale(.6); }
+  30%, 60% { opacity: .9; transform: scale(1); }
+}
+
+@keyframes wpThinkDot {
+  0%, 100% { opacity: .25; }
+  50%      { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wp-think-hop, .wp-think-arc, .wp-think-shadow, .wp-think-mark, .wp-think-dots i {
+    animation: none;
+  }
+  .wp-think-mark { opacity: .6; }
+  .wp-think-dots i { opacity: .6; }
+}
