@@ -77,6 +77,8 @@ const menuItemStyle: CSSProperties = {
   gap: 8,
 };
 
+const MAX_VISIBLE_COLLABORATORS = 5;
+
 export function WorkspaceHeaderV2({
   selectedProject,
   projectDetails,
@@ -106,6 +108,11 @@ export function WorkspaceHeaderV2({
   const [menuOpen, setMenuOpen] = useState(false);
   const isBusy = deployStatus === 'RUNNING' || deployStatus === 'PENDING' || deployStatus === 'CLEANUP';
   const isPlanBusy = planStatus === 'RUNNING' || planStatus === 'PENDING';
+
+  // Cap the presence stack so a crowded room can't push the header controls
+  // around; everyone past the cap collapses into a "+N" chip.
+  const visibleCollaborators = collaborators.slice(0, MAX_VISIBLE_COLLABORATORS);
+  const overflowCount = collaborators.length - visibleCollaborators.length;
 
   const tabs: { key: WorkspaceView; label: string }[] = [
     { key: 'canvas', label: 'Canvas' },
@@ -171,7 +178,8 @@ export function WorkspaceHeaderV2({
         {collaborators.length === 0 ? (
           <span style={{ fontSize: 11, color: 'var(--ink3)', fontStyle: 'italic', whiteSpace: 'nowrap' }}>Solo</span>
         ) : (
-          collaborators.map((c, i) => (
+          <>
+          {visibleCollaborators.map((c, i) => (
             <span
               key={c.id}
               title={c.name}
@@ -195,7 +203,32 @@ export function WorkspaceHeaderV2({
             >
               <AvatarFace url={c.avatar_url} name={c.name} />
             </span>
-          ))
+          ))}
+          {overflowCount > 0 && (
+            <span
+              title={collaborators.slice(MAX_VISIBLE_COLLABORATORS).map((c) => c.name).join(', ')}
+              style={{
+                width: 24,
+                height: 24,
+                flexShrink: 0,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                background: 'var(--panel)',
+                color: 'var(--ink2)',
+                fontFamily: 'var(--font-display, inherit)',
+                fontWeight: 700,
+                fontSize: 10,
+                border: '2px solid var(--panel)',
+                outline: '1px solid var(--line)',
+                marginLeft: -7,
+                borderRadius: 2,
+              }}
+            >
+              +{overflowCount}
+            </span>
+          )}
+          </>
         )}
       </div>
 

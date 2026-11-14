@@ -428,8 +428,13 @@ export function DocsPageV2() {
   const selectedRelease = selectedTag === 'latest' ? undefined : (releases ?? []).find((r) => r.tag === selectedTag);
   const selectedReleaseInfo = selectedTag === 'latest' ? latestRelease : selectedRelease;
 
+  // A specific version must never fall back to the latest-build proxy: if that
+  // release has no such asset, send the user to its release page rather than
+  // silently handing them a different version's binary under this label.
   const assetUrl = (filename: string, fallback: string) =>
-    selectedRelease?.assets.find((a) => a.name === filename)?.url ?? fallback;
+    selectedRelease
+      ? (selectedRelease.assets.find((a) => a.name === filename)?.url ?? selectedRelease.htmlUrl)
+      : fallback;
 
   const activeLinks = {
     windowsInstaller: assetUrl('whiparc-setup-windows-amd64.exe', downloadLinks.windowsInstaller),

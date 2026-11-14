@@ -7,6 +7,7 @@ see the [README quickstart](../README.md#quickstart).
 
 - [Prerequisites](#prerequisites)
 - [Developer sandbox setup](#developer-sandbox-setup)
+  - [Before a live deploy demo or recording](#before-a-live-deploy-demo-or-recording)
 - [Social login setup](#social-login-google--github-setup)
 - [Running the full stack](#running-the-full-stack-frontend--backend)
 - [Choosing how to run the backend](#choosing-how-to-run-the-backend-port-8080)
@@ -30,9 +31,11 @@ For how the pieces fit together, read [ARCHITECTURE.md](ARCHITECTURE.md).
 ## Developer Sandbox Setup
 
 Before running the application or executing deployments, you must spin up
-the local DevOps sandbox. This simulates the target cloud environment (AWS
-via LocalStack, and virtual machines via SSH-enabled Ubuntu containers)
-without incurring costs or needing real servers.
+the local DevOps sandbox. This simulates the target cloud environment (virtual
+machines via SSH-enabled Ubuntu containers, and AWS via LocalStack) without
+incurring costs or needing real servers. The sandbox is two compose files:
+the SSH targets live in `sandbox/docker-compose.sandbox.yml`, and LocalStack
+is the `localstack` service in the root `docker-compose.yml`.
 
 1. Generate the SSH key pair:
    ```bash
@@ -43,15 +46,49 @@ without incurring costs or needing real servers.
 2. Spin up the sandbox services:
    ```bash
    docker compose -f sandbox/docker-compose.sandbox.yml up -d
+   docker compose up -d localstack
    ```
 
-This starts:
-- LocalStack on port 4566 (simulating AWS VPC, S3, EC2 APIs)
+The first command starts:
 - ubuntu_ssh_1 on port 2222 (representing Ansible server target 1)
 - ubuntu_ssh_2 on port 2223 (representing Ansible server target 2)
 
+The second starts only the `localstack` service from the root
+`docker-compose.yml`, on port 4566 (simulating AWS VPC, S3 and EC2 APIs).
+Skip it if you only deploy to the SSH targets. LocalStack is deliberately not
+in the sandbox compose file: see the header comment there.
+
 The Go backend runner automatically reads the private key from
 `sandbox/id_rsa` to execute commands against the containers.
+
+### Before a live deploy demo or recording
+
+A deploy to the sandbox fails the moment a target is unreachable, so confirm
+the following before you start recording or presenting. Nothing here is
+specific to demos: it is the same list to run through when a deploy fails
+immediately.
+
+1. `sandbox/id_rsa` and `sandbox/id_rsa.pub` exist. The public key is copied
+   into the SSH images at build time, so if you regenerated the pair, rebuild
+   with `docker compose -f sandbox/docker-compose.sandbox.yml up -d --build`.
+2. The SSH targets are running: `docker ps` lists `ubuntu_ssh_1` and
+   `ubuntu_ssh_2`, publishing ports `2222` and `2223`.
+3. A target accepts the key:
+   ```bash
+   ssh -i sandbox/id_rsa -p 2222 -o StrictHostKeyChecking=no ubuntu@localhost true
+   ```
+   It should exit with status 0 and no prompt.
+4. If the demo deploys to AWS targets, LocalStack is running
+   (`docker compose up -d localstack`) and answers on port `4566`:
+   ```bash
+   curl -s http://localhost:4566/_localstack/health
+   ```
+5. Only one backend owns port `8080` (see
+   [Choosing how to run the backend](#choosing-how-to-run-the-backend-port-8080)).
+   Do not run `docker compose up` for the full stack and `npm run dev` for the
+   API at the same time: they publish the same ports.
+6. Run one throwaway deploy of the project you plan to demo and watch it reach
+   a finished state, so the first run of the day is not the one on camera.
 
 ## Social Login (Google / GitHub) Setup
 
@@ -144,9 +181,11 @@ Rules of thumb:
 - **`docker-compose.yml` and `docker-compose.hosted.yml` also cannot run
   together**: both publish `8080` and LocalStack's `4566`. Stop one first
   (`docker compose down`, or `docker compose -f docker-compose.hosted.yml down`).
-- **The sandbox stack** (`sandbox/docker-compose.sandbox.yml`, ports `2222`,
-  `2223`, `4566`) overlaps with both compose files' LocalStack and SSH
-  containers. Use it with the native backend; the compose files bring their own.
+- **The sandbox stack** (`sandbox/docker-compose.sandbox.yml`, ports `2222`
+  and `2223`, SSH targets only) overlaps with `docker-compose.yml`'s SSH
+  containers. Use it with the native backend, together with the `localstack`
+  service from `docker-compose.yml` (port `4566`) when you need an AWS mock;
+  the full compose files bring their own SSH containers and LocalStack.
 - **The hosted stack refuses to start without `JWT_SECRET` and `FRONTEND_URL`**
   (see
   [Testing Against the Hosted Stack](#testing-against-the-hosted-stack-postgres-locally)).
@@ -184,7 +223,7 @@ cd apps/api && go test ./...
 | `go run main.go` fails with undefined symbols | The package spans many files. Run `go run .` from `apps/api`. |
 | The web app cannot reach the API | Confirm the API is up on `http://localhost:8080`, or set `NEXT_PUBLIC_API_URL`. |
 | Sign-up works but no email arrives | Expected locally. The verification link is printed in the API terminal. |
-| Deploys fail immediately | Start the sandbox (`docker compose -f sandbox/docker-compose.sandbox.yml up -d`) and make sure `sandbox/id_rsa` exists. |
+| Deploys fail immediately | Start the sandbox (`docker compose -f sandbox/docker-compose.sandbox.yml up -d`, plus `docker compose up -d localstack` for AWS targets) and make sure `sandbox/id_rsa` exists. |
 | `npm install` errors about the Node version | Use Node.js 20.9 or newer. |
 
 ## Running the Backend Server Separately
@@ -195,6 +234,7 @@ can run the API server independently:
 1. Ensure the developer sandbox is running:
    ```bash
    docker compose -f sandbox/docker-compose.sandbox.yml up -d
+   docker compose up -d localstack   # only needed for AWS targets
    ```
 
 2. Navigate to the API app directory:
