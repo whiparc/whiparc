@@ -150,7 +150,11 @@ Then start the frontend (`npm run dev --workspace=web`), open a project you can
 edit and use the button at the top left of the canvas. It is hidden when AI mode
 is off, when you only have view access, and while a deploy is running.
 
-What the mock does: it always proposes a VPC, subnet, security group, server and
+What the mock does: a request with no infrastructure words is declined, so the
+refusal card can be seen: a poem, joke or general question is "outside what I can
+build", a Kubernetes, Lambda, GCP or Azure request alone is "not available yet",
+an attempt to override its instructions is "I can't do that", and anything else
+without a recognisable word is "tell me a little more". Otherwise it always proposes a VPC, subnet, security group, server and
 "Update Packages", then adds Node.js (prompt mentions node, javascript or
 express) or nginx (anything else), an RDS database (postgres, database or sql),
 and an S3 bucket (bucket, s3, storage or upload). A prompt that mentions
@@ -165,7 +169,17 @@ What to check by hand:
 - "Add to canvas" adds the nodes (tagged "AI generated") and they save like any
   other change. Generating twice shows "renamed" adjustments, because names must
   stay unique.
-- Closing the panel while "Generating…" is showing cancels the request.
+- While it generates, the Whiparc mark animates; Cancel (or closing the panel)
+  stops the request and keeps your text.
+- "Add to canvas" selects the first new node, so its settings open in the
+  inspector.
+- A declined request shows a card with the reason, not an error.
+
+If you run the API in Docker, rebuild it after changing any Go code in AI mode:
+`docker compose -f docker-compose.hosted.yml up -d --build api`. Restarting or
+recreating the container reuses the existing image, and the published images do not
+include this feature, so the symptom of a stale image is an unchanged prompt and
+behaviour (the log's `tokens_in` figure is a quick check).
 
 To use a real model instead, set `AI_PROVIDER=claude` with `ANTHROPIC_API_KEY`, or
 `AI_PROVIDER=gemini` with `GEMINI_API_KEY`. The other settings (model, timeout,

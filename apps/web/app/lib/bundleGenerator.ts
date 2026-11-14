@@ -32,6 +32,8 @@ interface NodeParams {
   bucketName?: string;
   forceDestroy?: boolean;
   versioningEnabled?: boolean;
+  blockPublicAccess?: boolean;
+  encryptionEnabled?: boolean;
   // AWS RDS instance
   dbName?: string;
   allocatedStorage?: number;
@@ -41,6 +43,9 @@ interface NodeParams {
   engineVersion?: string;
   dbSubnetGroupName?: string;
   vpcSecurityGroupIds?: string;
+  publiclyAccessible?: boolean;
+  storageEncrypted?: boolean;
+  multiAz?: boolean;
   // AWS VPC
   vpcName?: string;
   cidrBlock?: string;
@@ -673,6 +678,30 @@ resource "aws_s3_bucket_versioning" "${name}_versioning" {
     status = "${versioning ? 'Enabled' : 'Suspended'}"
   }
 }\n\n`;
+
+      // Posture settings are opt-in on the value (=== true), not on its absence: a
+      // bucket saved before these settings existed has neither key and must keep
+      // producing exactly the Terraform it always did, or the next apply would
+      // change infrastructure the user never touched.
+      if (p.blockPublicAccess === true) {
+        tfResourcesBlock += `resource "aws_s3_bucket_public_access_block" "${name}_public_access" {
+  bucket                  = aws_s3_bucket.${name}.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}\n\n`;
+      }
+      if (p.encryptionEnabled === true) {
+        tfResourcesBlock += `resource "aws_s3_bucket_server_side_encryption_configuration" "${name}_encryption" {
+  bucket = aws_s3_bucket.${name}.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}\n\n`;
+      }
     }
     else if (id.startsWith('aws_db_instance') && hasAws) {
       const name = p.dbName || 'appdb';
@@ -707,6 +736,13 @@ resource "aws_s3_bucket_versioning" "${name}_versioning" {
           extraParams += `\n  vpc_security_group_ids = [aws_security_group.${sgName}.id]`;
         }
       }
+
+      // Opt-in on the value, like the S3 settings: a database saved before these
+      // existed keeps its Terraform unchanged (turning encryption on later would
+      // force AWS to replace the instance).
+      if (p.storageEncrypted === true) extraParams += `\n  storage_encrypted = true`;
+      if (p.multiAz === true) extraParams += `\n  multi_az = true`;
+      if (p.publiclyAccessible === true) extraParams += `\n  publicly_accessible = true`;
 
       tfResourcesBlock += `resource "aws_db_instance" "${name}" {
   allocated_storage   = ${storage}

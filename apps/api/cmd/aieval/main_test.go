@@ -338,6 +338,12 @@ func TestEveryCaseRunsThroughTheMockProvider(t *testing.T) {
 	var runs []result
 	for _, c := range cases {
 		r := runCase(context.Background(), aigen.Mock{}, c, 5*time.Second)
+		if c.EmptyOK && r.ExpectedEmpty {
+			// A prompt the catalog cannot or must not build: the mock now declines
+			// it, as a model is told to, and that is the right answer.
+			runs = append(runs, r)
+			continue
+		}
 		if r.Outcome != outcomeClean {
 			t.Errorf("%s: mock output was %s (%s) %+v", c.ID, r.Outcome, r.ErrorClass, r.Warnings)
 		}

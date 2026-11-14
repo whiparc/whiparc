@@ -133,3 +133,71 @@ describe("generateBundleFiles", () => {
     expect(all).not.toMatch(/infraflow|infracanvas|project alpha/i);
   });
 });
+
+// Posture settings added after the first release. They are opt-in on the value
+// (=== true): a node saved before they existed has no such key and must keep
+// producing exactly the Terraform it always did.
+describe("generateTerraformFiles posture settings", () => {
+  const s3 = (parameters: Record<string, unknown>) =>
+    node("aws_s3_bucket_1", { tech: "Terraform", label: "Object Storage (S3)", parameters: { bucketName: "uploads", ...parameters } });
+  const rds = (parameters: Record<string, unknown>) =>
+    node("aws_db_instance_1", { tech: "Terraform", label: "Relational Database (RDS)", parameters: { dbName: "appdb", ...parameters } });
+  const tf = (...nodes: ReturnType<typeof node>[]) => generateTerraformFiles([awsTarget(), ...nodes], []).mainTf;
+
+  it("blocks public access and encrypts a bucket created with the new defaults", () => {
+    const out = tf(s3({ blockPublicAccess: true, encryptionEnabled: true }));
+    expect(out).toContain('resource "aws_s3_bucket_public_access_block" "uploads_public_access"');
+    expect(out).toContain("restrict_public_buckets = true");
+    expect(out).toContain('resource "aws_s3_bucket_server_side_encryption_configuration" "uploads_encryption"');
+    expect(out).toContain('sse_algorithm = "AES256"');
+    // Versioning, the public-access block and the encryption each attach to this bucket.
+    expect(out.match(/bucket\s+= aws_s3_bucket\.uploads\.id/g)).toHaveLength(3);
+  });
+
+  it("leaves a bucket saved before these settings existed exactly as it was", () => {
+    const legacy = tf(s3({ forceDestroy: true, versioningEnabled: true }));
+    expect(legacy).not.toContain("aws_s3_bucket_public_access_block");
+    expect(legacy).not.toContain("aws_s3_bucket_server_side_encryption_configuration");
+    expect(legacy).toContain('resource "aws_s3_bucket" "uploads"');
+    expect(legacy).toContain('resource "aws_s3_bucket_versioning" "uploads_versioning"');
+  });
+
+  it("writes nothing for a setting the user turned off", () => {
+    const out = tf(s3({ blockPublicAccess: false, encryptionEnabled: false }));
+    expect(out).not.toContain("aws_s3_bucket_public_access_block");
+    expect(out).not.toContain("aws_s3_bucket_server_side_encryption_configuration");
+  });
+
+  it("gives two buckets their own posture resources with no duplicate labels", () => {
+    const a = s3({ bucketName: "assets", blockPublicAccess: true, encryptionEnabled: true });
+    const b = node("aws_s3_bucket_2", { tech: "Terraform", label: "S3", parameters: { bucketName: "logs", blockPublicAccess: true, encryptionEnabled: true } });
+    const out = tf(a, b);
+    const labels = [...out.matchAll(/^resource "([a-z0-9_]+)" "([^"]+)"/gm)].map((m) => `${m[1]}.${m[2]}`);
+    expect(new Set(labels).size).toBe(labels.length);
+    expect(labels).toContain("aws_s3_bucket_public_access_block.assets_public_access");
+    expect(labels).toContain("aws_s3_bucket_public_access_block.logs_public_access");
+  });
+
+  it("encrypts, exposes and replicates a database only when asked", () => {
+    const on = tf(rds({ storageEncrypted: true, multiAz: true, publiclyAccessible: true }));
+    expect(on).toContain("storage_encrypted = true");
+    expect(on).toContain("multi_az = true");
+    expect(on).toContain("publicly_accessible = true");
+
+    for (const off of [{}, { storageEncrypted: false, multiAz: false, publiclyAccessible: false }]) {
+      const out = tf(rds(off));
+      expect(out).not.toContain("storage_encrypted");
+      expect(out).not.toContain("multi_az");
+      expect(out).not.toContain("publicly_accessible");
+      expect(out).toContain('resource "aws_db_instance" "appdb"');
+    }
+  });
+
+  it("keeps the database block well formed with every option on", () => {
+    const out = tf(rds({ storageEncrypted: true, multiAz: true, publiclyAccessible: true }));
+    const block = out.slice(out.indexOf('resource "aws_db_instance"'));
+    const body = block.slice(0, block.indexOf("\n}\n") + 2);
+    expect((body.match(/{/g) ?? []).length).toBe((body.match(/}/g) ?? []).length);
+    expect(body).toMatch(/skip_final_snapshot = true\n  storage_encrypted = true\n  multi_az = true\n  publicly_accessible = true\n}/);
+  });
+});

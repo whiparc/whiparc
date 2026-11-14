@@ -99,6 +99,19 @@ const (
 	MaxNoteLen = 200
 )
 
+// Decline reasons a model may give when it builds nothing. It chooses a code from
+// this fixed list and the server writes the sentence the user reads, so a refusal
+// is never a model's free text. aigen.DeclineMessage maps each code.
+const (
+	DeclineNotInfrastructure = "not_infrastructure" // chat, questions, writing, code: nothing to build
+	DeclineUnsupported       = "unsupported"        // a platform or service the catalog does not have
+	DeclineUnsafe            = "unsafe"             // custom scripts, commands, credentials, repositories
+	DeclineTooVague          = "too_vague"          // infrastructure, but nothing specific enough to build
+)
+
+// DeclineReasons lists the codes in the order the schema offers them.
+var DeclineReasons = []string{DeclineNotInfrastructure, DeclineUnsupported, DeclineUnsafe, DeclineTooVague}
+
 // Reusable patterns. None can match a double quote, backslash, dollar sign or
 // newline, because string parameters are interpolated into HCL and YAML by the
 // generators without escaping.
@@ -174,6 +187,10 @@ var nodes = []Node{
 			{Key: "bucketName", Type: ParamString, Default: "whiparc-user-bucket", Pattern: patBucket, MaxLen: 63, AISettable: true, ResourceLabel: true},
 			{Key: "forceDestroy", Type: ParamBool, Default: true, Description: "Destructive on teardown; not a model decision."},
 			{Key: "versioningEnabled", Type: ParamBool, Default: true, AISettable: true},
+			// Security posture. Defaults are the safe side; weakening them is the
+			// user's decision in the inspector, so a model cannot set them.
+			{Key: "blockPublicAccess", Type: ParamBool, Default: true, Description: "Blocks public ACLs and bucket policies. Turning it off is a user decision."},
+			{Key: "encryptionEnabled", Type: ParamBool, Default: true, Description: "Server-side encryption (SSE-S3) of stored objects."},
 		},
 	},
 	{
@@ -191,6 +208,11 @@ var nodes = []Node{
 			{Key: "engineVersion", Type: ParamString, Default: "14.1", Pattern: `^[0-9]+(\.[0-9]+)?$`, MaxLen: 8},
 			{Key: "vpcSecurityGroupIds", Type: ParamString, Default: "", Pattern: `^$`},
 			{Key: "dbSubnetGroupName", Type: ParamString, Default: "", Pattern: `^$`},
+			// Posture and cost. Not model-settable: exposing the database to the
+			// internet and doubling its cost are user decisions.
+			{Key: "publiclyAccessible", Type: ParamBool, Default: false, Description: "Gives the database a public address. Off by default."},
+			{Key: "storageEncrypted", Type: ParamBool, Default: true, Description: "Encrypts the database storage at rest."},
+			{Key: "multiAz", Type: ParamBool, Default: false, Description: "A standby in another zone. Roughly doubles the cost."},
 		},
 	},
 	{

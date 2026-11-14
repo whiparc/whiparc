@@ -28,8 +28,19 @@ export interface AIProposal {
 
 export type AIGenerateResult =
   | { ok: true; proposal: AIProposal }
-  // notes is set on a refusal where the model said why it built nothing.
-  | { ok: false; status: number; message: string; notes: string[] };
+  // notes is set on a refusal where the model said why it built nothing. reason
+  // is the server's code for a refusal ("not_infrastructure", "unsupported",
+  // "unsafe", "too_vague", "empty"): the request was understood and declined, as
+  // opposed to a failure ("" when it is one). message is already the sentence to show.
+  | { ok: false; status: number; message: string; notes: string[]; reason: string };
+
+// Reasons the server gives when it builds nothing. Anything else is treated as a
+// failure, not a decline, so an unknown code never gets a friendly framing.
+const DECLINE_REASONS = ['not_infrastructure', 'unsupported', 'unsafe', 'too_vague', 'empty'] as const;
+export type DeclineReason = (typeof DECLINE_REASONS)[number];
+export function isDecline(reason: string): reason is DeclineReason {
+  return (DECLINE_REASONS as readonly string[]).includes(reason);
+}
 
 const MAX_NOTES = 5;
 
@@ -58,17 +69,20 @@ export async function fetchAIStatus(token: string): Promise<AIStatus> {
   }
 }
 
-async function errorDetails(res: Response): Promise<{ message: string; notes: string[] }> {
+async function errorDetails(res: Response): Promise<{ message: string; notes: string[]; reason: string }> {
   try {
     const body = await res.json();
     const notes = parseNotes(body?.notes);
-    if (body && typeof body.error === 'string' && body.error) return { message: body.error, notes };
+    // A reason only counts on a 422, the status the server uses for "understood,
+    // built nothing". Anywhere else it is ignored.
+    const reason = res.status === 422 && typeof body?.reason === 'string' && isDecline(body.reason) ? body.reason : '';
+    if (body && typeof body.error === 'string' && body.error) return { message: body.error, notes, reason };
   } catch {
     // fall through
   }
-  if (res.status === 403) return { message: 'You need edit access to this project to use AI generation.', notes: [] };
-  if (res.status === 429) return { message: 'Too many requests. Please wait a moment and try again.', notes: [] };
-  return { message: 'Something went wrong. Please try again.', notes: [] };
+  if (res.status === 403) return { message: 'You need edit access to this project to use AI generation.', notes: [], reason: '' };
+  if (res.status === 429) return { message: 'Too many requests. Please wait a moment and try again.', notes: [], reason: '' };
+  return { message: 'Something went wrong. Please try again.', notes: [], reason: '' };
 }
 
 export async function generateProposal(projectId: string, token: string, prompt: string, signal?: AbortSignal): Promise<AIGenerateResult> {
@@ -82,9 +96,9 @@ export async function generateProposal(projectId: string, token: string, prompt:
     });
   } catch (err) {
     if (err instanceof DOMException && err.name === 'AbortError') {
-      return { ok: false, status: 0, message: 'Cancelled.', notes: [] };
+      return { ok: false, status: 0, message: 'Cancelled.', notes: [], reason: '' };
     }
-    return { ok: false, status: 0, message: 'Could not reach the server. Check your connection and try again.', notes: [] };
+    return { ok: false, status: 0, message: 'Could not reach the server. Check your connection and try again.', notes: [], reason: '' };
   }
 
   if (!res.ok) return { ok: false, status: res.status, ...(await errorDetails(res)) };
@@ -102,7 +116,7 @@ export async function generateProposal(projectId: string, token: string, prompt:
       },
     };
   } catch {
-    return { ok: false, status: res.status, message: 'The server returned an unreadable response. Please try again.', notes: [] };
+    return { ok: false, status: res.status, message: 'The server returned an unreadable response. Please try again.', notes: [], reason: '' };
   }
 }
 

@@ -2,6 +2,7 @@ package aigen
 
 import (
 	"context"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -118,6 +119,30 @@ func TestPromptClaimsAboutForbiddenEdgesAreTrue(t *testing.T) {
 	}
 }
 
+// The reading guidance names nodes by ID. If one is renamed, removed or made
+// non-placeable, the guidance would point a model at something it cannot use.
+func TestReadingGuidanceNamesOnlyPlaceableNodes(t *testing.T) {
+	// Every identifier-shaped token (lower case, joined by _ . or -) must be a
+	// placeable node, so a typo or a forbidden node such as shell_command fails.
+	// The plain-word IDs are listed because no pattern can tell them from prose.
+	ids := regexp.MustCompile(`\b[a-z][a-z0-9]*(?:[_.-][a-z0-9]+)+\b`).FindAllString(promptReading, -1)
+	if len(ids) < 3 {
+		t.Fatalf("found only %v in the guidance; the test pattern is out of date", ids)
+	}
+	ids = append(ids, "nginx", "nodejs", "postgresql")
+	for _, id := range ids {
+		n, ok := catalog.Get(id)
+		if !ok || !n.AIGeneratable {
+			t.Errorf("the prompt's reading guidance names %q, which is not a placeable catalog node", id)
+		}
+	}
+	for _, want := range []string{"static site", "does not mean a storage bucket", "alongside the server", `"notes"`} {
+		if !strings.Contains(systemPrompt, want) {
+			t.Errorf("prompt lacks %q", want)
+		}
+	}
+}
+
 func TestPromptIsStableAndFramesTheTask(t *testing.T) {
 	if buildSystemPrompt() != systemPrompt || buildSystemPrompt() != buildSystemPrompt() {
 		t.Error("the prompt must be deterministic")
@@ -130,8 +155,10 @@ func TestPromptIsStableAndFramesTheTask(t *testing.T) {
 	if strings.Contains(systemPrompt, "%!") || strings.Contains(systemPrompt, "{{") {
 		t.Error("an unformatted placeholder leaked into the prompt")
 	}
-	// It is sent with every request, so keep it short.
-	if n := len(systemPrompt); n > 3000 {
+	// It is sent with every request, so keep it short. The cap rose from 3,000 to
+	// 4,000 bytes (about 150 tokens) for the rules that make the model decline what
+	// it cannot build, instead of substituting something else.
+	if n := len(systemPrompt); n > 4000 {
 		t.Errorf("system prompt is %d bytes", n)
 	}
 	// It must not carry anything a user typed or any catalog value a model may not see.

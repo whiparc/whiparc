@@ -138,8 +138,12 @@ type aiGenerateResponse struct {
 // model's notes when it gave any, because "I can't do that on GCP" is the useful
 // part of an answer that contained no nodes.
 type aiRejectedResponse struct {
-	Error string   `json:"error"`
-	Notes []string `json:"notes,omitempty"`
+	Error string `json:"error"`
+	// Reason says why nothing was built: one of catalog.DeclineReasons when the
+	// model declined, aigen.DeclineEmpty when it built nothing and said nothing,
+	// or absent for a structural failure (malformed or oversized output).
+	Reason string   `json:"reason,omitempty"`
+	Notes  []string `json:"notes,omitempty"`
 }
 
 // POST /api/projects/{id}/ai/generate
@@ -212,7 +216,13 @@ func handleAIGenerate(w http.ResponseWriter, r *http.Request) {
 		recordAIGeneration(user.ID, projectID, usage, aiOutcomeRejected)
 		log.Printf("[AI] output rejected project=%s user=%s: %v\n", projectID, user.ID, err)
 		rej := aiRejectedResponse{Error: "The AI could not produce a usable design for that description. Try rephrasing it, or describe fewer things at once."}
-		if result != nil { // only ErrEmpty returns a result; it carries the model's notes
+		if result != nil { // only ErrEmpty returns a result; it carries the model's reason and notes
+			// Built nothing: tell the user plainly why, in the server's own words.
+			rej.Reason = result.Decline
+			if rej.Reason == "" {
+				rej.Reason = aigen.DeclineEmpty
+			}
+			rej.Error = aigen.DeclineMessage(result.Decline)
 			rej.Notes = result.Notes
 		}
 		writeJSONStatus(w, http.StatusUnprocessableEntity, rej)

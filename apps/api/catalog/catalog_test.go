@@ -408,3 +408,76 @@ func TestSchemaOffersAnOptionalBoundedNotesList(t *testing.T) {
 		}
 	}
 }
+
+// A setting that weakens security or raises cost is the user's call. These are
+// the ones added after the first catalog: none may be offered to a model, and
+// each must default to the safe side (encrypted, private, single-zone).
+func TestPostureSettingsAreUserOnlyAndDefaultSafe(t *testing.T) {
+	want := map[string]map[string]bool{
+		"aws_s3_bucket":   {"blockPublicAccess": true, "encryptionEnabled": true},
+		"aws_db_instance": {"publiclyAccessible": false, "storageEncrypted": true, "multiAz": false},
+	}
+	for id, params := range want {
+		n, ok := Get(id)
+		if !ok {
+			t.Fatalf("%s is not in the catalog", id)
+		}
+		for key, safeDefault := range params {
+			var found bool
+			for _, p := range n.Params {
+				if p.Key != key {
+					continue
+				}
+				found = true
+				if p.AISettable {
+					t.Errorf("%s.%s must not be settable by a model", id, key)
+				}
+				if p.Type != ParamBool {
+					t.Errorf("%s.%s should be a bool, is %v", id, key, p.Type)
+				}
+				if p.Default != safeDefault {
+					t.Errorf("%s.%s defaults to %v, want %v", id, key, p.Default, safeDefault)
+				}
+			}
+			if !found {
+				t.Errorf("%s.%s is missing from the catalog", id, key)
+			}
+		}
+	}
+
+	// The schema a model sees must not mention them.
+	raw, err := json.Marshal(JSONSchema())
+	if err != nil {
+		t.Fatal(err)
+	}
+	schema := string(raw)
+	for _, key := range []string{"blockPublicAccess", "encryptionEnabled", "publiclyAccessible", "storageEncrypted", "multiAz"} {
+		if strings.Contains(schema, key) {
+			t.Errorf("the model-facing schema offers %q", key)
+		}
+	}
+}
+
+// Every value a catalog dropdown can hold must be a choice in the workspace
+// inspector. A missing option makes a select display its first entry while the
+// node holds a different value, so the user sees one setting and deploys another.
+// Found this way: db.t3.small (RDS) and reloaded (systemd) were allowed here but
+// not offered there.
+func TestEveryCatalogChoiceIsOfferedInTheInspector(t *testing.T) {
+	src := readRepoFile(t, "../../web/app/workspace/page.tsx")
+	// Parameters the inspector edits as free text, so any allowed value can be typed.
+	freeText := map[string]bool{"create_user.shell": true}
+
+	for _, n := range All() {
+		for _, p := range n.Params {
+			if p.Type != ParamEnum || freeText[n.ID+"."+p.Key] {
+				continue
+			}
+			for _, v := range p.Enum {
+				if !strings.Contains(src, `<option value="`+v+`"`) {
+					t.Errorf("%s.%s allows %q but the inspector has no such option", n.ID, p.Key, v)
+				}
+			}
+		}
+	}
+}
