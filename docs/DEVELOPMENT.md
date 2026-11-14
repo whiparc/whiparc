@@ -9,6 +9,7 @@ see the [README quickstart](../README.md#quickstart).
 - [Developer sandbox setup](#developer-sandbox-setup)
   - [Before a live deploy demo or recording](#before-a-live-deploy-demo-or-recording)
 - [Social login setup](#social-login-google--github-setup)
+- [AI mode (prompt to canvas)](#ai-mode-prompt-to-canvas)
 - [Running the full stack](#running-the-full-stack-frontend--backend)
 - [Choosing how to run the backend](#choosing-how-to-run-the-backend-port-8080)
 - [Running the tests](#running-the-tests)
@@ -118,6 +119,65 @@ Google" / "Continue with GitHub" locally:
 loads it automatically for the `api` service; if running the API directly
 via `go run .`, export the four variables in your shell instead, since only
 `docker compose`'s `env_file` reads `.env` automatically.
+
+## AI Mode (Prompt to Canvas)
+
+Optional and off by default. A "Generate with AI" button in the workspace turns a
+plain-language description into a proposed set of nodes. The model can only pick
+from a fixed catalog, the server validates everything it returns, and nothing
+reaches the canvas until you review the proposal and click "Add to canvas". The
+design and the evaluation results are in
+[plans/ai-mode-phase-1-design.md](plans/ai-mode-phase-1-design.md).
+
+**Try it with no key and no network** using the built-in mock provider. It is a
+keyword matcher, not a model, but the endpoint, validator and review panel behave
+exactly as they do with a real one. The API reads process environment variables
+(it does not read `.env`), so set them in the shell that starts it:
+
+```bash
+cd apps/api
+AI_MODE_ENABLED=true AI_PROVIDER=mock go run .
+```
+
+On Windows PowerShell:
+
+```powershell
+cd apps/api
+$env:AI_MODE_ENABLED = "true"; $env:AI_PROVIDER = "mock"; go run .
+```
+
+Then start the frontend (`npm run dev --workspace=web`), open a project you can
+edit and use the button at the top left of the canvas. It is hidden when AI mode
+is off, when you only have view access, and while a deploy is running.
+
+What the mock does: it always proposes a VPC, subnet, security group, server and
+"Update Packages", then adds Node.js (prompt mentions node, javascript or
+express) or nginx (anything else), an RDS database (postgres, database or sql),
+and an S3 bucket (bucket, s3, storage or upload). A prompt that mentions
+kubernetes, k8s, lambda, gcp or azure also returns a "not included" note, which
+is how to see that panel.
+
+What to check by hand:
+
+- Generate is disabled until there is text; the example prompts fill the box.
+- The review lists the proposed nodes; nothing is on the canvas yet. Discard and
+  Escape leave the canvas untouched.
+- "Add to canvas" adds the nodes (tagged "AI generated") and they save like any
+  other change. Generating twice shows "renamed" adjustments, because names must
+  stay unique.
+- Closing the panel while "Generating…" is showing cancels the request.
+
+To use a real model instead, set `AI_PROVIDER=claude` with `ANTHROPIC_API_KEY`, or
+`AI_PROVIDER=gemini` with `GEMINI_API_KEY`. The other settings (model, timeout,
+daily cap) are in [`.env.example`](../.env.example). With Docker, put them in
+`.env` and run `docker compose up --build`, since the published API image may not
+include this feature yet. The measured quality of each provider comes from
+`go run ./cmd/aieval`, described in section 3 of the design document.
+
+A brand-new account sees the workspace tour first, and its overlay blocks clicks
+until it is finished or skipped. Also note that the API limits sign-ins to 10 per
+15 minutes per address, so scripted test runs that log in repeatedly will see
+HTTP 429 until the limiter resets (restart the API, or reuse one session).
 
 ## Running the Full Stack (Frontend + Backend)
 
