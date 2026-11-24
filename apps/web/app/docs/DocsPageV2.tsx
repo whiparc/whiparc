@@ -1381,7 +1381,9 @@ whiparc config set gateway-url https://gateway.<your-domain>`} />
               Home
             </Link>
             <span style={{ cursor: 'not-allowed' }}>Terms</span>
-            <span style={{ cursor: 'not-allowed' }}>Privacy</span>
+            <Link href="/privacy" className="wp-docs-toclink" style={{ color: 'var(--ink3)' }}>
+              Privacy
+            </Link>
           </div>
         </div>
       </footer>
