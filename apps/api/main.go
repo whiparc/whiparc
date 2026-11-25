@@ -312,6 +312,8 @@ func main() {
 	contactGlobalLimiter = NewRateLimiter(60, time.Hour, 60)     // ceiling on contact messages (and acknowledgements) per hour
 	captureTokenLimiter = NewRateLimiter(30, 15*time.Minute, 30) // newsletter confirm/unsubscribe attempts per 15 min per IP
 
+	initAIMode(os.Getenv)
+
 	// Set up routing
 	mux := http.NewServeMux()
 
@@ -356,6 +358,7 @@ func main() {
 	mux.Handle("POST /api/auth/email/change", AuthMiddleware(http.HandlerFunc(handleRequestEmailChange)))
 	mux.HandleFunc("POST /api/auth/email/confirm", enableCORS(handleConfirmEmailChange))
 	mux.Handle("GET /api/activity", AuthMiddleware(http.HandlerFunc(handleGetActivity)))
+	mux.Handle("GET /api/ai/status", AuthMiddleware(http.HandlerFunc(handleAIStatus)))
 	mux.HandleFunc("GET /api/auth/{provider}/login", handleOAuthLogin)
 	mux.HandleFunc("GET /api/auth/{provider}/callback", handleOAuthCallback)
 	mux.HandleFunc("GET /api/workspace/{projectId}/sync", handleWorkspaceWebSocketSync)
@@ -393,6 +396,7 @@ func main() {
 	mux.Handle("GET /api/projects/{id}/snapshots", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleGetSnapshots))))
 	mux.Handle("POST /api/projects/{id}/snapshots/{snapshotId}/revert", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleRevertSnapshot))))
 	mux.Handle("POST /api/projects/{id}/import", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleImport))))
+	mux.Handle("POST /api/projects/{id}/ai/generate", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleAIGenerate))))
 	mux.Handle("GET /api/projects/{id}/credentials", AuthMiddleware(RequireProjectRole("VIEWER")(http.HandlerFunc(handleGetProjectCredentials))))
 	mux.Handle("POST /api/projects/{id}/credentials", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleCreateProjectCredential))))
 	mux.Handle("DELETE /api/projects/{id}/credentials/{credId}", AuthMiddleware(RequireProjectRole("EDITOR")(http.HandlerFunc(handleDeleteProjectCredential))))

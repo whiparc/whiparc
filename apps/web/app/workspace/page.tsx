@@ -42,6 +42,7 @@ import { ProductTour } from '../components/ProductTour';
 import { getWorkspaceTourSteps } from './workspaceTour';
 import { LEGACY_TOKEN_SCOPE_STYLE } from '../components/ui/legacy-token-scope';
 import { WorkspaceHeaderV2, type WorkspaceView } from './WorkspaceHeaderV2';
+import AIGeneratePanel from './AIGeneratePanel';
 import { LibraryPanelV2 } from './LibraryPanelV2';
 import { ConsoleBar } from './ConsoleBar';
 import { ProjectVariablesView } from './ProjectVariablesView';
@@ -670,6 +671,11 @@ interface InspectorNodeParameters {
   bucketName?: string;
   versioningEnabled?: boolean;
   forceDestroy?: boolean;
+  blockPublicAccess?: boolean;
+  encryptionEnabled?: boolean;
+  publiclyAccessible?: boolean;
+  storageEncrypted?: boolean;
+  multiAz?: boolean;
   // RDS
   dbName?: string;
   engineVersion?: string;
@@ -1328,6 +1334,26 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                           className="h-4 w-4 rounded border-border bg-muted text-primary focus:ring-primary focus:ring-offset-0 cursor-pointer"
                         />
                       </div>
+                      <div className="flex items-center justify-between p-2.5 bg-muted rounded-lg border border-border select-none" title="Blocks public ACLs and bucket policies">
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider font-heading">Block Public Access</span>
+                        <input
+                          type="checkbox"
+                          data-testid="param-blockPublicAccess"
+                          checked={p.blockPublicAccess === true}
+                          onChange={(e) => handleParameterChange('blockPublicAccess', e.target.checked)}
+                          className="h-4 w-4 rounded border-border bg-muted text-primary focus:ring-primary focus:ring-offset-0 cursor-pointer"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between p-2.5 bg-muted rounded-lg border border-border select-none" title="Server-side encryption of stored objects (SSE-S3)">
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider font-heading">Encrypt Objects (SSE-S3)</span>
+                        <input
+                          type="checkbox"
+                          data-testid="param-encryptionEnabled"
+                          checked={p.encryptionEnabled === true}
+                          onChange={(e) => handleParameterChange('encryptionEnabled', e.target.checked)}
+                          className="h-4 w-4 rounded border-border bg-muted text-primary focus:ring-primary focus:ring-offset-0 cursor-pointer"
+                        />
+                      </div>
                     </>
                   )}
 
@@ -1360,6 +1386,7 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                             className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none cursor-pointer transition-all"
                           >
                             <option value="db.t3.micro">db.t3.micro</option>
+                            <option value="db.t3.small">db.t3.small</option>
                             <option value="db.t3.medium">db.t3.medium</option>
                           </select>
                         </div>
@@ -1413,6 +1440,37 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                           type="text"
                           value={p.dbSubnetGroupName || ''}
                           className="w-full bg-muted border border-border rounded-lg px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-all"
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between p-2.5 bg-muted rounded-lg border border-border select-none" title="Encrypts the database storage at rest">
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider font-heading">Encrypt Storage</span>
+                        <input
+                          type="checkbox"
+                          data-testid="param-storageEncrypted"
+                          checked={p.storageEncrypted === true}
+                          onChange={(e) => handleParameterChange('storageEncrypted', e.target.checked)}
+                          className="h-4 w-4 rounded border-border bg-muted text-primary focus:ring-primary focus:ring-offset-0 cursor-pointer"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between p-2.5 bg-muted rounded-lg border border-border select-none" title="Gives the database a public address">
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider font-heading">Publicly Accessible</span>
+                        <input
+                          type="checkbox"
+                          data-testid="param-publiclyAccessible"
+                          checked={p.publiclyAccessible === true}
+                          onChange={(e) => handleParameterChange('publiclyAccessible', e.target.checked)}
+                          className="h-4 w-4 rounded border-border bg-muted text-primary focus:ring-primary focus:ring-offset-0 cursor-pointer"
+                        />
+                      </div>
+                      <div className="flex items-center justify-between p-2.5 bg-muted rounded-lg border border-border select-none" title="A standby in another availability zone; roughly doubles the cost">
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider font-heading">Multi-AZ Standby</span>
+                        <input
+                          type="checkbox"
+                          data-testid="param-multiAz"
+                          checked={p.multiAz === true}
+                          onChange={(e) => handleParameterChange('multiAz', e.target.checked)}
+                          className="h-4 w-4 rounded border-border bg-muted text-primary focus:ring-primary focus:ring-offset-0 cursor-pointer"
                         />
                       </div>
                     </>
@@ -1730,6 +1788,7 @@ const InspectorPanel: React.FC<InspectorPanelProps> = ({
                               <option value="started">started</option>
                               <option value="stopped">stopped</option>
                               <option value="restarted">restarted</option>
+                              <option value="reloaded">reloaded</option>
                             </select>
                           </div>
                           <div className="flex items-center justify-between p-2 bg-muted rounded-lg border border-border select-none">
@@ -2368,7 +2427,9 @@ function getDefaultParametersForNode(nodeId: string): Record<string, unknown> {
     return {
       bucketName: 'whiparc-user-bucket',
       forceDestroy: true,
-      versioningEnabled: true
+      versioningEnabled: true,
+      blockPublicAccess: true,
+      encryptionEnabled: true
     };
   }
   if (nodeId.startsWith('aws_db_instance')) {
@@ -2380,7 +2441,10 @@ function getDefaultParametersForNode(nodeId: string): Record<string, unknown> {
       password: 'SuperSecurePassword123!',
       engineVersion: '14.1',
       vpcSecurityGroupIds: '',
-      dbSubnetGroupName: ''
+      dbSubnetGroupName: '',
+      publiclyAccessible: false,
+      storageEncrypted: true,
+      multiAz: false
     };
   }
   if (nodeId.startsWith('aws_vpc')) {
@@ -4030,6 +4094,7 @@ function WorkspaceContent() {
               onGcpTargetAdded={() => setShowGcpNotice(true)}
             />
             <GcpComingSoonDialog isOpen={showGcpNotice} onClose={() => setShowGcpNotice(false)} />
+            <AIGeneratePanel projectId={selectedProject} token={token} readOnly={isPipelineBusy || saveStatus === 'readonly'} />
 
             <div
               data-tour="sandbox"
