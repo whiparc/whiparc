@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"regexp"
@@ -39,16 +40,15 @@ type CustomNode struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
-// POST /api/custom-nodes/validate
+// maxCustomNodeValidateBytes caps the JSON body accepted by the validate
+// endpoint.
+const maxCustomNodeValidateBytes = 256 << 10
+
+// POST /api/custom-nodes/validate (authenticated; CORS is handled by CORSWrapper)
 func handleValidateCustomNode(w http.ResponseWriter, r *http.Request) {
-	// Enable CORS if requested
-	w.Header().Set("Access-Control-Allow-Origin", allowedOrigin())
-	w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-	if r.Method == http.MethodOptions {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
+	// Bound the body before the HCL/YAML parsers see it. Authored custom-node
+	// snippets are a few KB; the cap is generous but finite.
+	r.Body = http.MaxBytesReader(w, r.Body, maxCustomNodeValidateBytes)
 
 	var payload struct {
 		Tech     string `json:"tech"`
@@ -56,6 +56,11 @@ func handleValidateCustomNode(w http.ResponseWriter, r *http.Request) {
 		RawCode  string `json:"raw_code"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			http.Error(w, "Request body too large", http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "Invalid payload: "+err.Error(), http.StatusBadRequest)
 		return
 	}

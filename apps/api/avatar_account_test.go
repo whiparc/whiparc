@@ -22,13 +22,14 @@ import (
 
 func withTestDB(t *testing.T) *dbHandle {
 	t.Helper()
-	oldDB, oldAvatar, oldDel := db, avatarLimiter, deleteAcctLimiter
+	oldDB, oldAvatar, oldDel, oldExport := db, avatarLimiter, deleteAcctLimiter, exportLimiter
 	testDB := setupAuthTestDB(t)
 	db = testDB
 	avatarLimiter = NewRateLimiter(100, time.Minute, 100)
 	deleteAcctLimiter = NewRateLimiter(100, time.Minute, 100)
+	exportLimiter = NewRateLimiter(100, time.Minute, 100)
 	t.Cleanup(func() {
-		db, avatarLimiter, deleteAcctLimiter = oldDB, oldAvatar, oldDel
+		db, avatarLimiter, deleteAcctLimiter, exportLimiter = oldDB, oldAvatar, oldDel, oldExport
 		testDB.Close()
 	})
 	return testDB

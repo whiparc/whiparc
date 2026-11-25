@@ -60,6 +60,7 @@ function AccountContent() {
   const [removingAvatar, setRemovingAvatar] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [exporting, setExporting] = useState(false);
   const [showDelete, setShowDelete] = useState(false);
   const [deletePassword, setDeletePassword] = useState('');
   const [deleteConfirmEmail, setDeleteConfirmEmail] = useState('');
@@ -128,6 +129,15 @@ function AccountContent() {
     setRemovingAvatar(false);
     if (result.success) setNotice({ kind: 'success', text: 'Avatar removed.' });
     else setActionError(result.error || 'Failed to remove avatar.');
+  };
+
+  const handleExportData = async () => {
+    setExporting(true);
+    setActionError(null);
+    const result = await useAuthStore.getState().exportAccountData();
+    setExporting(false);
+    if (result.success) setNotice({ kind: 'success', text: 'Your data export has been downloaded.' });
+    else setActionError(result.error || 'Failed to export your data.');
   };
 
   const handleDeleteAccount = async (e: React.FormEvent) => {
@@ -561,6 +571,24 @@ function AccountContent() {
             style={{ marginTop: 14, height: 36, padding: '0 16px', fontSize: 13, fontWeight: 500, background: 'transparent', color: 'var(--danger)', border: '1px solid var(--danger)', cursor: 'pointer' }}
           >
             Logout
+          </button>
+        </div>
+
+        <div className="wp-blueprint" style={cardStyle}>
+          <BlueprintCorners />
+          <h2 style={h2Style}>Download your data</h2>
+          <p style={bodyStyle}>
+            A JSON file with your profile, your personal workspace&apos;s projects (canvases, snapshots and custom nodes) and your published templates.
+            Cloud credentials and agent keys are not included. Worth doing before you delete your account.
+          </p>
+          <button
+            type="button"
+            onClick={handleExportData}
+            disabled={exporting}
+            data-testid="export-data"
+            style={{ marginTop: 14, height: 36, padding: '0 16px', fontSize: 13, fontWeight: 500, background: 'transparent', color: 'var(--ink)', border: '1px solid var(--line)', cursor: exporting ? 'default' : 'pointer', opacity: exporting ? 0.6 : 1 }}
+          >
+            {exporting ? 'Preparing…' : 'Download my data'}
           </button>
         </div>
 

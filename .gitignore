@@ -85,6 +85,7 @@ __pycache__/
 /apps/web/playwright-report/
 /apps/web/test-results/
 /apps/web/blob-report/
+apps/api/aieval-results.json
 
 # Written by `next dev` (agentRules); the root AGENTS.md is the source of truth
 /apps/web/AGENTS.md

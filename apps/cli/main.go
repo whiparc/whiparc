@@ -109,12 +109,6 @@ func main() {
 		Short: "Manage workspace projects",
 	}
 
-	var projectsListCmd = &cobra.Command{
-		Use:   "list",
-		Short: "List all accessible project workspaces",
-		Run:   runProjectsList,
-	}
-
 	var projectsCreateCmd = &cobra.Command{
 		Use:   "create",
 		Short: "Create a new visual workspace project",
@@ -132,7 +126,7 @@ func main() {
 	projectsDeleteCmd.Flags().String("id", "", "ID of the target project to delete")
 	projectsDeleteCmd.Flags().Bool("force", false, "Force delete without verification prompt")
 
-	projectsCmd.AddCommand(projectsListCmd, projectsCreateCmd, projectsDeleteCmd)
+	projectsCmd.AddCommand(projectsListCmd(), projectsCreateCmd, projectsDeleteCmd)
 
 	// import
 	var importCmd = &cobra.Command{
@@ -142,7 +136,7 @@ func main() {
 	}
 	importCmd.Flags().String("project", "", "Target project workspace ID")
 	importCmd.Flags().StringP("file", "f", "", "Specific IaC configuration file to import")
-	importCmd.Flags().StringP("dir", "d", "", "Directory containing IaC files to import")
+	importCmd.Flags().StringP("dir", "d", "", "Directory containing IaC files to import (skips .git, .terraform, node_modules, .github)")
 
 	// deploy
 	var deployCmd = &cobra.Command{
@@ -331,11 +325,34 @@ func runLogout(cmd *cobra.Command, args []string) {
 	printSuccess("Credentials cleared. Logged out successfully.")
 }
 
+func projectsListCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List all accessible project workspaces",
+		Run:   runProjectsList,
+	}
+	cmd.Flags().Bool("json", false, "Print projects as a JSON array on stdout (messages go to stderr)")
+	return cmd
+}
+
 func runProjectsList(cmd *cobra.Command, args []string) {
+	asJSON, _ := cmd.Flags().GetBool("json")
+
 	var projects []Project
 	err := makeRequest("GET", "/api/projects", nil, &projects)
 	if err != nil {
+		// In JSON mode stdout carries nothing but the array, so a script piping
+		// it into jq never sees a styled error line mixed into the data.
+		if asJSON {
+			fmt.Fprintf(cmd.ErrOrStderr(), "Failed to retrieve projects: %v\n", err)
+			return
+		}
 		printError("Failed to retrieve projects: %v", err)
+		return
+	}
+
+	if asJSON {
+		printProjectsJSON(cmd, projects)
 		return
 	}
 
@@ -349,6 +366,24 @@ func runProjectsList(cmd *cobra.Command, args []string) {
 		rows[i] = []string{p.ID, p.Name, p.Visibility, p.TeamID}
 	}
 	printTable([]string{"PROJECT ID", "NAME", "VISIBILITY", "TEAM ID"}, rows)
+}
+
+// printProjectsJSON writes projects as an indented JSON array to stdout and
+// nothing else. An empty or null API response still prints "[]" so consumers
+// like `jq length` always get valid JSON; the human-readable note goes to
+// stderr.
+func printProjectsJSON(cmd *cobra.Command, projects []Project) {
+	if len(projects) == 0 {
+		projects = []Project{}
+		fmt.Fprintln(cmd.ErrOrStderr(), "No projects found.")
+	}
+
+	enc := json.NewEncoder(cmd.OutOrStdout())
+	enc.SetIndent("", "  ")
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(projects); err != nil {
+		fmt.Fprintf(cmd.ErrOrStderr(), "Failed to encode projects: %v\n", err)
+	}
 }
 
 func runProjectsCreate(cmd *cobra.Command, args []string) {
@@ -422,6 +457,81 @@ func runProjectsDelete(cmd *cobra.Command, args []string) {
 	printSuccess("Project deleted successfully.")
 }
 
+// skippedImportDirs are lower-cased directory names that collectIaCFiles never
+// descends into (matched case-insensitively, since the CLI also runs on
+// case-insensitive Windows and macOS filesystems). Pointing `import --dir` at
+// a repository root otherwise uploads vendored module copies
+// (.terraform/modules), git internals (.git), install trees (node_modules) and
+// CI workflow files (.github), which can be thousands of files and shows up as
+// confusing nodes on the canvas.
+var skippedImportDirs = map[string]bool{
+	".git":         true,
+	".terraform":   true,
+	"node_modules": true,
+	".github":      true,
+}
+
+// collectIaCFiles walks dir and returns every .tf/.yml/.yaml file below it,
+// skipping the directories in skippedImportDirs. The skip list applies to
+// descendants only: a dir that is itself named, say, ".github" is still walked.
+//
+// Only regular files are collected, so a symlink such as `x.tf -> ~/.ssh/id_rsa`
+// can never pull a file from outside the tree into the upload.
+//
+// Each returned FileItem.Name is the file's path relative to dir rather than
+// its bare base name: a plain Base() makes two files with the same name in
+// different folders collide in the upload payload.
+//
+// Files that match but cannot be read are not fatal; their paths are returned
+// in unreadable so the caller can warn instead of dropping them silently.
+func collectIaCFiles(dir string) (files []FileItem, unreadable []string, err error) {
+	err = filepath.Walk(dir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if info.IsDir() {
+			if path != dir && skippedImportDirs[strings.ToLower(info.Name())] {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+
+		switch strings.ToLower(filepath.Ext(path)) {
+		case ".tf", ".yml", ".yaml":
+		default:
+			return nil
+		}
+
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+
+		data, err := os.ReadFile(path)
+		if err != nil {
+			unreadable = append(unreadable, filepath.ToSlash(rel))
+			return nil
+		}
+
+		files = append(files, FileItem{
+			Name:    filepath.ToSlash(rel),
+			Content: string(data),
+		})
+
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return files, unreadable, nil
+}
+
 func runImport(cmd *cobra.Command, args []string) {
 	projectID, _ := cmd.Flags().GetString("project")
 	filePath, _ := cmd.Flags().GetString("file")
@@ -450,28 +560,15 @@ func runImport(cmd *cobra.Command, args []string) {
 			Content: string(data),
 		})
 	} else {
-		err := filepath.Walk(dirPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			if !info.IsDir() {
-				ext := strings.ToLower(filepath.Ext(path))
-				if ext == ".tf" || ext == ".yml" || ext == ".yaml" {
-					data, err := os.ReadFile(path)
-					if err == nil {
-						files = append(files, FileItem{
-							Name:    filepath.Base(path),
-							Content: string(data),
-						})
-					}
-				}
-			}
-			return nil
-		})
+		collected, unreadable, err := collectIaCFiles(dirPath)
 		if err != nil {
 			printError("Failed to walk directory: %v", err)
 			return
 		}
+		for _, name := range unreadable {
+			printWarn("Skipped unreadable file %s", name)
+		}
+		files = collected
 	}
 
 	if len(files) == 0 {

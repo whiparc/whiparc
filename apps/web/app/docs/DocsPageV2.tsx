@@ -259,7 +259,7 @@ const SEARCH_CONTENT: Record<string, string> = {
   'auth-login': 'whiparc login prompt account email password session token',
   'auth-logout': 'whiparc logout clear locally cached credentials end session',
   projects: 'workspace projects CRUD query initialize delete visual canvas projects',
-  'projects-list': 'whiparc projects list',
+  'projects-list': 'whiparc projects list --json JSON array jq script stdout stderr',
   'projects-create': 'whiparc projects create --name --description --visibility PRIVATE TEAM PUBLIC first team',
   'projects-delete': 'whiparc projects delete --id --force confirmation prompt',
   import: 'importing IaC code existing configurations visual workspace resource structures nodes edges auto-arrange layout',
@@ -428,8 +428,13 @@ export function DocsPageV2() {
   const selectedRelease = selectedTag === 'latest' ? undefined : (releases ?? []).find((r) => r.tag === selectedTag);
   const selectedReleaseInfo = selectedTag === 'latest' ? latestRelease : selectedRelease;
 
+  // A specific version must never fall back to the latest-build proxy: if that
+  // release has no such asset, send the user to its release page rather than
+  // silently handing them a different version's binary under this label.
   const assetUrl = (filename: string, fallback: string) =>
-    selectedRelease?.assets.find((a) => a.name === filename)?.url ?? fallback;
+    selectedRelease
+      ? (selectedRelease.assets.find((a) => a.name === filename)?.url ?? selectedRelease.htmlUrl)
+      : fallback;
 
   const activeLinks = {
     windowsInstaller: assetUrl('whiparc-setup-windows-amd64.exe', downloadLinks.windowsInstaller),
@@ -1178,6 +1183,10 @@ whiparc config set gateway-url https://gateway.<your-domain>`} />
               <div style={{ marginTop: 10 }}>
                 <CodeBlock code="whiparc projects list" />
               </div>
+              <p style={{ margin: '14px 0 0', ...bodyStyle }}>For scripts, add <InlineCode>--json</InlineCode> to print the projects as a JSON array instead of a table. Only the array is written to stdout; messages such as <InlineCode>No projects found.</InlineCode> and errors go to stderr, and an empty list prints <InlineCode>[]</InlineCode>, so the output pipes straight into tools like <InlineCode>jq</InlineCode>:</p>
+              <div style={{ marginTop: 10 }}>
+                <CodeBlock code="whiparc projects list --json | jq '.[].id'" />
+              </div>
 
               <h3 id="projects-create" style={h2Style}>Create a Project</h3>
               <p style={bodyStyle}>
@@ -1372,7 +1381,9 @@ whiparc config set gateway-url https://gateway.<your-domain>`} />
               Home
             </Link>
             <span style={{ cursor: 'not-allowed' }}>Terms</span>
-            <span style={{ cursor: 'not-allowed' }}>Privacy</span>
+            <Link href="/privacy" className="wp-docs-toclink" style={{ color: 'var(--ink3)' }}>
+              Privacy
+            </Link>
           </div>
         </div>
       </footer>

@@ -9,10 +9,11 @@ Pull requests here require the [CLA](../../CLA.md).
 
 ## Run it
 
-Start the sandbox first (LocalStack and SSH targets), then the API:
+Start the sandbox first (SSH targets, plus LocalStack for AWS targets), then the API:
 
 ```bash
 docker compose -f sandbox/docker-compose.sandbox.yml up -d   # from the repo root
+docker compose up -d localstack                              # from the repo root; AWS targets only
 cd apps/api
 go run .
 ```
