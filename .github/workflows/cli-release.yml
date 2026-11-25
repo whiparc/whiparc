@@ -213,8 +213,12 @@ jobs:
         with:
           go-version-file: 'apps/cli/go.mod'
 
+      # Pinned, not `@v2`: v2.49.0 (2026-11-12) requires Go >= 1.27.4, but this job
+      # uses the Go version in apps/cli/go.mod with GOTOOLCHAIN=local, so a floating
+      # tag broke the job. v2.48.0 needs Go 1.26.4. Raise the pin together with the
+      # Go version in apps/cli/go.mod.
       - name: Install nfpm
-        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2
+        run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.48.0
 
       - name: Build Linux packages (.deb + .rpm)
         run: |
